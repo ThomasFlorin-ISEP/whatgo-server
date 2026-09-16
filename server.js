@@ -105,7 +105,7 @@ app.post('/api/auth/login', async (req, res) => {
   const token = signToken(user);
   res.cookie('whatgo_token', token, {
     httpOnly: true,
-    secure: false,
+    secure: true,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
@@ -162,4 +162,52 @@ app.put('/api/dashboard/business', requireAuth, requireRole('admin'), (req, res)
 });
 
 const PORT = process.env.PORT || 3000;
+// ============================================================
+// AUTO-CRÉATION : s'assure que "WHATGO AI" et un compte admin
+// existent toujours, même sur un serveur tout neuf (comme Render)
+// ============================================================
+async function ensureWhatgoBusiness() {
+  const { hashPassword } = require('./auth');
+  const existing = db.prepare('SELECT * FROM businesses WHERE slug = ?').get('whatgo');
+
+  if (!existing) {
+    const prompt = `
+Tu es l'assistant virtuel de WHATGO AI, sur le site whatgo.ai. Tu réponds aux
+visiteurs qui découvrent le produit et se posent des questions avant de s'inscrire.
+
+INFORMATIONS SUR WHATGO AI :
+- Ce que c'est : un chatbot IA installé directement sur le site web d'une entreprise,
+  entraîné sur son catalogue/FAQ, qui répond aux visiteurs et qualifie chaque contact
+  dans son CRM.
+- Différence avec les autres outils : la configuration est faite par l'équipe WHATGO,
+  pas par le client lui-même.
+- Secteurs ciblés : hôtellerie, services locaux, e-commerce.
+- Tarifs : Starter 40€/mois (~100 conversations), Growth 149€/mois (~600 conversations),
+  Scale sur devis.
+- Mise en place gratuite, faite par l'équipe, généralement sous 24 à 48h.
+- Essai : 14 jours gratuits, sans carte bancaire.
+- Options à venir : WhatsApp et IA vocale.
+
+TON RÔLE :
+1. Réponds UNIQUEMENT à partir des informations ci-dessus, n'invente jamais de chiffre.
+2. Si le visiteur semble intéressé, propose de laisser son email ou de démarrer l'essai.
+3. Reste bref, chaleureux, professionnel.
+`.trim();
+
+    const result = db.prepare(
+      'INSERT INTO businesses (slug, name, system_prompt) VALUES (?, ?, ?)'
+    ).run('whatgo', 'WHATGO AI', prompt);
+
+    const hash = await hashPassword('motdepasse123');
+    db.prepare(
+      'INSERT INTO users (business_id, email, password_hash, role) VALUES (?, ?, ?, ?)'
+    ).run(result.lastInsertRowid, 'admin@whatgo.ai', hash, 'admin');
+
+    console.log('✅ Entreprise WHATGO créée automatiquement (admin@whatgo.ai / motdepasse123)');
+  } else {
+    console.log('ℹ️  Entreprise WHATGO déjà présente, rien à faire.');
+  }
+}
+ensureWhatgoBusiness();
+
 app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT} (Gemini + tableau de bord)`));
