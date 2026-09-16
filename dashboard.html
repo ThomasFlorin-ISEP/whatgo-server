@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>WHATGO — Tableau de bord</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #F4F5F1; color: #1B2321; margin: 0; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 60px 24px; }
+  h1 { font-size: 1.5rem; }
+  .card { background: #fff; border: 1px solid #DADED8; border-radius: 12px; padding: 24px; margin-top: 20px; }
+  input { width: 100%; padding: 10px 12px; border: 1px solid #DADED8; border-radius: 8px; margin-bottom: 12px; font-size: .95rem; box-sizing: border-box; }
+  button { background: #1B2321; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: .9rem; }
+  button:hover { background: #000; }
+  .error { color: #b3261e; font-size: .85rem; margin-top: 8px; }
+  .convo { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #ECEDE8; font-size: .9rem; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .badge { font-size: .75rem; background: #E4F3E9; color: #137A3F; padding: 3px 10px; border-radius: 99px; }
+  #logoutBtn { background: transparent; color: #8A9089; border: 1px solid #DADED8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="loginView">
+    <h1>WHATGO — Connexion</h1>
+    <div class="card">
+      <form id="loginForm">
+        <input type="email" id="email" placeholder="Email" required />
+        <input type="password" id="password" placeholder="Mot de passe" required />
+        <button type="submit">Se connecter</button>
+        <div class="error" id="loginError"></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="dashboardView" style="display:none">
+    <div class="topbar">
+      <div>
+        <h1 id="businessName">—</h1>
+        <span class="badge" id="roleBadge">—</span>
+      </div>
+      <button id="logoutBtn">Se déconnecter</button>
+    </div>
+    <div class="card">
+      <div id="conversationsList">Chargement…</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = '';
+
+async function checkSession() {
+  try {
+    const res = await fetch(API + '/api/dashboard/me', { credentials: 'include' });
+    if (!res.ok) throw new Error();
+    const me = await res.json();
+    showDashboard(me);
+  } catch {}
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const errorEl = document.getElementById('loginError');
+  errorEl.textContent = '';
+
+  try {
+    const res = await fetch(API + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Erreur de connexion.';
+      return;
+    }
+    showDashboard(data);
+  } catch {
+    errorEl.textContent = 'Impossible de contacter le serveur.';
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch(API + '/api/auth/logout', { method: 'POST', credentials: 'include' });
+  document.getElementById('dashboardView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'block';
+});
+
+function showDashboard(me) {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('dashboardView').style.display = 'block';
+  document.getElementById('businessName').textContent = me.business;
+  document.getElementById('roleBadge').textContent = me.role === 'admin' ? 'Administrateur' : 'Lecture seule';
+  loadConversations();
+}
+
+async function loadConversations() {
+  const res = await fetch(API + '/api/dashboard/conversations', { credentials: 'include' });
+  const conversations = await res.json();
+  const list = document.getElementById('conversationsList');
+
+  if (conversations.length === 0) {
+    list.innerHTML = '<p style="color:#8A9089">Aucune conversation pour le moment.</p>';
+    return;
+  }
+
+  list.innerHTML = conversations.map(c => `
+    <div class="convo">
+      <span>${c.visitor_label} — ${c.message_count} message(s)</span>
+      <span style="color:#8A9089">${new Date(c.started_at).toLocaleString('fr-FR')}</span>
+    </div>
+  `).join('');
+}
+
+checkSession();
+</script>
+</body>
+</html>
