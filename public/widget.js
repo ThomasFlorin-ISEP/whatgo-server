@@ -251,8 +251,8 @@
   });
   closeBtn.addEventListener('click', closePanel);
 
-  // --- Ouverture automatique à l'arrivée sur la page (ordinateur uniquement, une fois par visite) ---
-  if (AUTO_OPEN && !alreadySeen() && window.innerWidth > 600) {
+  // --- Ouverture automatique à l'arrivée sur la page (ordinateur et mobile, une fois par visite) ---
+  if (AUTO_OPEN && !alreadySeen()) {
     setTimeout(function () {
       if (!alreadySeen() && !panel.classList.contains('wgt-open')) openPanel(false);
     }, AUTO_DELAY);
