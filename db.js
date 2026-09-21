@@ -78,6 +78,7 @@ addColumnIfMissing('businesses', "intro TEXT DEFAULT ''");
 addColumnIfMissing('businesses', "faq TEXT DEFAULT '[]'");
 addColumnIfMissing('businesses', "pricing TEXT DEFAULT ''");
 addColumnIfMissing('businesses', "hours TEXT DEFAULT ''");
+addColumnIfMissing('businesses', "webhook_url TEXT DEFAULT ''");
 
 // Les entreprises qui existaient déjà avant l'introduction du statut
 // brouillon/publié fonctionnaient déjà en direct : on les considère
