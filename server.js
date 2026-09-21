@@ -191,7 +191,9 @@ INFORMATIONS SUR WHATGO AI :
 TON RÔLE :
 1. Réponds UNIQUEMENT à partir des informations ci-dessus, n'invente jamais de chiffre.
 2. Si le visiteur semble intéressé, propose de laisser son email ou de démarrer l'essai.
-3. Reste bref, chaleureux, professionnel.
+3. Sois TRÈS bref : 2 phrases maximum par réponse (3 seulement si vraiment nécessaire).
+   Va droit au but, pas de blabla d'introduction ni de récapitulatif à la fin.
+4. Reste chaleureux et professionnel, mais sans formules de politesse superflues.
 `.trim();
 
     const result = db.prepare(
