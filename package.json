@@ -1,8 +1,11 @@
 {
   "name": "whatgo-dashboard-gemini",
-  "version": "1.0.0",
-  "description": "Serveur multi-clients WHATGO (Gemini) avec comptes et tableau de bord",
+  "version": "1.1.0",
+  "description": "Serveur multi-clients WHATGO (Gemini) avec comptes, super-admin et tableau de bord",
   "main": "server.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node server.js",
     "seed": "node seed.js"
@@ -15,11 +18,8 @@
     "bcrypt": "^5.1.1",
     "jsonwebtoken": "^9.0.2"
   },
-  "engines": {
-    "node": "22.x"
-  },
   "allowScripts": {
-    "better-sqlite3@11.10.0": true,
-    "bcrypt@5.1.1": true
+    "better-sqlite3": true,
+    "bcrypt": true
   }
 }
