@@ -42,6 +42,48 @@ db.exec(`
     content         TEXT NOT NULL,
     created_at      TEXT DEFAULT (datetime('now'))
   );
+
+  -- Comptes super-admin (l'équipe WHATGO) : totalement séparés des comptes
+  -- clients, pour ne jamais toucher aux contraintes de la table "users".
+  CREATE TABLE IF NOT EXISTS super_admins (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    email         TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at    TEXT DEFAULT (datetime('now'))
+  );
 `);
+
+// ------------------------------------------------------------
+// Migrations douces : on ajoute des colonnes à "businesses" sans
+// jamais toucher aux données déjà là. addColumnIfMissing() renvoie
+// true seulement la toute première fois qu'elle ajoute la colonne
+// (utile pour ne lancer un ajustement ponctuel qu'une seule fois).
+// ------------------------------------------------------------
+function addColumnIfMissing(table, columnDef) {
+  const columnName = columnDef.trim().split(/\s+/)[0];
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes('duplicate column name')) {
+      return false;
+    }
+    throw err;
+  }
+}
+
+const statusJustAdded = addColumnIfMissing('businesses', "status TEXT NOT NULL DEFAULT 'draft'");
+addColumnIfMissing('businesses', "sector TEXT DEFAULT ''");
+addColumnIfMissing('businesses', "intro TEXT DEFAULT ''");
+addColumnIfMissing('businesses', "faq TEXT DEFAULT '[]'");
+addColumnIfMissing('businesses', "pricing TEXT DEFAULT ''");
+addColumnIfMissing('businesses', "hours TEXT DEFAULT ''");
+
+// Les entreprises qui existaient déjà avant l'introduction du statut
+// brouillon/publié fonctionnaient déjà en direct : on les considère
+// "publiées" d'office, une seule fois, au moment où la colonne apparaît.
+if (statusJustAdded) {
+  db.exec("UPDATE businesses SET status = 'published' WHERE status = 'draft'");
+}
 
 module.exports = db;
