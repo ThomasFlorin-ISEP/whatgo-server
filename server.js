@@ -65,6 +65,73 @@ function buildSystemPrompt(business) {
   return prompt.trim();
 }
 
+// Détecte une adresse email dans un message (signe qu'un visiteur devient un lead).
+function extractEmail(text) {
+  const match = String(text || '').match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return match ? match[0] : null;
+}
+
+// Envoie le lead vers Make/Zapier/etc. sans jamais bloquer ni casser la
+// réponse du chatbot si le webhook est lent, en panne, ou mal configuré.
+function sendLeadToWebhook(business, payload) {
+  if (!business.webhook_url) return;
+  fetch(business.webhook_url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch((err) => {
+    console.error(`Erreur envoi webhook pour "${business.name}":`, err.message);
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Appelle Gemini avec une logique de réessai automatique : si l'API répond
+// une erreur 503 "UNAVAILABLE" (surcharge temporaire chez Google), on
+// retente jusqu'à 2 fois avec un court délai avant d'abandonner. Les autres
+// erreurs (clé API invalide, requête mal formée, etc.) ne sont PAS retentées,
+// puisqu'elles ne se résoudraient pas d'elles-mêmes.
+async function callGemini(systemPrompt, contents, maxRetries = 2) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    let data;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents,
+        }),
+      });
+      data = await response.json();
+    } catch (networkErr) {
+      // Erreur réseau (timeout, coupure...) : on retente pareil qu'une surcharge.
+      if (attempt < maxRetries) {
+        console.warn(`Gemini injoignable (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai...`);
+        await sleep(800 * (attempt + 1));
+        continue;
+      }
+      throw networkErr;
+    }
+
+    const isOverloaded = data.error && (data.error.code === 503 || data.error.status === 'UNAVAILABLE');
+    if (isOverloaded && attempt < maxRetries) {
+      console.warn(`Gemini surchargé (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai dans ${800 * (attempt + 1)}ms...`);
+      await sleep(800 * (attempt + 1)); // 800ms, puis 1600ms
+      continue;
+    }
+
+    return data; // succès, ou erreur définitive (pas une surcharge) qu'on remonte telle quelle
+  }
+}
+
 function slugify(name) {
   return name
     .toLowerCase()
@@ -105,6 +172,24 @@ app.post('/api/chat', async (req, res) => {
       'INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)'
     ).run(convoId, 'user', lastUserMessage.content);
 
+    // Lead qualifié : le visiteur vient de laisser un email pour la première
+    // fois dans cette conversation → on l'envoie une seule fois vers Make/Zapier.
+    const newEmail = extractEmail(lastUserMessage.content);
+    if (newEmail) {
+      const priorUserMessages = messages.slice(0, -1).filter((m) => m.role === 'user');
+      const alreadyHadEmail = priorUserMessages.some((m) => extractEmail(m.content));
+      if (!alreadyHadEmail) {
+        sendLeadToWebhook(business, {
+          business: business.name,
+          slug: business.slug,
+          conversationId: convoId,
+          email: newEmail,
+          message: lastUserMessage.content,
+          date: new Date().toISOString(),
+        });
+      }
+    }
+
     // Entreprise pas encore publiée : réponse d'attente, pas d'appel à Gemini
     // (évite d'improviser avec un contenu vide ou incomplet).
     if (business.status !== 'published') {
@@ -121,21 +206,7 @@ app.post('/api/chat', async (req, res) => {
       parts: [{ text: m.content }],
     }));
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': GEMINI_API_KEY,
-      },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: business.system_prompt }] },
-        contents: contents,
-      }),
-    });
-
-    const data = await response.json();
+    const data = await callGemini(business.system_prompt, contents);
 
     if (data.error) {
       console.error('Erreur API Gemini:', data.error);
@@ -339,6 +410,22 @@ app.put('/api/dashboard/content', requireAuth, requireRole('admin'), (req, res) 
     WHERE id = ?
   `).run(sector || '', intro || '', JSON.stringify(faqArr), pricing || '', hours || '', newSystemPrompt, req.user.businessId);
 
+  res.json({ ok: true });
+});
+
+// Page "Intégrations" : où envoyer les leads qualifiés (via Make/Zapier...)
+app.get('/api/dashboard/webhook', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
+  const b = db.prepare('SELECT webhook_url FROM businesses WHERE id = ?').get(req.user.businessId);
+  res.json({ webhookUrl: b.webhook_url || '' });
+});
+
+app.put('/api/dashboard/webhook', requireAuth, requireRole('admin'), (req, res) => {
+  const { webhookUrl } = req.body;
+  const value = (webhookUrl || '').trim();
+  if (value && !/^https:\/\//.test(value)) {
+    return res.status(400).json({ error: 'L\'adresse doit commencer par https://' });
+  }
+  db.prepare('UPDATE businesses SET webhook_url = ? WHERE id = ?').run(value, req.user.businessId);
   res.json({ ok: true });
 });
 
