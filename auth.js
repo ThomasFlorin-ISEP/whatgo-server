@@ -19,9 +19,14 @@ async function verifyPassword(plainPassword, hash) {
   return bcrypt.compare(plainPassword, hash);
 }
 
+// Un compte super-admin n'appartient à aucune entreprise (businessId: null).
 function signToken(user) {
   return jwt.sign(
-    { userId: user.id, businessId: user.business_id, role: user.role },
+    {
+      userId: user.id,
+      businessId: user.business_id ?? null,
+      role: user.role,
+    },
     JWT_SECRET,
     { expiresIn: TOKEN_EXPIRY }
   );
@@ -38,13 +43,30 @@ function requireAuth(req, res, next) {
   }
 }
 
-function requireRole(minRole) {
+// requireRole('admin') → uniquement les admins de l'entreprise cliente.
+// requireRole(['admin', 'super_admin']) → plusieurs rôles acceptés.
+function requireRole(allowed) {
+  const roles = Array.isArray(allowed) ? allowed : [allowed];
   return (req, res, next) => {
-    if (minRole === 'admin' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Action réservée aux administrateurs.' });
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Action non autorisée pour ce compte.' });
     }
     next();
   };
 }
 
-module.exports = { hashPassword, verifyPassword, signToken, requireAuth, requireRole };
+function requireSuperAdmin(req, res, next) {
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Réservé à l\'équipe WHATGO.' });
+  }
+  next();
+}
+
+module.exports = {
+  hashPassword,
+  verifyPassword,
+  signToken,
+  requireAuth,
+  requireRole,
+  requireSuperAdmin,
+};
