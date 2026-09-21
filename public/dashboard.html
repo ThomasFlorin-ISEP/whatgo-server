@@ -157,6 +157,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM4 9h16M9 9v11"/></svg>
         <span class="label">Contenu</span>
       </div>
+      <div class="nav-item" data-tab="integrations">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 16.08a2.99 2.99 0 0 0-1.72.54l-6.5-3.9a2.94 2.94 0 0 0 0-1.44l6.5-3.9a3 3 0 1 0-.9-1.72l-6.5 3.9a3 3 0 1 0 0 4.88l6.5 3.9a3 3 0 1 0 2.62-2.26z"/></svg>
+        <span class="label">Intégrations</span>
+      </div>
       <div class="nav-item" data-tab="clients" id="clientsNavItem" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span class="label">Clients</span>
@@ -231,6 +235,26 @@
         <span class="ok-msg" id="contentOk"></span>
         <span class="error-msg" id="contentError"></span>
       </form>
+    </section>
+
+    <!-- ---------- Intégrations ---------- -->
+    <section class="tab-page" id="page-integrations">
+      <div class="page-head"><h2>Intégrations</h2></div>
+      <div class="panel" style="max-width:560px">
+        <h3>Envoyer les leads vers Make (ou Zapier)</h3>
+        <p style="font-size:.85rem;color:var(--muted);margin-top:-8px">
+          Dès qu'un visiteur laisse un email dans la conversation, ses informations sont envoyées automatiquement à cette adresse. Laissez vide pour ne rien envoyer.
+        </p>
+        <form id="webhookForm">
+          <div class="field">
+            <label>URL du webhook Make</label>
+            <input type="url" id="wh-url" placeholder="https://hook.eu1.make.com/..." />
+          </div>
+          <button type="submit" class="btn">Enregistrer</button>
+          <span class="ok-msg" id="webhookOk"></span>
+          <span class="error-msg" id="webhookError"></span>
+        </form>
+      </div>
     </section>
 
     <!-- ---------- Clients (super-admin) ---------- -->
@@ -339,6 +363,7 @@ function enterApp() {
     document.querySelector('.nav-item[data-tab="overview"]').style.display = 'none';
     document.querySelector('.nav-item[data-tab="conversations"]').style.display = 'none';
     document.querySelector('.nav-item[data-tab="content"]').style.display = 'none';
+    document.querySelector('.nav-item[data-tab="integrations"]').style.display = 'none';
     switchTab('clients');
     loadClients();
   } else {
@@ -348,6 +373,7 @@ function enterApp() {
     loadStats();
     loadConversations();
     loadContent();
+    loadWebhook();
   }
 }
 
@@ -475,6 +501,30 @@ document.getElementById('contentForm').addEventListener('submit', async (e) => {
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || "Erreur lors de l'enregistrement."; return; }
     okEl.textContent = 'Contenu enregistré.';
+    setTimeout(() => (okEl.textContent = ''), 3000);
+  } catch { errEl.textContent = 'Impossible de contacter le serveur.'; }
+});
+
+// ---------- Intégrations ----------
+async function loadWebhook() {
+  const res = await fetch(API + '/api/dashboard/webhook', { credentials: 'include' });
+  const data = await res.json();
+  document.getElementById('wh-url').value = data.webhookUrl || '';
+}
+
+document.getElementById('webhookForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const okEl = document.getElementById('webhookOk');
+  const errEl = document.getElementById('webhookError');
+  okEl.textContent = ''; errEl.textContent = '';
+  try {
+    const res = await fetch(API + '/api/dashboard/webhook', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ webhookUrl: document.getElementById('wh-url').value.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || "Erreur lors de l'enregistrement."; return; }
+    okEl.textContent = 'Adresse enregistrée.';
     setTimeout(() => (okEl.textContent = ''), 3000);
   } catch { errEl.textContent = 'Impossible de contacter le serveur.'; }
 });
