@@ -3,303 +3,666 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>WHATGO — Tableau de bord</title>
+<title>WHATGO — Console</title>
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#0F1A16" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%231FAA59'/%3E%3Cpath d='M9 12h14M9 17h9' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
-  :root {
-    --dark: #1B2321; --bg: #F4F5F1; --line: #DADED8; --muted: #8A9089;
-    --green: #1FAA59; --green-bg: #E4F3E9; --green-text: #137A3F;
-    --red: #B5122B; --red-bg: #FBE7EA;
-  }
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--dark); margin: 0; }
-  input, textarea, select { font-family: inherit; }
+/* ============================================================
+   WHATGO — Console. Design system (repris du mockup co-fondateur)
+   ============================================================ */
+:root{
+  --bg:#EDF3F0; --bg-soft:#F6FAF8;
+  --panel:rgba(255,255,255,.78);
+  --panel-solid:#FFFFFF;
+  --line:#E2EAE6; --line-soft:#EEF3F1;
+  --ink:#0B1A14; --ink-soft:#4A5C54; --ink-faint:#7F8F87;
+  --green:#1FAA59; --green-deep:#0C7A40; --green-soft:#DFF6EA; --green-line:rgba(31,170,89,.28);
+  --gold:#C9AE68; --gold-soft:#F6EFDC;
+  --blue:#3E7BD6; --blue-soft:#E3EDFB;
+  --amber:#D98A1F; --amber-soft:#FDF0DA;
+  --red:#C0392B; --red-soft:#FBE9E7;
+  --violet:#6D5BD0; --violet-soft:#EDE9FB;
+  --night:#0F1A16; --night-2:#16241D;
+  --r-s:9px; --r-m:13px; --r-l:18px;
+  --sh-s:0 1px 3px rgba(11,40,28,.07),0 1px 2px rgba(11,40,28,.04);
+  --sh-m:0 12px 28px -16px rgba(11,40,28,.34);
+  --sh-l:0 28px 60px -30px rgba(11,40,28,.5);
+  --side:248px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:'Space Grotesk','Inter',sans-serif;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+img,svg{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+[hidden]{display:none!important}
 
-  /* ---------- Écran de connexion ---------- */
-  #loginView { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-  .login-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 36px; width: 100%; max-width: 380px; }
-  .login-card h1 { font-size: 1.3rem; margin: 0 0 4px; }
-  .login-card p.sub { color: var(--muted); font-size: .85rem; margin: 0 0 24px; }
-  .field { margin-bottom: 14px; }
-  .field label { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 5px; }
-  input, textarea, select {
-    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: .92rem; background: #fff; color: var(--dark);
-  }
-  textarea { resize: vertical; min-height: 80px; }
-  .btn { background: var(--dark); color: #fff; border: none; padding: 11px 20px; border-radius: 8px; cursor: pointer; font-size: .9rem; font-weight: 600; }
-  .btn:hover { background: #000; }
-  .btn.secondary { background: transparent; color: var(--dark); border: 1px solid var(--line); }
-  .btn.secondary:hover { background: var(--bg); }
-  .btn.danger { background: var(--red); }
-  .btn:disabled { opacity: .5; cursor: default; }
-  .btn.full { width: 100%; }
-  .error-msg { color: var(--red); font-size: .82rem; margin-top: 8px; }
-  .ok-msg { color: var(--green-text); font-size: .82rem; margin-top: 8px; }
+/* ---------- ambient ---------- */
+.aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.aurora::before{content:"";position:absolute;width:820px;height:820px;top:-28%;right:-12%;border-radius:50%;
+  filter:blur(90px);background:radial-gradient(circle at 40% 40%,rgba(123,224,166,.42),transparent 68%)}
+.aurora::after{content:"";position:absolute;width:680px;height:680px;bottom:-22%;left:14%;border-radius:50%;
+  filter:blur(100px);background:radial-gradient(circle,rgba(160,214,255,.34),transparent 66%)}
 
-  /* ---------- Layout général ---------- */
-  #appView { display: none; min-height: 100vh; }
-  .sidebar {
-    width: 220px; background: var(--dark); color: #fff; flex-shrink: 0; display: flex; flex-direction: column;
-    position: fixed; top: 0; left: 0; bottom: 0; padding: 20px 14px;
-  }
-  .sidebar .logo { font-weight: 800; font-size: 1.15rem; letter-spacing: .02em; padding: 6px 10px 22px; }
-  .sidebar nav { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-  .nav-item {
-    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: rgba(255,255,255,.72);
-    cursor: pointer; font-size: .88rem; font-weight: 500; user-select: none;
-  }
-  .nav-item:hover { background: rgba(255,255,255,.06); color: #fff; }
-  .nav-item.active { background: rgba(255,255,255,.12); color: #fff; }
-  .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
-  .sidebar-foot { border-top: 1px solid rgba(255,255,255,.12); padding-top: 14px; font-size: .78rem; color: rgba(255,255,255,.6); }
-  .sidebar-foot b { color: #fff; display: block; font-size: .85rem; margin-bottom: 2px; }
-  .sidebar-foot button { margin-top: 10px; }
+/* ============================================================ LOGIN */
+#loginView{min-height:100vh;display:grid;place-items:center;padding:24px;position:relative;z-index:2}
+.login-card{width:100%;max-width:400px;background:linear-gradient(168deg,rgba(255,255,255,.94),rgba(255,255,255,.72));
+  -webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);
+  border:1px solid rgba(255,255,255,.92);border-radius:22px;padding:36px 32px;box-shadow:var(--sh-l)}
+.login-card__logo{display:flex;align-items:center;gap:9px;margin-bottom:22px}
+.login-card__logo .mark{width:30px;height:30px;border-radius:9px;background:var(--green);display:grid;place-items:center;flex-shrink:0}
+.login-card__logo .mark svg{width:16px;height:16px;stroke:#fff;stroke-width:2.6}
+.login-card__logo span{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.05rem;letter-spacing:.01em}
+.login-card h1{font-size:1.32rem;margin-bottom:5px}
+.login-card .sub{color:var(--ink-soft);font-size:.88rem;margin-bottom:26px}
+.login-card .hint{margin-top:20px;padding-top:18px;border-top:1px solid var(--line);font-size:.78rem;color:var(--ink-faint)}
 
-  .main { margin-left: 220px; flex: 1; padding: 32px 40px 60px; max-width: 1100px; }
-  .page-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
-  .page-head h2 { font-size: 1.5rem; margin: 0; }
-  .badge { font-size: .74rem; padding: 4px 11px; border-radius: 99px; font-weight: 600; }
-  .badge.published { background: var(--green-bg); color: var(--green-text); }
-  .badge.draft { background: var(--red-bg); color: var(--red); }
+/* ============================================================ SHELL */
+#appView{display:none;min-height:100vh}
+#appView.is-on{display:block}
 
-  .tab-page { display: none; }
-  .tab-page.active { display: block; }
+.sidebar{position:fixed;inset:0 auto 0 0;width:var(--side);z-index:40;
+  background:linear-gradient(168deg,var(--night) 0%,var(--night-2) 52%,#0B1712 100%);
+  color:#fff;display:flex;flex-direction:column;padding:18px 12px 14px}
+.sidebar__logo{padding:6px 10px 20px;display:flex;align-items:center;gap:9px}
+.sidebar__logo .mark{width:26px;height:26px;border-radius:8px;background:var(--green);display:grid;place-items:center;flex-shrink:0}
+.sidebar__logo .mark svg{width:14px;height:14px;stroke:#fff;stroke-width:2.6}
+.sidebar__logo span{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1rem;letter-spacing:.01em;color:#fff}
+.sidebar nav{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0 -2px;padding:0 2px}
+.sidebar nav::-webkit-scrollbar{width:4px}
+.sidebar nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:2px}
+.navgroup{font-size:.63rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+  color:rgba(255,255,255,.34);padding:16px 12px 7px}
+.navgroup:first-child{padding-top:2px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;
+  color:rgba(255,255,255,.7);cursor:pointer;font-size:.875rem;font-weight:500;user-select:none;
+  border:1px solid transparent;transition:background .14s,color .14s;text-align:left;background:none;width:100%}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-item.active{background:rgba(31,170,89,.18);color:#fff;border-color:rgba(31,170,89,.34)}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;stroke-width:1.9}
+.pill-soon{margin-left:auto;font-size:.58rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);
+  padding:2px 6px;border-radius:99px}
+.sidebar__foot{border-top:1px solid rgba(255,255,255,.1);padding:13px 10px 2px;margin-top:10px}
+.sidebar__biz{font-size:.86rem;font-weight:600;color:#fff;margin-bottom:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar__role{font-size:.74rem;color:rgba(255,255,255,.54)}
+.sidebar__out{margin-top:11px;width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+  color:rgba(255,255,255,.85);border-radius:9px;padding:8px;font-size:.8rem;font-weight:600;cursor:pointer}
+.sidebar__out:hover{background:rgba(255,255,255,.13);color:#fff}
 
-  /* ---------- Cartes de stats ---------- */
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
-  .stat-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
-  .stat-card .label { font-size: .78rem; color: var(--muted); margin-bottom: 6px; }
-  .stat-card .value { font-size: 1.7rem; font-weight: 700; }
+.main{margin-left:var(--side);padding:26px 34px 80px;max-width:1320px;position:relative;z-index:2}
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:22px}
+.topbar h2{font-size:1.62rem}
+.topbar p{color:var(--ink-soft);font-size:.9rem;margin-top:4px;max-width:70ch}
+.topbar__act{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 
-  .panel { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
-  .panel h3 { margin: 0 0 16px; font-size: 1rem; }
+.tab-page{display:none;animation:fade .22s ease}
+.tab-page.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 
-  /* ---------- Graphique en barres, en CSS pur ---------- */
-  .chart { display: flex; align-items: flex-end; gap: 6px; height: 140px; padding-top: 10px; }
-  .chart .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
-  .chart .bar { width: 100%; max-width: 26px; background: var(--green); border-radius: 4px 4px 0 0; min-height: 3px; transition: height .2s; }
-  .chart .bar-label { font-size: .62rem; color: var(--muted); margin-top: 6px; white-space: nowrap; }
+/* ============================================================ ATOMS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 16px;border-radius:10px;
+  font-size:.86rem;font-weight:600;border:1px solid transparent;cursor:pointer;white-space:nowrap;
+  transition:transform .12s,box-shadow .16s,background .16s,border-color .16s}
+.btn svg{width:15px;height:15px;flex-shrink:0}
+.btn:active{transform:scale(.985)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn--primary{background:linear-gradient(180deg,#25BC66,#118F48);color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 8px 18px -10px rgba(14,122,64,.8)}
+.btn--primary:hover:not(:disabled){box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 12px 22px -10px rgba(14,122,64,.9)}
+.btn--ghost{background:rgba(255,255,255,.8);border-color:var(--line);color:var(--ink);box-shadow:var(--sh-s)}
+.btn--ghost:hover:not(:disabled){border-color:var(--green-line);color:var(--green-deep)}
+.btn--sm{padding:6px 11px;font-size:.79rem;border-radius:8px;gap:5px}
+.btn--sm svg{width:13px;height:13px}
+.btn--full{width:100%}
 
-  /* ---------- Liste de conversations (tickets) ---------- */
-  .ticket { display: flex; justify-content: space-between; align-items: center; padding: 13px 4px; border-bottom: 1px solid #ECEDE8; cursor: pointer; }
-  .ticket:hover { background: #FAFBF9; }
-  .ticket:last-child { border-bottom: none; }
-  .ticket .who { font-size: .9rem; font-weight: 600; }
-  .ticket .meta { font-size: .78rem; color: var(--muted); }
-  .empty-state { color: var(--muted); font-size: .88rem; padding: 20px 0; text-align: center; }
+.card{background:linear-gradient(170deg,rgba(255,255,255,.9),rgba(255,255,255,.66));
+  -webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);
+  border:1px solid rgba(255,255,255,.9);border-radius:var(--r-l);box-shadow:var(--sh-m);
+  padding:22px;margin-bottom:18px}
+.card--flush{padding:0;overflow:hidden}
+.card--chart{overflow:hidden}
+.split>*,.grid2>*,.kpis>*{min-width:0}
+.card__head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.card__head--pad{padding:20px 22px 0}
+.card h3{font-size:1.02rem}
+.card__sub{font-size:.82rem;color:var(--ink-soft);margin-top:3px;max-width:76ch}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.split{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start}
 
-  /* ---------- Panneau latéral transcript ---------- */
-  .overlay { position: fixed; inset: 0; background: rgba(27,35,33,.35); display: none; z-index: 998; }
-  .overlay.open { display: block; }
-  .drawer {
-    position: fixed; top: 0; right: -420px; width: 400px; max-width: 90vw; height: 100%; background: #fff;
-    box-shadow: -10px 0 30px rgba(0,0,0,.15); z-index: 999; transition: right .2s; display: flex; flex-direction: column;
-  }
-  .drawer.open { right: 0; }
-  .drawer-head { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
-  .drawer-head h4 { margin: 0; font-size: .95rem; }
-  .drawer-body { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
-  .bubble { max-width: 85%; padding: 9px 13px; border-radius: 12px; font-size: .87rem; line-height: 1.4; }
-  .bubble.user { background: var(--dark); color: #fff; align-self: flex-end; }
-  .bubble.assistant { background: #EEF1F5; align-self: flex-start; }
-  .close-x { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--muted); }
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:.71rem;font-weight:700;
+  padding:3px 9px;border-radius:99px;letter-spacing:.02em;white-space:nowrap}
+.tag--green{background:var(--green-soft);color:var(--green-deep)}
+.tag--amber{background:var(--amber-soft);color:#96610F}
+.tag--red{background:var(--red-soft);color:var(--red)}
+.tag--grey{background:#EDF1EF;color:var(--ink-soft)}
+.tag--dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
 
-  /* ---------- FAQ dynamique ---------- */
-  .faq-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 8px; align-items: start; }
-  .faq-row textarea { min-height: 44px; }
-  .faq-row button { background: transparent; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; color: var(--red); padding: 0 10px; }
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field label,.lbl{display:block;font-size:.78rem;font-weight:600;color:var(--ink-soft);margin-bottom:6px}
+.field .help{font-size:.76rem;color:var(--ink-faint);margin-top:6px;line-height:1.45}
+input[type=text],input[type=email],input[type=password],input[type=url],input[type=tel],
+textarea,select{
+  width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-s);background:#fff;
+  font-size:.88rem;transition:border-color .14s,box-shadow .14s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,170,89,.13)}
+input:disabled,textarea:disabled,select:disabled{background:#F4F7F5;color:var(--ink-faint);cursor:not-allowed}
+textarea{resize:vertical;min-height:82px;line-height:1.55}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237F8F87' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;background-size:15px;padding-right:32px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 
-  /* ---------- Table clients (super-admin) ---------- */
-  table.clients { width: 100%; border-collapse: collapse; font-size: .87rem; }
-  table.clients th { text-align: left; color: var(--muted); font-size: .74rem; font-weight: 600; padding: 8px 6px; border-bottom: 1px solid var(--line); }
-  table.clients td { padding: 10px 6px; border-bottom: 1px solid #ECEDE8; vertical-align: middle; }
-  .snippet-box { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-family: monospace; font-size: .72rem; word-break: break-all; margin-top: 10px; }
-  .toggle-status { font-size: .78rem; padding: 5px 10px; border-radius: 7px; cursor: pointer; border: 1px solid var(--line); background: #fff; }
+.msg{font-size:.82rem;margin-top:9px;display:none}
+.msg.is-on{display:block}
+.msg--ok{color:var(--green-deep)}
+.msg--err{color:var(--red)}
 
-  @media (max-width: 760px) {
-    .sidebar { width: 64px; padding: 16px 8px; }
-    .sidebar .logo { display: none; }
-    .nav-item span.label { display: none; }
-    .sidebar-foot { display: none; }
-    .main { margin-left: 64px; padding: 24px 16px 60px; }
-  }
+/* ============================================================ KPI */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.kpi{background:linear-gradient(170deg,rgba(255,255,255,.92),rgba(255,255,255,.66));
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  border:1px solid rgba(255,255,255,.9);border-radius:var(--r-l);padding:17px 19px;box-shadow:var(--sh-m)}
+.kpi--hero{background:linear-gradient(160deg,rgba(223,246,234,.96),rgba(255,255,255,.7));border-color:var(--green-line)}
+.kpi__l{font-size:.78rem;color:var(--ink-soft);font-weight:500;display:flex;align-items:center;gap:6px}
+.kpi__l svg{width:14px;height:14px;stroke:var(--green-deep)}
+.kpi__v{font-family:'Space Grotesk',sans-serif;font-size:1.92rem;font-weight:700;letter-spacing:-.03em;
+  line-height:1.1;margin-top:7px}
+.kpi--hero .kpi__v{color:var(--green-deep)}
+
+/* chart */
+.chart{display:flex;align-items:flex-end;gap:5px;height:178px;padding-top:14px}
+.chart__col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;
+  position:relative;cursor:default}
+.chart__stack{width:100%;max-width:30px;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:2px}
+.chart__b{width:100%;border-radius:4px;min-height:2px;transition:opacity .15s}
+.chart__b--solo{background:linear-gradient(180deg,#31C273,#0E8A47)}
+.chart__col:hover .chart__b{opacity:.75}
+.chart__x{font-size:.63rem;color:var(--ink-faint);margin-top:7px;white-space:nowrap;max-width:100%;overflow:hidden}
+.chart__tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);max-width:210px;
+  background:var(--night);color:#fff;font-size:.72rem;padding:6px 10px;border-radius:8px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .14s;z-index:5}
+.chart__col:hover .chart__tip{opacity:1}
+
+/* ============================================================ TABLE */
+.tablewrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:.855rem}
+table.tbl th{text-align:left;font-size:.71rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-faint);padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap;background:rgba(255,255,255,.5)}
+table.tbl td{padding:12px 14px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+table.tbl tbody tr{transition:background .12s}
+table.tbl tbody tr.clickable{cursor:pointer}
+table.tbl tbody tr.clickable:hover{background:rgba(223,246,234,.42)}
+table.tbl tbody tr:last-child td{border-bottom:none}
+.cell-main{font-weight:600}
+.cell-sub{font-size:.77rem;color:var(--ink-faint);margin-top:1px}
+.num{font-variant-numeric:tabular-nums}
+.right{text-align:right}
+
+.empty{text-align:center;padding:44px 20px;color:var(--ink-faint)}
+.empty svg{width:34px;height:34px;margin:0 auto 12px;stroke:#BFCCC6;stroke-width:1.6}
+.empty b{display:block;color:var(--ink-soft);font-size:.92rem;font-weight:600;margin-bottom:4px}
+.empty p{font-size:.84rem;max-width:44ch;margin:0 auto}
+
+/* ============================================================ DRAWER */
+.overlay{position:fixed;inset:0;background:rgba(11,26,20,.4);z-index:90;opacity:0;visibility:hidden;
+  transition:opacity .2s,visibility .2s;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.overlay.open{opacity:1;visibility:visible}
+.drawer{position:fixed;top:0;right:0;height:100%;width:520px;max-width:94vw;background:var(--bg-soft);
+  z-index:91;box-shadow:-18px 0 50px rgba(11,40,28,.22);display:flex;flex-direction:column;
+  transform:translateX(102%);transition:transform .24s cubic-bezier(.3,.9,.3,1)}
+.drawer.open{transform:none}
+.drawer__head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;
+  align-items:flex-start;gap:14px;background:#fff}
+.drawer__head h4{font-size:1.02rem}
+.drawer__head .cell-sub{margin-top:3px}
+.drawer__x{background:none;border:0;cursor:pointer;color:var(--ink-faint);padding:4px;border-radius:7px;line-height:1}
+.drawer__x:hover{background:var(--line-soft);color:var(--ink)}
+.drawer__x svg{width:18px;height:18px}
+.drawer__body{flex:1;overflow-y:auto;padding:20px 22px}
+
+.thread{display:flex;flex-direction:column;gap:9px}
+.bubble{max-width:85%;padding:9px 13px;border-radius:14px;font-size:.855rem;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.bubble.user{background:linear-gradient(180deg,#25BC66,#159A51);color:#fff;align-self:flex-end;border-bottom-right-radius:5px}
+.bubble.assistant{background:#fff;border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:5px}
+
+/* ============================================================ MISC */
+.faqrow{display:grid;grid-template-columns:1fr 1.3fr auto;gap:9px;margin-bottom:9px;align-items:start}
+.faqrow textarea{min-height:46px}
+.iconbtn{background:#fff;border:1px solid var(--line);border-radius:8px;cursor:pointer;padding:8px;
+  color:var(--ink-faint);line-height:0;flex-shrink:0}
+.iconbtn:hover{color:var(--red);border-color:rgba(192,57,43,.32);background:var(--red-soft)}
+.iconbtn svg{width:14px;height:14px;stroke-width:2}
+
+.code{background:var(--night);color:#CFE8D9;border-radius:var(--r-m);padding:14px 16px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;line-height:1.6;
+  word-break:break-all;position:relative}
+.code > span{display:block;padding-right:70px}
+.code .cp{position:absolute;top:9px;right:9px}
+
+/* beta / coming-soon hero */
+.betahero{border-radius:var(--r-l);overflow:hidden;position:relative;margin-bottom:18px;
+  background:linear-gradient(160deg,var(--night) 0%,#16241D 55%,#0B1712 100%);
+  border:1px solid rgba(255,255,255,.1);box-shadow:var(--sh-l);padding:28px 30px;color:#fff}
+.betahero::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(110% 80% at 88% -18%,rgba(255,255,255,.08),transparent 60%)}
+.betahero__in{position:relative;z-index:2;display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.betahero__ic{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;flex-shrink:0}
+.betahero__ic svg{width:25px;height:25px;stroke:#fff;stroke-width:1.9}
+.betahero__t{flex:1;min-width:240px}
+.betahero h3{color:#fff;font-size:1.3rem;margin-bottom:6px}
+.betahero p{color:rgba(224,234,229,.72);font-size:.89rem;max-width:62ch}
+.soonbadge{display:inline-flex;align-items:center;gap:7px;font-size:.66rem;font-weight:800;letter-spacing:.15em;
+  text-transform:uppercase;color:rgba(255,255,255,.75);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);
+  padding:6px 13px;border-radius:99px;margin-bottom:12px}
+.soonbadge::before{content:"";width:6px;height:6px;border-radius:50%;background:#8FA69C}
+
+.note{background:var(--blue-soft);border:1px solid rgba(62,123,214,.24);border-radius:var(--r-m);
+  padding:13px 15px;font-size:.82rem;color:#28518F;display:flex;gap:10px;margin-bottom:16px}
+.note svg{width:16px;height:16px;flex-shrink:0;margin-top:1px;stroke:#3E7BD6}
+.note b{font-weight:700}
+
+/* toast */
+.toasts{position:fixed;bottom:22px;right:22px;z-index:120;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
+.toast{background:var(--night);color:#fff;border-radius:12px;padding:12px 16px;font-size:.85rem;font-weight:500;
+  box-shadow:var(--sh-l);display:flex;align-items:center;gap:9px;animation:tin .22s ease;max-width:360px}
+.toast svg{width:16px;height:16px;flex-shrink:0;stroke:#5FE39B;stroke-width:2.4}
+.toast--err svg{stroke:#FF9A8E}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ============================================================ RESPONSIVE */
+.mobbar{display:none}
+@media (max-width:1180px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .split,.grid2{grid-template-columns:1fr}
+}
+@media (max-width:900px){
+  :root{--side:0px}
+  .sidebar{transform:translateX(-100%);transition:transform .24s;width:262px;box-shadow:24px 0 50px rgba(0,0,0,.3)}
+  .sidebar.open{transform:none}
+  .main{margin-left:0;padding:16px 16px 90px}
+  .mobbar{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:38;
+    background:rgba(246,250,248,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);padding:11px 16px;margin:-16px -16px 16px}
+  .mobbar .mark{width:22px;height:22px;border-radius:7px;background:var(--green);display:grid;place-items:center}
+  .mobbar .mark svg{width:12px;height:12px;stroke:#fff;stroke-width:2.6}
+  .mobbar button{background:#fff;border:1px solid var(--line);border-radius:9px;width:38px;height:36px;
+    display:grid;place-items:center;cursor:pointer;margin-left:auto}
+  .mobbar button svg{width:17px;height:17px;stroke-width:2}
+  .row2,.faqrow{grid-template-columns:1fr}
+  .kpis{grid-template-columns:1fr 1fr}
+  .drawer{width:100%}
+  .topbar h2{font-size:1.36rem}
+}
+@media (max-width:520px){
+  .kpis{grid-template-columns:1fr}
+  .chart__x{font-size:.58rem}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
 </style>
 </head>
 <body>
+<div class="aurora" aria-hidden="true"></div>
 
 <!-- ============================================================ CONNEXION ============================================================ -->
 <div id="loginView">
   <div class="login-card">
-    <h1>WHATGO</h1>
-    <p class="sub">Connexion au tableau de bord</p>
-    <form id="loginForm">
-      <div class="field"><label>Email</label><input type="email" id="email" required autocomplete="username" /></div>
-      <div class="field"><label>Mot de passe</label><input type="password" id="password" required autocomplete="current-password" /></div>
-      <button type="submit" class="btn full">Se connecter</button>
-      <div class="error-msg" id="loginError"></div>
+    <div class="login-card__logo">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 9h14M5 15h9" stroke-linecap="round"/></svg></span>
+      <span>WHATGO</span>
+    </div>
+    <h1>Connexion</h1>
+    <p class="sub">Accédez à la console WHATGO.</p>
+    <form id="loginForm" novalidate>
+      <div class="field"><label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="username" placeholder="vous@entreprise.com" /></div>
+      <div class="field"><label for="password">Mot de passe</label>
+        <input type="password" id="password" required autocomplete="current-password" /></div>
+      <button type="submit" class="btn btn--primary btn--full" id="loginBtn">Se connecter</button>
+      <p class="msg msg--err is-on" id="loginError"></p>
     </form>
   </div>
 </div>
 
 <!-- ============================================================ APPLICATION ============================================================ -->
 <div id="appView">
-  <aside class="sidebar">
-    <div class="logo">WHATGO</div>
-    <nav id="navList">
-      <div class="nav-item active" data-tab="overview">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4v8H3zM10 8h4v12h-4zM17 4h4v16h-4z"/></svg>
-        <span class="label">Vue d'ensemble</span>
-      </div>
-      <div class="nav-item" data-tab="conversations">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-        <span class="label">Conversations</span>
-      </div>
-      <div class="nav-item" data-tab="content">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar__logo">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 9h14M5 15h9" stroke-linecap="round"/></svg></span>
+      <span>WHATGO</span>
+    </div>
+    <nav id="navList" aria-label="Navigation principale">
+
+      <div class="navgroup" data-grp="client">Pilotage</div>
+      <button class="nav-item active" data-tab="overview" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 13h4v8H3zM10 8h4v13h-4zM17 3h4v18h-4z" stroke-linejoin="round"/></svg>
+        <span>Vue d'ensemble</span></button>
+      <button class="nav-item" data-tab="leads" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke-linecap="round"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87" stroke-linecap="round"/></svg>
+        <span>Leads</span><span class="pill-soon">Bientôt</span></button>
+      <button class="nav-item" data-tab="conversations" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0112.5 3 8.5 8.5 0 0121 11.5z" stroke-linejoin="round"/></svg>
+        <span>Conversations</span></button>
+      <button class="nav-item" data-tab="appointments" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4" stroke-linecap="round"/></svg>
+        <span>Rendez-vous</span><span class="pill-soon">Bientôt</span></button>
+
+      <div class="navgroup" data-grp="client">Assistant</div>
+      <button class="nav-item" data-tab="content" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM4 9h16M9 9v11"/></svg>
-        <span class="label">Contenu</span>
-      </div>
-      <div class="nav-item" data-tab="integrations">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 16.08a2.99 2.99 0 0 0-1.72.54l-6.5-3.9a2.94 2.94 0 0 0 0-1.44l6.5-3.9a3 3 0 1 0-.9-1.72l-6.5 3.9a3 3 0 1 0 0 4.88l6.5 3.9a3 3 0 1 0 2.62-2.26z"/></svg>
-        <span class="label">Intégrations</span>
-      </div>
-      <div class="nav-item" data-tab="clients" id="clientsNavItem" style="display:none">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span class="label">Clients</span>
-      </div>
-      <div class="nav-item" data-tab="settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span class="label">Paramètres</span>
-      </div>
+        <span>Contenu</span></button>
+      <button class="nav-item" data-tab="knowledge" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5V5a2 2 0 012-2h13v18H6a2 2 0 01-2-1.5z" stroke-linejoin="round"/><path d="M8 7h7M8 11h5" stroke-linecap="round"/></svg>
+        <span>Base de connaissances</span><span class="pill-soon">Bientôt</span></button>
+      <button class="nav-item" data-tab="qualification" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M6 12h12M10 19h4" stroke-linecap="round"/></svg>
+        <span>Qualification</span><span class="pill-soon">Bientôt</span></button>
+      <button class="nav-item" data-tab="widget" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="14" rx="3"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/></svg>
+        <span>Widget du site</span><span class="pill-soon">Bientôt</span></button>
+
+      <div class="navgroup" data-grp="client">Canaux</div>
+      <button class="nav-item" data-tab="whatsapp" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0112.5 3 8.5 8.5 0 0121 11.5z" stroke-linejoin="round"/></svg>
+        <span>WhatsApp</span><span class="pill-soon">Bientôt</span></button>
+      <button class="nav-item" data-tab="voice" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.8 2.1z" stroke-linejoin="round"/></svg>
+        <span>IA vocale</span><span class="pill-soon">Bientôt</span></button>
+
+      <div class="navgroup" data-grp="client">Connexions</div>
+      <button class="nav-item" data-tab="integrations" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" stroke-linecap="round"/></svg>
+        <span>Intégrations</span></button>
+
+      <div class="navgroup" data-grp="all">Compte</div>
+      <button class="nav-item" data-tab="team" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0113 0" stroke-linecap="round"/><circle cx="17.5" cy="9.5" r="2.6"/><path d="M15.5 20a5 5 0 016-4.4" stroke-linecap="round"/></svg>
+        <span>Équipe</span><span class="pill-soon">Bientôt</span></button>
+      <button class="nav-item" data-tab="billing" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20" stroke-linecap="round"/></svg>
+        <span>Plan &amp; consommation</span><span class="pill-soon">Bientôt</span></button>
+      <button class="nav-item" data-tab="clients" data-grp="admin" id="clientsNavItem" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21V8l7-5 7 5v13" stroke-linejoin="round"/><path d="M9 21v-6h4v6M21 21H3" stroke-linecap="round"/></svg>
+        <span>Clients WHATGO</span></button>
+      <button class="nav-item" data-tab="settings" data-grp="all" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.6 1.6 0 009 19.4a1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1A1.6 1.6 0 004.6 9a1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z" stroke-linejoin="round"/></svg>
+        <span>Paramètres</span></button>
     </nav>
-    <div class="sidebar-foot">
-      <b id="sideBusinessName">—</b>
-      <span id="sideRole">—</span>
-      <button class="btn secondary full" id="logoutBtn" style="margin-top:10px;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff">Se déconnecter</button>
+    <div class="sidebar__foot">
+      <div class="sidebar__biz" id="sideBiz">—</div>
+      <div class="sidebar__role" id="sideRole">—</div>
+      <button class="sidebar__out" id="logoutBtn" type="button">Se déconnecter</button>
     </div>
   </aside>
 
   <main class="main">
+    <div class="mobbar">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 9h14M5 15h9" stroke-linecap="round"/></svg></span>
+      <button id="burger" type="button" aria-label="Ouvrir le menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>
+      </button>
+    </div>
 
-    <!-- ---------- Vue d'ensemble ---------- -->
+    <!-- ============================== VUE D'ENSEMBLE (réel) -->
     <section class="tab-page active" id="page-overview">
-      <div class="page-head">
-        <h2>Vue d'ensemble</h2>
-        <span class="badge" id="statusBadge">—</span>
+      <div class="topbar">
+        <div><h2>Vue d'ensemble</h2><p>Ce que votre assistant a fait pour vous, à partir des vraies conversations enregistrées.</p></div>
+        <div class="topbar__act"><span class="tag tag--dot" id="statusBadge">—</span></div>
       </div>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="label">Conversations totales</div><div class="value" id="statTotal">—</div></div>
-        <div class="stat-card"><div class="label">Conversations (30 derniers jours)</div><div class="value" id="stat30d">—</div></div>
-        <div class="stat-card"><div class="label">Messages par conversation (moy.)</div><div class="value" id="statAvg">—</div></div>
-      </div>
-      <div class="panel">
-        <h3>Conversations — 14 derniers jours</h3>
+      <div class="kpis" id="ovKpis"></div>
+      <div class="card card--chart">
+        <div class="card__head"><div><h3>Conversations — 14 derniers jours</h3></div></div>
         <div class="chart" id="chart"></div>
       </div>
     </section>
 
-    <!-- ---------- Conversations ---------- -->
-    <section class="tab-page" id="page-conversations">
-      <div class="page-head"><h2>Conversations</h2></div>
-      <div class="panel"><div id="conversationsList">Chargement…</div></div>
+    <!-- ============================== LEADS (pas encore développé) -->
+    <section class="tab-page" id="page-leads">
+      <div class="topbar"><div><h2>Leads</h2><p>Suivi des contacts qualifiés issus de vos conversations.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__in">
+          <span class="betahero__ic" style="background:linear-gradient(160deg,#7F7BF0,#3E7BD6)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke-linecap="round"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87" stroke-linecap="round"/></svg>
+          </span>
+          <div class="betahero__t">
+            <span class="soonbadge">Bientôt disponible</span>
+            <h3>Suivi des leads</h3>
+            <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée. Pour l'instant, retrouvez chaque échange dans l'onglet Conversations.</p>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <!-- ---------- Contenu ---------- -->
+    <!-- ============================== CONVERSATIONS (réel) -->
+    <section class="tab-page" id="page-conversations">
+      <div class="topbar"><div><h2>Conversations</h2><p>Tous les échanges enregistrés par votre assistant.</p></div></div>
+      <div class="card card--flush">
+        <div class="tablewrap"><table class="tbl" id="convTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ============================== RENDEZ-VOUS (pas encore développé) -->
+    <section class="tab-page" id="page-appointments">
+      <div class="topbar"><div><h2>Rendez-vous</h2><p>Les créneaux réservés automatiquement par l'assistant.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__in">
+          <span class="betahero__ic" style="background:linear-gradient(160deg,#31C273,#0E8A47)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4" stroke-linecap="round"/></svg>
+          </span>
+          <div class="betahero__t">
+            <span class="soonbadge">Bientôt disponible</span>
+            <h3>Prise de rendez-vous</h3>
+            <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== CONTENU (réel) -->
     <section class="tab-page" id="page-content">
-      <div class="page-head"><h2>Contenu de l'assistant</h2></div>
-      <form id="contentForm">
-        <div class="panel">
-          <h3>Présentation</h3>
-          <div class="field"><label>Secteur d'activité</label>
+      <div class="topbar"><div><h2>Contenu de l'assistant</h2><p>Ce que l'IA sait sur votre entreprise pour répondre aux visiteurs.</p></div></div>
+      <form id="contentForm" novalidate>
+        <div class="card">
+          <div class="card__head"><div><h3>Présentation</h3></div></div>
+          <div class="field"><label for="c-sector">Secteur d'activité</label>
             <select id="c-sector">
               <option value="">— Choisir —</option>
               <option>Hôtellerie</option><option>Services locaux</option><option>E-commerce</option><option>Autre</option>
-            </select>
-          </div>
-          <div class="field"><label>Description de l'entreprise (ce que l'IA doit savoir)</label>
-            <textarea id="c-intro" placeholder="Ex : Hôtel 4 étoiles au centre de Lyon, 40 chambres, spa, restaurant gastronomique…"></textarea>
-          </div>
+            </select></div>
+          <div class="field"><label for="c-intro">Description de l'entreprise (ce que l'IA doit savoir)</label>
+            <textarea id="c-intro" placeholder="Ex : Hôtel 4 étoiles au centre de Lyon, 40 chambres, spa, restaurant gastronomique…"></textarea></div>
         </div>
-        <div class="panel">
-          <h3>Tarifs</h3>
+        <div class="card">
+          <div class="card__head"><div><h3>Tarifs</h3></div></div>
           <div class="field"><textarea id="c-pricing" placeholder="Ex : Chambre double 120€/nuit, suite 220€/nuit, petit-déjeuner 15€…"></textarea></div>
         </div>
-        <div class="panel">
-          <h3>Horaires</h3>
-          <div class="field"><textarea id="c-hours" placeholder="Ex : Réception ouverte 24h/24. Restaurant : 12h-14h et 19h-22h." style="min-height:60px"></textarea></div>
+        <div class="card">
+          <div class="card__head"><div><h3>Horaires</h3></div></div>
+          <div class="field"><textarea id="c-hours" style="min-height:62px" placeholder="Ex : Réception ouverte 24h/24. Restaurant : 12h-14h et 19h-22h."></textarea></div>
         </div>
-        <div class="panel">
-          <h3>Questions fréquentes</h3>
+        <div class="card">
+          <div class="card__head"><div><h3>Questions fréquentes</h3></div></div>
           <div id="faqRows"></div>
-          <button type="button" class="btn secondary" id="addFaqBtn" style="margin-top:6px">+ Ajouter une question</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="addFaqBtn" style="margin-top:6px">+ Ajouter une question</button>
         </div>
-        <button type="submit" class="btn">Enregistrer le contenu</button>
-        <span class="ok-msg" id="contentOk"></span>
-        <span class="error-msg" id="contentError"></span>
+        <button type="submit" class="btn btn--primary">Enregistrer le contenu</button>
+        <p class="msg msg--ok" id="contentOk">Contenu enregistré.</p>
+        <p class="msg msg--err" id="contentError"></p>
       </form>
     </section>
 
-    <!-- ---------- Intégrations ---------- -->
-    <section class="tab-page" id="page-integrations">
-      <div class="page-head"><h2>Intégrations</h2></div>
-      <div class="panel" style="max-width:560px">
-        <h3>Envoyer les leads vers Make (ou Zapier)</h3>
-        <p style="font-size:.85rem;color:var(--muted);margin-top:-8px">
-          Dès qu'un visiteur laisse un email dans la conversation, ses informations sont envoyées automatiquement à cette adresse. Laissez vide pour ne rien envoyer.
-        </p>
-        <form id="webhookForm">
-          <div class="field">
-            <label>URL du webhook Make</label>
-            <input type="url" id="wh-url" placeholder="https://hook.eu1.make.com/..." />
-          </div>
-          <button type="submit" class="btn">Enregistrer</button>
-          <span class="ok-msg" id="webhookOk"></span>
-          <span class="error-msg" id="webhookError"></span>
-        </form>
+    <!-- ============================== BASE DE CONNAISSANCES (pas encore développé) -->
+    <section class="tab-page" id="page-knowledge">
+      <div class="topbar"><div><h2>Base de connaissances</h2><p>Indexation de documents et pages web pour enrichir l'assistant.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__ic" style="background:linear-gradient(160deg,#3E7BD6,#28518F);width:54px;height:54px;border-radius:16px;display:grid;place-items:center;margin-bottom:14px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5V5a2 2 0 012-2h13v18H6a2 2 0 01-2-1.5z" stroke-linejoin="round"/><path d="M8 7h7M8 11h5" stroke-linecap="round"/></svg>
+        </div>
+        <span class="soonbadge">Bientôt disponible</span>
+        <h3>Import de documents</h3>
+        <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée. Utilisez pour l'instant l'onglet Contenu pour renseigner l'assistant.</p>
       </div>
     </section>
 
-    <!-- ---------- Clients (super-admin) ---------- -->
-    <section class="tab-page" id="page-clients">
-      <div class="page-head"><h2>Clients WHATGO</h2></div>
-      <div class="panel">
-        <h3>Créer un nouveau client</h3>
-        <form id="newClientForm">
-          <div class="field"><label>Nom de l'entreprise</label><input type="text" id="nc-name" required /></div>
-          <div class="field"><label>Secteur</label>
-            <select id="nc-sector">
-              <option value="">— Choisir —</option>
-              <option>Hôtellerie</option><option>Services locaux</option><option>E-commerce</option><option>Autre</option>
-            </select>
+    <!-- ============================== QUALIFICATION (pas encore développé) -->
+    <section class="tab-page" id="page-qualification">
+      <div class="topbar"><div><h2>Qualification</h2><p>Les règles qui définissent un bon lead pour votre activité.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__ic" style="background:linear-gradient(160deg,#6D5BD0,#4A3AA8);width:54px;height:54px;border-radius:16px;display:grid;place-items:center;margin-bottom:14px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M6 12h12M10 19h4" stroke-linecap="round"/></svg>
+        </div>
+        <span class="soonbadge">Bientôt disponible</span>
+        <h3>Règles de qualification</h3>
+        <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée.</p>
+      </div>
+    </section>
+
+    <!-- ============================== WIDGET DU SITE (pas encore développé) -->
+    <section class="tab-page" id="page-widget">
+      <div class="topbar"><div><h2>Widget du site</h2><p>Apparence et emplacement du chat sur votre site.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__ic" style="background:linear-gradient(160deg,#D98A1F,#96610F);width:54px;height:54px;border-radius:16px;display:grid;place-items:center;margin-bottom:14px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="14" rx="3"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/></svg>
+        </div>
+        <span class="soonbadge">Bientôt disponible</span>
+        <h3>Personnalisation du widget</h3>
+        <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée. La pose du widget sur votre site est faite manuellement par l'équipe WHATGO.</p>
+      </div>
+    </section>
+
+    <!-- ============================== WHATSAPP (pas encore développé) -->
+    <section class="tab-page" id="page-whatsapp">
+      <div class="topbar"><div><h2>WhatsApp</h2><p>Le même assistant, sur le canal où vos clients écrivent déjà.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__in">
+          <span class="betahero__ic" style="background:linear-gradient(160deg,#3BE07C,#0E9F62)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0112.5 3 8.5 8.5 0 0121 11.5z" stroke-linejoin="round"/></svg>
+          </span>
+          <div class="betahero__t">
+            <span class="soonbadge">Bientôt disponible</span>
+            <h3>Agent IA WhatsApp</h3>
+            <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée.</p>
           </div>
-          <div class="field"><label>Email admin (pour se connecter)</label><input type="email" id="nc-email" required /></div>
-          <div class="field"><label>Mot de passe admin</label><input type="text" id="nc-password" required minlength="8" placeholder="8 caractères minimum" /></div>
-          <button type="submit" class="btn">Créer ce client</button>
-          <span class="error-msg" id="newClientError"></span>
-        </form>
-        <div id="newClientResult" style="display:none;margin-top:16px">
-          <div class="ok-msg">Client créé, en statut « brouillon ». Balise à coller une fois le contenu prêt :</div>
-          <div class="snippet-box" id="snippetBox"></div>
         </div>
       </div>
-      <div class="panel">
-        <h3>Tous les clients</h3>
-        <table class="clients">
-          <thead><tr><th>Nom</th><th>Secteur</th><th>Statut</th><th>Conversations</th><th></th></tr></thead>
-          <tbody id="clientsTableBody"><tr><td colspan="5">Chargement…</td></tr></tbody>
-        </table>
+    </section>
+
+    <!-- ============================== IA VOCALE (pas encore développé) -->
+    <section class="tab-page" id="page-voice">
+      <div class="topbar"><div><h2>IA vocale</h2><p>Les appels que personne ne décroche, pris par le même assistant.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__in">
+          <span class="betahero__ic" style="background:linear-gradient(160deg,#7F7BF0,#3E7BD6)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.8 2.1z" stroke-linejoin="round"/></svg>
+          </span>
+          <div class="betahero__t">
+            <span class="soonbadge">Bientôt disponible</span>
+            <h3>Standard téléphonique IA</h3>
+            <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée.</p>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- ---------- Paramètres ---------- -->
+    <!-- ============================== INTÉGRATIONS (réel) -->
+    <section class="tab-page" id="page-integrations">
+      <div class="topbar"><div><h2>Intégrations</h2><p>Où envoyer automatiquement les contacts captés par l'assistant.</p></div></div>
+      <div class="card" style="max-width:560px">
+        <div class="card__head"><div><h3>Envoyer les leads vers Make (ou Zapier)</h3>
+          <p class="card__sub">Dès qu'un visiteur laisse un email dans la conversation, ses informations sont envoyées automatiquement à cette adresse. Laissez vide pour ne rien envoyer.</p></div></div>
+        <form id="webhookForm" novalidate>
+          <div class="field" style="margin:0"><label for="wh-url">URL du webhook</label>
+            <input type="url" id="wh-url" placeholder="https://hook.eu1.make.com/..." /></div>
+          <button type="submit" class="btn btn--primary btn--sm" style="margin-top:14px">Enregistrer</button>
+          <p class="msg msg--ok" id="webhookOk">Adresse enregistrée.</p>
+          <p class="msg msg--err" id="webhookError"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============================== ÉQUIPE (pas encore développé) -->
+    <section class="tab-page" id="page-team">
+      <div class="topbar"><div><h2>Équipe</h2><p>Qui accède à la console et avec quels droits.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__ic" style="background:linear-gradient(160deg,#4A5C54,#16241D);width:54px;height:54px;border-radius:16px;display:grid;place-items:center;margin-bottom:14px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0113 0" stroke-linecap="round"/><circle cx="17.5" cy="9.5" r="2.6"/><path d="M15.5 20a5 5 0 016-4.4" stroke-linecap="round"/></svg>
+        </div>
+        <span class="soonbadge">Bientôt disponible</span>
+        <h3>Gestion d'équipe</h3>
+        <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée. Un seul compte administrateur par entreprise pour le moment.</p>
+      </div>
+    </section>
+
+    <!-- ============================== PLAN & CONSOMMATION (pas encore développé) -->
+    <section class="tab-page" id="page-billing">
+      <div class="topbar"><div><h2>Plan &amp; consommation</h2><p>Votre forfait et ce que vous avez consommé ce mois-ci.</p></div></div>
+      <div class="betahero">
+        <div class="betahero__ic" style="background:linear-gradient(160deg,#C9AE68,#96610F);width:54px;height:54px;border-radius:16px;display:grid;place-items:center;margin-bottom:14px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20" stroke-linecap="round"/></svg>
+        </div>
+        <span class="soonbadge">Bientôt disponible</span>
+        <h3>Facturation en libre-service</h3>
+        <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée. Contactez l'équipe WHATGO pour toute question de facturation.</p>
+      </div>
+    </section>
+
+    <!-- ============================== CLIENTS (super-admin, réel) -->
+    <section class="tab-page" id="page-clients">
+      <div class="topbar"><div><h2>Clients WHATGO</h2><p>Création, publication et suivi des déploiements.</p></div></div>
+      <div class="card">
+        <div class="card__head"><div><h3>Créer un nouveau client</h3></div></div>
+        <form id="newClientForm" novalidate>
+          <div class="row2">
+            <div class="field"><label for="nc-name">Nom de l'entreprise</label><input type="text" id="nc-name" required /></div>
+            <div class="field"><label for="nc-sector">Secteur</label>
+              <select id="nc-sector">
+                <option value="">— Choisir —</option>
+                <option>Hôtellerie</option><option>Services locaux</option><option>E-commerce</option><option>Autre</option>
+              </select></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label for="nc-email">Email admin (pour se connecter)</label><input type="email" id="nc-email" required /></div>
+            <div class="field"><label for="nc-password">Mot de passe admin</label><input type="text" id="nc-password" required minlength="8" placeholder="8 caractères minimum" /></div>
+          </div>
+          <button type="submit" class="btn btn--primary">Créer ce client</button>
+          <p class="msg msg--err" id="newClientError"></p>
+        </form>
+        <div id="newClientResult" hidden style="margin-top:16px">
+          <p class="msg msg--ok is-on">Client créé, en statut « brouillon ». Balise à coller une fois le contenu prêt :</p>
+          <div class="code" style="margin-top:8px"><span id="snippetBox"></span></div>
+        </div>
+      </div>
+      <div class="card card--flush">
+        <div class="card__head card__head--pad"><div><h3>Tous les clients</h3></div></div>
+        <div class="tablewrap"><table class="tbl" id="clientsTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ============================== PARAMÈTRES (réel) -->
     <section class="tab-page" id="page-settings">
-      <div class="page-head"><h2>Paramètres</h2></div>
-      <div class="panel" style="max-width:420px">
-        <h3>Changer mon mot de passe</h3>
-        <form id="passwordForm">
-          <div class="field"><label>Mot de passe actuel</label><input type="password" id="pw-current" required /></div>
-          <div class="field"><label>Nouveau mot de passe</label><input type="password" id="pw-new" required minlength="8" /></div>
-          <button type="submit" class="btn">Mettre à jour</button>
-          <div class="ok-msg" id="pwOk"></div>
-          <div class="error-msg" id="pwError"></div>
+      <div class="topbar"><div><h2>Paramètres</h2><p>Votre compte.</p></div></div>
+      <div class="card" style="max-width:420px">
+        <div class="card__head"><div><h3>Changer mon mot de passe</h3></div></div>
+        <form id="passwordForm" novalidate>
+          <div class="field"><label for="pw-current">Mot de passe actuel</label><input type="password" id="pw-current" required autocomplete="current-password" /></div>
+          <div class="field"><label for="pw-new">Nouveau mot de passe</label><input type="password" id="pw-new" required minlength="8" autocomplete="new-password" />
+            <p class="help">8 caractères minimum.</p></div>
+          <button type="submit" class="btn btn--primary">Mettre à jour</button>
+          <p class="msg msg--ok" id="pwOk">Mot de passe mis à jour.</p>
+          <p class="msg msg--err" id="pwError"></p>
         </form>
       </div>
     </section>
@@ -310,66 +673,111 @@
 <!-- ---------- Panneau transcript ---------- -->
 <div class="overlay" id="overlay"></div>
 <div class="drawer" id="drawer">
-  <div class="drawer-head"><h4 id="drawerTitle">Conversation</h4><button class="close-x" id="drawerClose">✕</button></div>
-  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer__head">
+    <div><h4 id="drawerTitle">Conversation</h4><div class="cell-sub" id="drawerSub"></div></div>
+    <button class="drawer__x" id="drawerClose" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="drawer__body" id="drawerBody"></div>
 </div>
 
-<script>
-const API = '';
-let ME = null;
+<div class="toasts" id="toasts"></div>
 
-// ---------- Session ----------
+<script>
+var API = '';
+var ME = null;
+
+function $(s, r) { return (r || document).querySelector(s); }
+function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function toast(msg, isErr) {
+  var t = document.createElement('div');
+  t.className = 'toast' + (isErr ? ' toast--err' : '');
+  t.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">' +
+    (isErr ? '<path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/>'
+           : '<path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>') +
+    '</svg><span>' + esc(msg) + '</span>';
+  $('#toasts').appendChild(t);
+  setTimeout(function () { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 2600);
+  setTimeout(function () { t.remove(); }, 3000);
+}
+
+function showMsg(sel, text, isErr) {
+  var el = $(sel);
+  if (!el) return;
+  if (text !== undefined) el.textContent = text;
+  el.classList.add('is-on');
+  if (!isErr) setTimeout(function () { el.classList.remove('is-on'); }, 3000);
+}
+function hideMsg(sel) { var el = $(sel); if (el) el.classList.remove('is-on'); }
+
+function fmtDay(d) { return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }); }
+
+function emptyRow(cols, title, text) {
+  return '<tr><td colspan="' + cols + '"><div class="empty">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7h18v12a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-linejoin="round"/><path d="M3 7l2-4h14l2 4M9 12h6" stroke-linecap="round"/></svg>' +
+    '<b>' + esc(title) + '</b><p>' + esc(text) + '</p></div></td></tr>';
+}
+
+/* ============================================================
+   SESSION
+   ============================================================ */
 async function checkSession() {
   try {
-    const res = await fetch(API + '/api/dashboard/me', { credentials: 'include' });
+    var res = await fetch(API + '/api/dashboard/me', { credentials: 'include' });
     if (!res.ok) throw new Error();
     ME = await res.json();
     enterApp();
-  } catch {}
+  } catch (e) {}
 }
 
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
+$('#loginForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  const errorEl = document.getElementById('loginError');
-  errorEl.textContent = '';
+  var email = $('#email').value;
+  var password = $('#password').value;
+  hideMsg('#loginError');
   try {
-    const res = await fetch(API + '/api/auth/login', {
+    var res = await fetch(API + '/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email, password: password }),
     });
-    const data = await res.json();
-    if (!res.ok) { errorEl.textContent = data.error || 'Erreur de connexion.'; return; }
+    var data = await res.json();
+    if (!res.ok) { showMsg('#loginError', data.error || 'Erreur de connexion.', true); return; }
     ME = data;
     enterApp();
-  } catch { errorEl.textContent = 'Impossible de contacter le serveur.'; }
+  } catch (err) { showMsg('#loginError', 'Impossible de contacter le serveur.', true); }
 });
 
-document.getElementById('logoutBtn').addEventListener('click', async () => {
+$('#logoutBtn').addEventListener('click', async function () {
   await fetch(API + '/api/auth/logout', { method: 'POST', credentials: 'include' });
   location.reload();
 });
 
 function enterApp() {
-  document.getElementById('loginView').style.display = 'none';
-  document.getElementById('appView').style.display = 'flex';
-  document.getElementById('sideBusinessName').textContent = ME.business;
-  document.getElementById('sideRole').textContent = ME.role === 'super_admin' ? 'Équipe WHATGO'
+  $('#loginView').style.display = 'none';
+  $('#appView').classList.add('is-on');
+  $('#appView').style.display = 'block';
+  $('#sideBiz').textContent = ME.business;
+  $('#sideRole').textContent = ME.role === 'super_admin' ? 'Équipe WHATGO'
     : ME.role === 'admin' ? 'Administrateur' : 'Lecture seule';
 
   if (ME.role === 'super_admin') {
-    document.getElementById('clientsNavItem').style.display = 'flex';
-    document.querySelector('.nav-item[data-tab="overview"]').style.display = 'none';
-    document.querySelector('.nav-item[data-tab="conversations"]').style.display = 'none';
-    document.querySelector('.nav-item[data-tab="content"]').style.display = 'none';
-    document.querySelector('.nav-item[data-tab="integrations"]').style.display = 'none';
+    $$('[data-grp="client"]').forEach(function (el) { el.hidden = true; });
+    $('#clientsNavItem').hidden = false;
     switchTab('clients');
     loadClients();
   } else {
-    const badge = document.getElementById('statusBadge');
-    badge.textContent = ME.status === 'published' ? 'Publié' : 'Brouillon';
-    badge.className = 'badge ' + (ME.status === 'published' ? 'published' : 'draft');
+    $('#clientsNavItem').hidden = true;
+    var b = $('#statusBadge');
+    b.textContent = ME.status === 'published' ? 'Publié' : 'Brouillon';
+    b.className = 'tag tag--dot ' + (ME.status === 'published' ? 'tag--green' : 'tag--amber');
+    switchTab('overview');
     loadStats();
     loadConversations();
     loadContent();
@@ -377,224 +785,271 @@ function enterApp() {
   }
 }
 
-// ---------- Navigation ----------
-document.querySelectorAll('.nav-item').forEach((el) => {
-  el.addEventListener('click', () => switchTab(el.dataset.tab));
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+$$('.nav-item').forEach(function (el) {
+  el.addEventListener('click', function () { switchTab(el.dataset.tab); });
 });
 function switchTab(tab) {
-  document.querySelectorAll('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.tab === tab));
-  document.querySelectorAll('.tab-page').forEach((el) => el.classList.toggle('active', el.id === 'page-' + tab));
+  $$('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
+  $$('.tab-page').forEach(function (el) { el.classList.toggle('active', el.id === 'page-' + tab); });
+  $('#sidebar').classList.remove('open');
+  window.scrollTo(0, 0);
 }
+var burger = $('#burger');
+if (burger) burger.addEventListener('click', function () { $('#sidebar').classList.toggle('open'); });
 
-// ---------- Vue d'ensemble ----------
+/* ============================================================
+   DRAWER (transcript)
+   ============================================================ */
+function openDrawer(title, sub, bodyHtml) {
+  $('#drawerTitle').textContent = title;
+  $('#drawerSub').textContent = sub || '';
+  $('#drawerBody').innerHTML = bodyHtml;
+  $('#overlay').classList.add('open');
+  $('#drawer').classList.add('open');
+}
+function closeDrawer() {
+  $('#overlay').classList.remove('open');
+  $('#drawer').classList.remove('open');
+}
+$('#drawerClose').addEventListener('click', closeDrawer);
+$('#overlay').addEventListener('click', closeDrawer);
+
+/* ============================================================
+   VUE D'ENSEMBLE
+   ============================================================ */
 async function loadStats() {
-  const res = await fetch(API + '/api/dashboard/stats', { credentials: 'include' });
-  const s = await res.json();
-  document.getElementById('statTotal').textContent = s.totalConversations;
-  document.getElementById('stat30d').textContent = s.conversations30d;
-  document.getElementById('statAvg').textContent = s.avgMessagesPerConversation;
+  try {
+    var res = await fetch(API + '/api/dashboard/stats', { credentials: 'include' });
+    var s = await res.json();
 
-  const max = Math.max(1, ...s.perDay.map((d) => d.count));
-  const chart = document.getElementById('chart');
-  chart.innerHTML = s.perDay.map((d) => {
-    const dateObj = new Date(d.day + 'T00:00:00');
-    const label = dateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-    const heightPct = Math.max(4, Math.round((d.count / max) * 100));
-    return `<div class="bar-col"><div class="bar" style="height:${heightPct}%" title="${d.count} conversation(s) le ${label}"></div><div class="bar-label">${label}</div></div>`;
-  }).join('');
+    $('#ovKpis').innerHTML =
+      '<div class="kpi kpi--hero"><div class="kpi__l">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0112.5 3 8.5 8.5 0 0121 11.5z" stroke-linejoin="round"/></svg>' +
+        'Conversations totales</div><div class="kpi__v">' + s.totalConversations + '</div></div>' +
+      '<div class="kpi"><div class="kpi__l">Conversations (30 derniers jours)</div><div class="kpi__v">' + s.conversations30d + '</div></div>' +
+      '<div class="kpi"><div class="kpi__l">Messages / conversation (moy.)</div><div class="kpi__v">' + s.avgMessagesPerConversation + '</div></div>';
+
+    var max = Math.max(1, ...s.perDay.map(function (d) { return d.count; }));
+    $('#chart').innerHTML = s.perDay.map(function (d) {
+      var label = fmtDay(d.day);
+      var h = Math.max(3, Math.round((d.count / max) * 100));
+      return '<div class="chart__col"><div class="chart__tip">' + d.count + ' conversation(s) le ' + label + '</div>' +
+        '<div class="chart__stack"><div class="chart__b chart__b--solo" style="height:' + h + '%"></div></div>' +
+        '<div class="chart__x">' + label + '</div></div>';
+    }).join('');
+  } catch (e) { toast('Impossible de charger les statistiques.', true); }
 }
 
-// ---------- Conversations ----------
+/* ============================================================
+   CONVERSATIONS
+   ============================================================ */
+var CONVS = [];
 async function loadConversations() {
-  const res = await fetch(API + '/api/dashboard/conversations', { credentials: 'include' });
-  const conversations = await res.json();
-  const list = document.getElementById('conversationsList');
-  if (conversations.length === 0) {
-    list.innerHTML = '<p class="empty-state">Aucune conversation pour le moment.</p>';
-    return;
-  }
-  list.innerHTML = conversations.map((c) => `
-    <div class="ticket" data-id="${c.id}">
-      <div><div class="who">${c.visitor_label}</div><div class="meta">${c.message_count} message(s)</div></div>
-      <div class="meta">${new Date(c.started_at).toLocaleString('fr-FR')}</div>
-    </div>
-  `).join('');
-  list.querySelectorAll('.ticket').forEach((row) => row.addEventListener('click', () => openTranscript(row.dataset.id)));
+  try {
+    var res = await fetch(API + '/api/dashboard/conversations', { credentials: 'include' });
+    CONVS = await res.json();
+    var body = $('#convTable');
+    body.innerHTML =
+      '<thead><tr><th>Visiteur</th><th>Messages</th><th class="right">Date</th></tr></thead><tbody>' +
+      (CONVS.length ? CONVS.map(function (c) {
+        return '<tr class="clickable" data-id="' + esc(c.id) + '">' +
+          '<td class="cell-main">' + esc(c.visitor_label) + '</td>' +
+          '<td class="num">' + c.message_count + '</td>' +
+          '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td></tr>';
+      }).join('') : emptyRow(3, 'Aucune conversation pour le moment', 'Dès qu\'un visiteur écrit à l\'assistant, la conversation apparaît ici.')) +
+      '</tbody>';
+    $$('tr[data-id]', body).forEach(function (row) {
+      row.addEventListener('click', function () { openTranscript(row.dataset.id); });
+    });
+  } catch (e) { toast('Impossible de charger les conversations.', true); }
 }
 
 async function openTranscript(id) {
-  const res = await fetch(API + '/api/dashboard/conversations/' + id, { credentials: 'include' });
-  const data = await res.json();
-  document.getElementById('drawerTitle').textContent = data.conversation.visitor_label + ' — ' + new Date(data.conversation.started_at).toLocaleString('fr-FR');
-  document.getElementById('drawerBody').innerHTML = data.messages.map((m) =>
-    `<div class="bubble ${m.role === 'user' ? 'user' : 'assistant'}">${escapeHtml(m.content)}</div>`
-  ).join('');
-  document.getElementById('overlay').classList.add('open');
-  document.getElementById('drawer').classList.add('open');
-}
-function closeDrawer() {
-  document.getElementById('overlay').classList.remove('open');
-  document.getElementById('drawer').classList.remove('open');
-}
-document.getElementById('drawerClose').addEventListener('click', closeDrawer);
-document.getElementById('overlay').addEventListener('click', closeDrawer);
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  try {
+    var res = await fetch(API + '/api/dashboard/conversations/' + id, { credentials: 'include' });
+    var data = await res.json();
+    var body = '<div class="thread">' + data.messages.map(function (m) {
+      return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + esc(m.content) + '</div>';
+    }).join('') + '</div>';
+    openDrawer(
+      data.conversation.visitor_label,
+      new Date(data.conversation.started_at).toLocaleString('fr-FR') + ' · ' + data.messages.length + ' message(s)',
+      body
+    );
+  } catch (e) { toast('Impossible de charger cette conversation.', true); }
 }
 
-// ---------- Contenu ----------
-let faqCount = 0;
-function addFaqRow(question = '', answer = '') {
+/* ============================================================
+   CONTENU
+   ============================================================ */
+var faqCount = 0;
+function addFaqRow(question, answer) {
   faqCount += 1;
-  const id = 'faq-' + faqCount;
-  const row = document.createElement('div');
-  row.className = 'faq-row';
-  row.id = id;
-  row.innerHTML = `
-    <textarea placeholder="Question" class="faq-q">${escapeHtml(question)}</textarea>
-    <textarea placeholder="Réponse" class="faq-a">${escapeHtml(answer)}</textarea>
-    <button type="button" title="Supprimer">✕</button>
-  `;
-  row.querySelector('button').addEventListener('click', () => row.remove());
-  document.getElementById('faqRows').appendChild(row);
+  var row = document.createElement('div');
+  row.className = 'faqrow';
+  row.innerHTML =
+    '<textarea placeholder="Question" class="faq-q"></textarea>' +
+    '<textarea placeholder="Réponse" class="faq-a"></textarea>' +
+    '<button type="button" class="iconbtn" title="Supprimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>';
+  row.querySelector('.faq-q').value = question || '';
+  row.querySelector('.faq-a').value = answer || '';
+  row.querySelector('button').addEventListener('click', function () { row.remove(); });
+  $('#faqRows').appendChild(row);
 }
-document.getElementById('addFaqBtn').addEventListener('click', () => addFaqRow());
+$('#addFaqBtn').addEventListener('click', function () { addFaqRow(); });
 
 async function loadContent() {
-  const res = await fetch(API + '/api/dashboard/content', { credentials: 'include' });
-  const c = await res.json();
-  document.getElementById('c-sector').value = c.sector || '';
-  document.getElementById('c-intro').value = c.intro || '';
-  document.getElementById('c-pricing').value = c.pricing || '';
-  document.getElementById('c-hours').value = c.hours || '';
-  document.getElementById('faqRows').innerHTML = '';
-  if (c.faq && c.faq.length) c.faq.forEach((f) => addFaqRow(f.question, f.answer));
-  else addFaqRow();
+  try {
+    var res = await fetch(API + '/api/dashboard/content', { credentials: 'include' });
+    var c = await res.json();
+    $('#c-sector').value = c.sector || '';
+    $('#c-intro').value = c.intro || '';
+    $('#c-pricing').value = c.pricing || '';
+    $('#c-hours').value = c.hours || '';
+    $('#faqRows').innerHTML = '';
+    if (c.faq && c.faq.length) c.faq.forEach(function (f) { addFaqRow(f.question, f.answer); });
+    else addFaqRow();
+  } catch (e) { toast('Impossible de charger le contenu.', true); }
 }
 
-document.getElementById('contentForm').addEventListener('submit', async (e) => {
+$('#contentForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-  const okEl = document.getElementById('contentOk');
-  const errEl = document.getElementById('contentError');
-  okEl.textContent = ''; errEl.textContent = '';
+  hideMsg('#contentOk'); hideMsg('#contentError');
 
-  const faq = Array.from(document.querySelectorAll('.faq-row')).map((row) => ({
-    question: row.querySelector('.faq-q').value.trim(),
-    answer: row.querySelector('.faq-a').value.trim(),
-  })).filter((f) => f.question && f.answer);
+  var faq = $$('.faqrow').map(function (row) {
+    return { question: row.querySelector('.faq-q').value.trim(), answer: row.querySelector('.faq-a').value.trim() };
+  }).filter(function (f) { return f.question && f.answer; });
 
-  const payload = {
-    sector: document.getElementById('c-sector').value,
-    intro: document.getElementById('c-intro').value,
-    pricing: document.getElementById('c-pricing').value,
-    hours: document.getElementById('c-hours').value,
-    faq,
+  var payload = {
+    sector: $('#c-sector').value,
+    intro: $('#c-intro').value,
+    pricing: $('#c-pricing').value,
+    hours: $('#c-hours').value,
+    faq: faq,
   };
 
   try {
-    const res = await fetch(API + '/api/dashboard/content', {
+    var res = await fetch(API + '/api/dashboard/content', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error || "Erreur lors de l'enregistrement."; return; }
-    okEl.textContent = 'Contenu enregistré.';
-    setTimeout(() => (okEl.textContent = ''), 3000);
-  } catch { errEl.textContent = 'Impossible de contacter le serveur.'; }
+    var data = await res.json();
+    if (!res.ok) { showMsg('#contentError', data.error || "Erreur lors de l'enregistrement.", true); return; }
+    showMsg('#contentOk');
+    toast('Contenu enregistré');
+  } catch (err) { showMsg('#contentError', 'Impossible de contacter le serveur.', true); }
 });
 
-// ---------- Intégrations ----------
+/* ============================================================
+   INTÉGRATIONS
+   ============================================================ */
 async function loadWebhook() {
-  const res = await fetch(API + '/api/dashboard/webhook', { credentials: 'include' });
-  const data = await res.json();
-  document.getElementById('wh-url').value = data.webhookUrl || '';
+  try {
+    var res = await fetch(API + '/api/dashboard/webhook', { credentials: 'include' });
+    var data = await res.json();
+    $('#wh-url').value = data.webhookUrl || '';
+  } catch (e) { toast('Impossible de charger les intégrations.', true); }
 }
 
-document.getElementById('webhookForm').addEventListener('submit', async (e) => {
+$('#webhookForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-  const okEl = document.getElementById('webhookOk');
-  const errEl = document.getElementById('webhookError');
-  okEl.textContent = ''; errEl.textContent = '';
+  hideMsg('#webhookOk'); hideMsg('#webhookError');
   try {
-    const res = await fetch(API + '/api/dashboard/webhook', {
+    var res = await fetch(API + '/api/dashboard/webhook', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ webhookUrl: document.getElementById('wh-url').value.trim() }),
+      body: JSON.stringify({ webhookUrl: $('#wh-url').value.trim() }),
     });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error || "Erreur lors de l'enregistrement."; return; }
-    okEl.textContent = 'Adresse enregistrée.';
-    setTimeout(() => (okEl.textContent = ''), 3000);
-  } catch { errEl.textContent = 'Impossible de contacter le serveur.'; }
+    var data = await res.json();
+    if (!res.ok) { showMsg('#webhookError', data.error || "Erreur lors de l'enregistrement.", true); return; }
+    showMsg('#webhookOk');
+    toast('Adresse enregistrée');
+  } catch (err) { showMsg('#webhookError', 'Impossible de contacter le serveur.', true); }
 });
 
-// ---------- Clients (super-admin) ----------
+/* ============================================================
+   CLIENTS (super-admin)
+   ============================================================ */
 async function loadClients() {
-  const res = await fetch(API + '/api/superadmin/clients', { credentials: 'include' });
-  const clients = await res.json();
-  const body = document.getElementById('clientsTableBody');
-  if (clients.length === 0) { body.innerHTML = '<tr><td colspan="5">Aucun client pour le moment.</td></tr>'; return; }
-  body.innerHTML = clients.map((c) => `
-    <tr>
-      <td>${escapeHtml(c.name)}</td>
-      <td>${escapeHtml(c.sector || '—')}</td>
-      <td><span class="badge ${c.status === 'published' ? 'published' : 'draft'}">${c.status === 'published' ? 'Publié' : 'Brouillon'}</span></td>
-      <td>${c.conversation_count}</td>
-      <td><button class="toggle-status" data-id="${c.id}" data-status="${c.status}">${c.status === 'published' ? 'Repasser en brouillon' : 'Publier'}</button></td>
-    </tr>
-  `).join('');
-  body.querySelectorAll('.toggle-status').forEach((btn) => btn.addEventListener('click', async () => {
-    const newStatus = btn.dataset.status === 'published' ? 'draft' : 'published';
-    await fetch(API + '/api/superadmin/clients/' + btn.dataset.id + '/status', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: newStatus }),
-    });
-    loadClients();
-  }));
+  try {
+    var res = await fetch(API + '/api/superadmin/clients', { credentials: 'include' });
+    var clients = await res.json();
+    renderClients(clients);
+  } catch (e) { toast('Impossible de charger les clients.', true); }
 }
 
-document.getElementById('newClientForm').addEventListener('submit', async (e) => {
+function renderClients(clients) {
+  var body = $('#clientsTable');
+  body.innerHTML =
+    '<thead><tr><th>Nom</th><th>Secteur</th><th>Statut</th><th>Conversations</th><th class="right"></th></tr></thead><tbody>' +
+    (clients.length ? clients.map(function (c) {
+      return '<tr><td class="cell-main">' + esc(c.name) + '</td>' +
+        '<td class="cell-sub">' + esc(c.sector || '—') + '</td>' +
+        '<td><span class="tag ' + (c.status === 'published' ? 'tag--green' : 'tag--amber') + '">' +
+        (c.status === 'published' ? 'Publié' : 'Brouillon') + '</span></td>' +
+        '<td class="num">' + c.conversation_count + '</td>' +
+        '<td class="right"><button class="btn btn--ghost btn--sm toggle-status" data-id="' + esc(c.id) + '" data-status="' + esc(c.status) + '" type="button">' +
+        (c.status === 'published' ? 'Repasser en brouillon' : 'Publier') + '</button></td></tr>';
+    }).join('') : emptyRow(5, 'Aucun client pour le moment', 'Créez le premier déploiement ci-dessus.')) +
+    '</tbody>';
+
+  $$('.toggle-status', body).forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var newStatus = btn.dataset.status === 'published' ? 'draft' : 'published';
+      try {
+        await fetch(API + '/api/superadmin/clients/' + btn.dataset.id + '/status', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: newStatus }),
+        });
+        toast(newStatus === 'published' ? 'Client publié' : 'Client repassé en brouillon');
+        loadClients();
+      } catch (e) { toast('Changement impossible.', true); }
+    });
+  });
+}
+
+$('#newClientForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-  const errEl = document.getElementById('newClientError');
-  errEl.textContent = '';
-  const payload = {
-    name: document.getElementById('nc-name').value,
-    sector: document.getElementById('nc-sector').value,
-    adminEmail: document.getElementById('nc-email').value,
-    adminPassword: document.getElementById('nc-password').value,
+  hideMsg('#newClientError');
+  var payload = {
+    name: $('#nc-name').value,
+    sector: $('#nc-sector').value,
+    adminEmail: $('#nc-email').value,
+    adminPassword: $('#nc-password').value,
   };
   try {
-    const res = await fetch(API + '/api/superadmin/clients', {
+    var res = await fetch(API + '/api/superadmin/clients', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error || 'Erreur lors de la création.'; return; }
-    document.getElementById('newClientResult').style.display = 'block';
-    document.getElementById('snippetBox').textContent = data.snippet;
-    document.getElementById('newClientForm').reset();
+    var data = await res.json();
+    if (!res.ok) { showMsg('#newClientError', data.error || 'Erreur lors de la création.', true); return; }
+    $('#newClientResult').hidden = false;
+    $('#snippetBox').textContent = data.snippet;
+    $('#newClientForm').reset();
+    toast('Client créé');
     loadClients();
-  } catch { errEl.textContent = 'Impossible de contacter le serveur.'; }
+  } catch (err) { showMsg('#newClientError', 'Impossible de contacter le serveur.', true); }
 });
 
-// ---------- Paramètres ----------
-document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+/* ============================================================
+   PARAMÈTRES
+   ============================================================ */
+$('#passwordForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-  const okEl = document.getElementById('pwOk');
-  const errEl = document.getElementById('pwError');
-  okEl.textContent = ''; errEl.textContent = '';
-  const payload = {
-    currentPassword: document.getElementById('pw-current').value,
-    newPassword: document.getElementById('pw-new').value,
+  hideMsg('#pwOk'); hideMsg('#pwError');
+  var payload = {
+    currentPassword: $('#pw-current').value,
+    newPassword: $('#pw-new').value,
   };
   try {
-    const res = await fetch(API + '/api/auth/password', {
+    var res = await fetch(API + '/api/auth/password', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload),
     });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error || 'Erreur.'; return; }
-    okEl.textContent = 'Mot de passe mis à jour.';
-    document.getElementById('passwordForm').reset();
-  } catch { errEl.textContent = 'Impossible de contacter le serveur.'; }
+    var data = await res.json();
+    if (!res.ok) { showMsg('#pwError', data.error || 'Erreur.', true); return; }
+    showMsg('#pwOk');
+    $('#passwordForm').reset();
+  } catch (err) { showMsg('#pwError', 'Impossible de contacter le serveur.', true); }
 });
 
 checkSession();
