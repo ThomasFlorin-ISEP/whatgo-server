@@ -27,6 +27,51 @@ const DRAFT_REPLY =
   "Merci pour votre message ! Notre équipe finalise la configuration de cet assistant, il sera bientôt pleinement opérationnel. N'hésitez pas à nous laisser vos coordonnées, nous reviendrons vers vous rapidement.";
 
 // ------------------------------------------------------------
+// Qualification (page "Qualification" du tableau de bord) : infos à
+// collecter, seuils de score, escalade vers un humain, sujets bloqués.
+// Stockée en JSON dans businesses.qualification. defaultQualification()
+// donne les valeurs par défaut d'une entreprise neuve (PAS des données
+// fictives par entreprise — juste ce qu'on affiche tant que rien n'a
+// été enregistré). Le médical/juridique/financier n'apparaît même pas
+// ici : c'est codé en dur dans buildSystemPrompt, jamais désactivable.
+// ------------------------------------------------------------
+function defaultQualification() {
+  return {
+    fields: [],
+    thresholds: { hot: 70, warm: 40, appointment: 55 },
+    escalation: {
+      askHuman: true,
+      threeUnknown: true,
+      angryTone: true,
+      bigAmount: false,
+      bigAmountValue: 5000,
+      dispute: true,
+      notifyEmail: '',
+      notifyPhone: '',
+    },
+    blockedTopics: { discount: false, contract: false, custom: '' },
+  };
+}
+
+// Relit le JSON stocké et complète tout champ manquant/invalide avec les
+// défauts, pour rester robuste face à une config partielle ou ancienne.
+function parseQualification(business) {
+  const d = defaultQualification();
+  let raw = {};
+  try {
+    raw = JSON.parse((business && business.qualification) || '{}') || {};
+  } catch {
+    raw = {};
+  }
+  return {
+    fields: Array.isArray(raw.fields) ? raw.fields : d.fields,
+    thresholds: Object.assign({}, d.thresholds, (raw.thresholds && typeof raw.thresholds === 'object') ? raw.thresholds : {}),
+    escalation: Object.assign({}, d.escalation, (raw.escalation && typeof raw.escalation === 'object') ? raw.escalation : {}),
+    blockedTopics: Object.assign({}, d.blockedTopics, (raw.blockedTopics && typeof raw.blockedTopics === 'object') ? raw.blockedTopics : {}),
+  };
+}
+
+// ------------------------------------------------------------
 // Construit le prompt système envoyé à Gemini à partir des
 // champs remplis dans la page "Contenu" du tableau de bord.
 // ------------------------------------------------------------
@@ -54,6 +99,30 @@ function buildSystemPrompt(business) {
     prompt += `\n\nQUESTIONS FRÉQUENTES :\n` +
       faqItems.map((f) => `- Q : ${f.question}\n  R : ${f.answer}`).join('\n');
   }
+
+  // Qualification : infos à collecter (page "Qualification") + sujets
+  // toujours refusés. Le médical/juridique/financier est ajouté sans
+  // condition, quelle que soit la config enregistrée par le client.
+  const qualification = parseQualification(business);
+  if (qualification.fields.length) {
+    prompt += `\n\nINFORMATIONS À COLLECTER (une seule question à la fois, jamais toutes d'un coup) :\n` +
+      qualification.fields.map((f) => {
+        let line = `- ${f.label}`;
+        if (f.when && String(f.when).trim()) line += ` : à demander ${String(f.when).trim()}`;
+        if (f.required) line += ' (obligatoire)';
+        return line;
+      }).join('\n');
+  }
+
+  const blocked = qualification.blockedTopics || {};
+  const blockedLines = ['Conseil médical', 'Conseil juridique', 'Conseil financier ou fiscal'];
+  if (blocked.discount) blockedLines.push('Négociation de remise');
+  if (blocked.contract) blockedLines.push('Engagement contractuel ferme');
+  if (blocked.custom && String(blocked.custom).trim()) {
+    String(blocked.custom).split(',').map((s) => s.trim()).filter(Boolean).forEach((topic) => blockedLines.push(topic));
+  }
+  prompt += `\n\nSUJETS QUE TU DOIS TOUJOURS REFUSER ET ORIENTER VERS UN HUMAIN :\n` +
+    blockedLines.map((t) => `- ${t}`).join('\n');
 
   prompt +=
     `\n\nTON RÔLE :\n` +
@@ -107,6 +176,80 @@ function sendLeadToWebhook(business, payload) {
   }).catch((err) => {
     console.error(`Erreur envoi webhook pour "${business.name}":`, err.message);
   });
+}
+
+// Envoie un signal d'escalade vers Make/Zapier, même mécanisme que
+// sendLeadToWebhook (fire-and-forget, réutilise business.webhook_url).
+// L'envoi réel de l'email/SMS ("Prévenir par email/SMS") n'est PAS fait
+// par ce serveur : WHATGO ne branche pas de SMTP/Twilio ici, c'est au
+// founder de le câbler lui-même dans son propre scénario Make à partir
+// de ce webhook — cohérent avec le fonctionnement des leads.
+function sendEscalationToWebhook(business, payload) {
+  if (!business.webhook_url) return;
+  fetch(business.webhook_url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ type: 'escalation' }, payload)),
+  }).catch((err) => {
+    console.error(`Erreur envoi webhook d'escalade pour "${business.name}":`, err.message);
+  });
+}
+
+// Mots-clés déclenchant chaque type d'escalade. Heuristique v1
+// déterministe, par mots-clés — PAS de NLP/ML. Un premier filet de
+// sécurité honnête, à affiner avec de vrais cas plutôt qu'à prétendre
+// détecter l'intention ou le ton avec finesse.
+const ESCALATION_HUMAN_KEYWORDS = ['humain', 'conseiller', "quelqu'un d'autre", 'une personne', 'un agent'];
+const ESCALATION_ANGRY_KEYWORDS = ['inadmissible', 'scandaleux', 'en colère', 'insupportable', 'réclamation', 'plainte', 'remboursez', 'honteux'];
+const ESCALATION_DISPUTE_KEYWORDS = ['litige', 'remboursement', 'avocat', 'procédure'];
+const ESCALATION_UNKNOWN_MARKERS = ['je ne sais pas', "je n'ai pas cette information", 'je ne peux pas répondre à cela'];
+
+// Détecte si l'échange qui vient d'avoir lieu doit déclencher une
+// escalade vers un humain, selon ce que le client a activé dans la
+// page "Qualification". Ne vérifie que le tour en cours (dernier
+// message visiteur + 3 derniers messages assistant) : appelée une
+// seule fois par appel à /api/chat, donc pas de risque de déclencher
+// plusieurs fois la même raison pour le même échange.
+function detectEscalation(business, config, lastUserMessage, convoId) {
+  const reasons = [];
+  const text = String(lastUserMessage || '').toLowerCase();
+  const esc = (config && config.escalation) || {};
+
+  if (esc.askHuman && ESCALATION_HUMAN_KEYWORDS.some((kw) => text.includes(kw))) {
+    reasons.push('Le visiteur demande explicitement un humain');
+  }
+
+  if (esc.angryTone && ESCALATION_ANGRY_KEYWORDS.some((kw) => text.includes(kw))) {
+    reasons.push('Ton agacé ou réclamation détecté');
+  }
+
+  if (esc.dispute && ESCALATION_DISPUTE_KEYWORDS.some((kw) => text.includes(kw))) {
+    reasons.push('Question sur un litige ou un remboursement');
+  }
+
+  if (esc.bigAmount) {
+    const threshold = Number(esc.bigAmountValue) || 0;
+    const numbers = (text.match(/\d[\d\s.,]*/g) || [])
+      .map((n) => Number(n.replace(/[\s.,]/g, '')))
+      .filter((n) => !Number.isNaN(n));
+    if (numbers.some((n) => n > threshold)) {
+      reasons.push(`Montant évoqué supérieur à ${threshold} €`);
+    }
+  }
+
+  if (esc.threeUnknown && convoId) {
+    const lastThree = db.prepare(
+      `SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' ORDER BY created_at DESC, id DESC LIMIT 3`
+    ).all(convoId);
+    if (lastThree.length === 3 && lastThree.every((m) => {
+      const c = String(m.content || '').toLowerCase();
+      return ESCALATION_UNKNOWN_MARKERS.some((marker) => c.includes(marker));
+    })) {
+      reasons.push('Trois réponses « je ne sais pas » d\'affilée');
+    }
+  }
+
+  return reasons;
 }
 
 function sleep(ms) {
@@ -253,6 +396,23 @@ app.post('/api/chat', async (req, res) => {
     db.prepare(
       'INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)'
     ).run(convoId, 'assistant', reply);
+
+    // Escalade vers un humain (page "Qualification") : uniquement sur les
+    // entreprises publiées, une fois l'échange complet enregistré.
+    const qualification = parseQualification(business);
+    const escalationReasons = detectEscalation(business, qualification, lastUserMessage.content, convoId);
+    if (escalationReasons.length) {
+      sendEscalationToWebhook(business, {
+        business: business.name,
+        slug: business.slug,
+        conversationId: convoId,
+        reason: escalationReasons,
+        notifyEmail: qualification.escalation.notifyEmail,
+        notifyPhone: qualification.escalation.notifyPhone,
+        lastMessage: lastUserMessage.content,
+        date: new Date().toISOString(),
+      });
+    }
 
     res.json({ reply, conversationId: convoId });
 
@@ -480,6 +640,77 @@ app.put('/api/dashboard/content', requireAuth, requireRole('admin'), (req, res) 
     SET sector = ?, intro = ?, faq = ?, pricing = ?, hours = ?, system_prompt = ?
     WHERE id = ?
   `).run(sector || '', intro || '', JSON.stringify(faqArr), pricing || '', hours || '', newSystemPrompt, req.user.businessId);
+
+  res.json({ ok: true });
+});
+
+// Page "Qualification" : infos à collecter, seuils de score, escalade
+// vers un humain, sujets bloqués. Influence directement le prompt envoyé
+// à Gemini (buildSystemPrompt) et la détection d'escalade dans /api/chat.
+app.get('/api/dashboard/qualification', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
+  const b = db.prepare('SELECT qualification FROM businesses WHERE id = ?').get(req.user.businessId);
+  res.json(parseQualification(b));
+});
+
+app.put('/api/dashboard/qualification', requireAuth, requireRole('admin'), (req, res) => {
+  const body = req.body || {};
+  const defaults = defaultQualification();
+
+  const fields = Array.isArray(body.fields)
+    ? body.fields
+        .filter((f) => f && String(f.label || '').trim())
+        .map((f) => ({
+          id: String(f.id || ('f' + Math.random().toString(36).slice(2, 9))),
+          label: String(f.label).trim(),
+          when: String(f.when || '').trim(),
+          points: Math.max(0, Math.min(100, Math.round(Number(f.points)) || 0)),
+          required: !!f.required,
+        }))
+    : [];
+
+  const thresholdsIn = (body.thresholds && typeof body.thresholds === 'object') ? body.thresholds : {};
+  const clampPct = (value, fallback) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback;
+  };
+  const thresholds = {
+    hot: clampPct(thresholdsIn.hot, defaults.thresholds.hot),
+    warm: clampPct(thresholdsIn.warm, defaults.thresholds.warm),
+    appointment: clampPct(thresholdsIn.appointment, defaults.thresholds.appointment),
+  };
+
+  const escIn = (body.escalation && typeof body.escalation === 'object') ? body.escalation : {};
+  const escalation = {
+    askHuman: !!escIn.askHuman,
+    threeUnknown: !!escIn.threeUnknown,
+    angryTone: !!escIn.angryTone,
+    bigAmount: !!escIn.bigAmount,
+    bigAmountValue: Math.max(0, Number(escIn.bigAmountValue) || 0) || defaults.escalation.bigAmountValue,
+    dispute: !!escIn.dispute,
+    notifyEmail: String(escIn.notifyEmail || '').trim(),
+    notifyPhone: String(escIn.notifyPhone || '').trim(),
+  };
+
+  // Sujets bloqués : le médical/juridique/financier n'est même pas
+  // accepté ici, il est codé en dur dans buildSystemPrompt.
+  const blockedIn = (body.blockedTopics && typeof body.blockedTopics === 'object') ? body.blockedTopics : {};
+  const blockedTopics = {
+    discount: !!blockedIn.discount,
+    contract: !!blockedIn.contract,
+    custom: String(blockedIn.custom || '').trim().slice(0, 500),
+  };
+
+  const qualification = { fields, thresholds, escalation, blockedTopics };
+
+  const business = db.prepare('SELECT * FROM businesses WHERE id = ?').get(req.user.businessId);
+  const updated = { ...business, qualification: JSON.stringify(qualification) };
+  const newSystemPrompt = buildSystemPrompt(updated);
+
+  db.prepare(`
+    UPDATE businesses
+    SET qualification = ?, system_prompt = ?
+    WHERE id = ?
+  `).run(JSON.stringify(qualification), newSystemPrompt, req.user.businessId);
 
   res.json({ ok: true });
 });
