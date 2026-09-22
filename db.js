@@ -51,6 +51,21 @@ db.exec(`
     password_hash TEXT NOT NULL,
     created_at    TEXT DEFAULT (datetime('now'))
   );
+
+  -- Leads réels captés depuis le chat : un visiteur qui laisse son email.
+  -- Table toute neuve, pas de migration à faire (contrairement aux colonnes
+  -- ajoutées à "businesses" via addColumnIfMissing() plus bas).
+  CREATE TABLE IF NOT EXISTS leads (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id     INTEGER NOT NULL,
+    conversation_id INTEGER,
+    email           TEXT NOT NULL,
+    message         TEXT,
+    score           INTEGER NOT NULL DEFAULT 40,
+    status          TEXT NOT NULL DEFAULT 'nouveau',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // ------------------------------------------------------------
