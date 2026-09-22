@@ -71,6 +71,31 @@ function extractEmail(text) {
   return match ? match[0] : null;
 }
 
+// Mots-clés FR laissant penser à une intention d'achat/contact forte.
+const LEAD_INTENT_KEYWORDS = [
+  'devis', 'tarif', 'prix', 'réserv', 'rendez-vous', 'rdv', 'disponibilité', 'urgent', 'contact',
+];
+
+// Heuristique de score v1 (PAS de machine learning) : un premier tri simple
+// et honnête pour prioriser les leads, à affiner plus tard avec de vraies
+// données. Base 40 (le visiteur a laissé un email = intention réelle),
+// puis quelques bonus, le tout borné entre 20 et 95.
+function computeLeadScore(message, isFirstUserMessage) {
+  let score = 40;
+  const text = String(message || '').toLowerCase();
+
+  if (LEAD_INTENT_KEYWORDS.some((kw) => text.includes(kw))) score += 15;
+
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  if (wordCount > 15) score += 10;
+
+  // L'email n'est pas arrivé dès le premier message : le visiteur s'est
+  // engagé un peu avant de convertir, signe d'un intérêt plus sérieux.
+  if (!isFirstUserMessage) score += 10;
+
+  return Math.max(20, Math.min(95, score));
+}
+
 // Envoie le lead vers Make/Zapier/etc. sans jamais bloquer ni casser la
 // réponse du chatbot si le webhook est lent, en panne, ou mal configuré.
 function sendLeadToWebhook(business, payload) {
@@ -93,7 +118,7 @@ function sleep(ms) {
 // retente jusqu'à 2 fois avec un court délai avant d'abandonner. Les autres
 // erreurs (clé API invalide, requête mal formée, etc.) ne sont PAS retentées,
 // puisqu'elles ne se résoudraient pas d'elles-mêmes.
-async function callGemini(systemPrompt, contents, maxRetries = 2) {
+async function callGemini(systemPrompt, contents, maxRetries = 3) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -115,7 +140,7 @@ async function callGemini(systemPrompt, contents, maxRetries = 2) {
       // Erreur réseau (timeout, coupure...) : on retente pareil qu'une surcharge.
       if (attempt < maxRetries) {
         console.warn(`Gemini injoignable (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai...`);
-        await sleep(800 * (attempt + 1));
+        await sleep(1000 * (attempt + 1));
         continue;
       }
       throw networkErr;
@@ -123,8 +148,8 @@ async function callGemini(systemPrompt, contents, maxRetries = 2) {
 
     const isOverloaded = data.error && (data.error.code === 503 || data.error.status === 'UNAVAILABLE');
     if (isOverloaded && attempt < maxRetries) {
-      console.warn(`Gemini surchargé (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai dans ${800 * (attempt + 1)}ms...`);
-      await sleep(800 * (attempt + 1)); // 800ms, puis 1600ms
+      console.warn(`Gemini surchargé (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai dans ${1000 * (attempt + 1)}ms...`);
+      await sleep(1000 * (attempt + 1)); // 1s, puis 2s, puis 3s
       continue;
     }
 
@@ -187,6 +212,14 @@ app.post('/api/chat', async (req, res) => {
           message: lastUserMessage.content,
           date: new Date().toISOString(),
         });
+
+        // Enregistré localement dans tous les cas, même si aucun webhook
+        // Make/Zapier n'est configuré pour cette entreprise.
+        const score = computeLeadScore(lastUserMessage.content, priorUserMessages.length === 0);
+        db.prepare(`
+          INSERT INTO leads (business_id, conversation_id, email, message, score, status)
+          VALUES (?, ?, ?, ?, ?, 'nouveau')
+        `).run(business.id, convoId, newEmail, lastUserMessage.content, score);
       }
     }
 
@@ -326,6 +359,44 @@ app.get('/api/dashboard/conversations/:id', requireAuth, requireRole(['admin', '
   ).all(req.params.id);
 
   res.json({ conversation: convo, messages });
+});
+
+// Page "Leads" : les contacts qualifiés captés via le chat (email laissé).
+const LEAD_STATUSES = ['nouveau', 'contacte', 'rdv_pris', 'gagne', 'perdu'];
+
+app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
+  const leads = db.prepare(`
+    SELECT id, email, message, score, status, conversation_id, created_at
+    FROM leads
+    WHERE business_id = ?
+    ORDER BY created_at DESC
+  `).all(req.user.businessId);
+
+  res.json(leads.map((l) => ({
+    id: l.id,
+    email: l.email,
+    message: l.message,
+    score: l.score,
+    status: l.status,
+    conversationId: l.conversation_id,
+    createdAt: l.created_at,
+  })));
+});
+
+app.put('/api/dashboard/leads/:id/status', requireAuth, requireRole('admin'), (req, res) => {
+  const { status } = req.body;
+  if (!LEAD_STATUSES.includes(status)) {
+    return res.status(400).json({ error: 'Statut invalide.' });
+  }
+
+  const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(req.params.id);
+  if (!lead || lead.business_id !== req.user.businessId) {
+    return res.status(404).json({ error: 'Lead introuvable.' });
+  }
+
+  db.prepare('UPDATE leads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(status, req.params.id);
+  res.json({ ok: true });
 });
 
 // Statistiques pour la vue d'ensemble du tableau de bord
