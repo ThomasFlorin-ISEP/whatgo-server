@@ -179,6 +179,7 @@ textarea{resize:vertical;min-height:82px;line-height:1.55}
 select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237F8F87' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 10px center;background-size:15px;padding-right:32px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 
 .msg{font-size:.82rem;margin-top:9px;display:none}
 .msg.is-on{display:block}
@@ -261,6 +262,26 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .iconbtn:hover{color:var(--red);border-color:rgba(192,57,43,.32);background:var(--red-soft)}
 .iconbtn svg{width:14px;height:14px;stroke-width:2}
 
+/* toggle on/off (escalade, sujets bloqués...) */
+.switchrow{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:11px 0;
+  border-bottom:1px solid var(--line-soft)}
+.switchrow:last-child{border-bottom:none}
+.switchrow__lbl{font-size:.86rem;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.switchrow__lbl input[type=number]{width:88px;padding:5px 8px;display:inline-block}
+.switch{position:relative;display:inline-block;width:38px;height:22px;flex-shrink:0;margin-top:1px}
+.switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.switch__track{position:absolute;inset:0;background:#D8E3DE;border-radius:99px;transition:background .16s;pointer-events:none}
+.switch__track::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 2px rgba(11,40,28,.3);transition:transform .16s}
+.switch input:checked + .switch__track{background:var(--green)}
+.switch input:checked + .switch__track::after{transform:translateX(16px)}
+.switch input:disabled + .switch__track{opacity:.55;cursor:not-allowed}
+.switch input:focus-visible + .switch__track{outline:2px solid var(--green);outline-offset:2px}
+
+/* rangée dynamique "Informations à collecter" */
+.qrow{display:grid;grid-template-columns:1.1fr 1.5fr 84px auto auto;gap:9px;margin-bottom:9px;align-items:center}
+.qrow input[type=number]{text-align:center}
+
 .code{background:var(--night);color:#CFE8D9;border-radius:var(--r-m);padding:14px 16px;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;line-height:1.6;
   word-break:break-all;position:relative}
@@ -317,6 +338,8 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     display:grid;place-items:center;cursor:pointer;margin-left:auto}
   .mobbar button svg{width:17px;height:17px;stroke-width:2}
   .row2,.faqrow{grid-template-columns:1fr}
+  .qrow{grid-template-columns:1fr}
+  .row3{grid-template-columns:1fr}
   .kpis{grid-template-columns:1fr 1fr}
   .drawer{width:100%}
   .topbar h2{font-size:1.36rem}
@@ -337,8 +360,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 <div id="loginView">
   <div class="login-card">
     <div class="login-card__logo">
-      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 9h14M5 15h9" stroke-linecap="round"/></svg></span>
-      <span>WHATGO</span>
+      <img src="logo.png" alt="WHATGO AI" height="28" style="height:28px;width:auto;border-radius:7px" />
     </div>
     <h1>Connexion</h1>
     <p class="sub">Accédez à la console WHATGO.</p>
@@ -357,8 +379,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 <div id="appView">
   <aside class="sidebar" id="sidebar">
     <div class="sidebar__logo">
-      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 9h14M5 15h9" stroke-linecap="round"/></svg></span>
-      <span>WHATGO</span>
+      <img src="logo.png" alt="WHATGO AI" height="24" style="height:24px;width:auto;border-radius:6px" />
     </div>
     <nav id="navList" aria-label="Navigation principale">
 
@@ -385,7 +406,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <span>Base de connaissances</span><span class="pill-soon">Bientôt</span></button>
       <button class="nav-item" data-tab="qualification" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M6 12h12M10 19h4" stroke-linecap="round"/></svg>
-        <span>Qualification</span><span class="pill-soon">Bientôt</span></button>
+        <span>Qualification</span></button>
       <button class="nav-item" data-tab="widget" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="14" rx="3"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/></svg>
         <span>Widget du site</span><span class="pill-soon">Bientôt</span></button>
@@ -442,6 +463,13 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       <div class="card card--chart">
         <div class="card__head"><div><h3>Conversations — 14 derniers jours</h3></div></div>
         <div class="chart" id="chart"></div>
+      </div>
+      <div class="card card--flush" id="ovLeadsCard">
+        <div class="card__head card__head--pad">
+          <div><h3>Derniers leads</h3><p class="card__sub">Les contacts les plus récents captés par l'assistant.</p></div>
+          <button class="btn btn--ghost btn--sm" type="button" onclick="switchTab('leads')">Voir tous les leads</button>
+        </div>
+        <div class="tablewrap"><table class="tbl" id="ovLeadsTable"></table></div>
       </div>
     </section>
 
@@ -525,17 +553,102 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       </div>
     </section>
 
-    <!-- ============================== QUALIFICATION (pas encore développé) -->
+    <!-- ============================== QUALIFICATION (réel) -->
     <section class="tab-page" id="page-qualification">
-      <div class="topbar"><div><h2>Qualification</h2><p>Les règles qui définissent un bon lead pour votre activité.</p></div></div>
-      <div class="betahero">
-        <div class="betahero__ic" style="background:linear-gradient(160deg,#6D5BD0,#4A3AA8);width:54px;height:54px;border-radius:16px;display:grid;place-items:center;margin-bottom:14px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M6 12h12M10 19h4" stroke-linecap="round"/></svg>
+      <div class="topbar"><div><h2>Qualification</h2><p>Les règles qui définissent un bon lead pour votre activité — elles influencent directement ce que l'assistant demande et détecte.</p></div></div>
+      <form id="qualifForm" novalidate>
+
+        <div class="card">
+          <div class="card__head"><div><h3>Informations à collecter</h3>
+            <p class="card__sub">L'assistant ne pose qu'une seule question à la fois, jamais toutes d'un coup.</p></div></div>
+          <div id="qFieldRows"></div>
+          <div id="qFieldEmpty" class="empty" style="display:none;padding:24px 12px">
+            <b>Aucune information définie</b>
+            <p>Ajoutez au moins une information à collecter pour guider l'assistant (ex : email, téléphone…).</p>
+          </div>
+          <button type="button" class="btn btn--ghost btn--sm" id="addQFieldBtn" style="margin-top:6px">+ Ajouter une information</button>
         </div>
-        <span class="soonbadge">Bientôt disponible</span>
-        <h3>Règles de qualification</h3>
-        <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée.</p>
-      </div>
+
+        <div class="card">
+          <div class="card__head"><div><h3>Seuils de score</h3>
+            <p class="card__sub">Le score de chaque lead (0 à 100) détermine son traitement.</p></div></div>
+          <div class="row3">
+            <div class="field"><label for="q-hot">Lead chaud à partir de</label>
+              <input type="number" id="q-hot" min="0" max="100" />
+              <p class="help">Notification immédiate et priorité dans la liste.</p></div>
+            <div class="field"><label for="q-warm">Lead tiède à partir de</label>
+              <input type="number" id="q-warm" min="0" max="100" />
+              <p class="help">Remonte dans le CRM sans alerte.</p></div>
+            <div class="field"><label for="q-appt">Proposer un RDV à partir de</label>
+              <input type="number" id="q-appt" min="0" max="100" />
+              <p class="help">En dessous, l'assistant répond mais ne propose pas de créneau.</p></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__head"><div><h3>Escalade vers un humain</h3>
+            <p class="card__sub">Détection par mots-clés (v1, pas d'IA) : quand l'un de ces cas survient, l'information est envoyée sur votre webhook.</p></div></div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Le visiteur demande explicitement un humain</span>
+            <label class="switch"><input type="checkbox" id="q-esc-askHuman" /><span class="switch__track"></span></label>
+          </div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Trois réponses « je ne sais pas » d'affilée</span>
+            <label class="switch"><input type="checkbox" id="q-esc-threeUnknown" /><span class="switch__track"></span></label>
+          </div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Ton agacé ou réclamation détecté</span>
+            <label class="switch"><input type="checkbox" id="q-esc-angryTone" /><span class="switch__track"></span></label>
+          </div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Montant évoqué supérieur à
+              <input type="number" id="q-esc-bigAmountValue" min="0" step="50" style="width:88px" /> €</span>
+            <label class="switch"><input type="checkbox" id="q-esc-bigAmount" /><span class="switch__track"></span></label>
+          </div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Question sur un litige ou un remboursement</span>
+            <label class="switch"><input type="checkbox" id="q-esc-dispute" /><span class="switch__track"></span></label>
+          </div>
+          <div class="row2" style="margin-top:16px">
+            <div class="field"><label for="q-esc-email">Prévenir par email</label>
+              <input type="email" id="q-esc-email" placeholder="vous@entreprise.com" /></div>
+            <div class="field"><label for="q-esc-phone">Ou par SMS</label>
+              <input type="tel" id="q-esc-phone" placeholder="06 12 34 56 78" /></div>
+          </div>
+          <p class="help" style="margin-top:8px">La notification par email/SMS elle-même part de votre scénario Make à partir du webhook déjà configuré dans « Intégrations », pas directement de WHATGO.</p>
+        </div>
+
+        <div class="card">
+          <div class="card__head"><div><h3>Sujets bloqués</h3>
+            <p class="card__sub">Ce que l'assistant refuse toujours et redirige vers un humain.</p></div></div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Conseil médical <span class="tag tag--grey">Toujours actif</span></span>
+            <label class="switch"><input type="checkbox" checked disabled /><span class="switch__track"></span></label>
+          </div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Conseil juridique <span class="tag tag--grey">Toujours actif</span></span>
+            <label class="switch"><input type="checkbox" checked disabled /><span class="switch__track"></span></label>
+          </div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Conseil financier ou fiscal <span class="tag tag--grey">Toujours actif</span></span>
+            <label class="switch"><input type="checkbox" checked disabled /><span class="switch__track"></span></label>
+          </div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Négociation de remise</span>
+            <label class="switch"><input type="checkbox" id="q-blocked-discount" /><span class="switch__track"></span></label>
+          </div>
+          <div class="switchrow">
+            <span class="switchrow__lbl">Engagement contractuel ferme</span>
+            <label class="switch"><input type="checkbox" id="q-blocked-contract" /><span class="switch__track"></span></label>
+          </div>
+          <div class="field" style="margin-top:14px"><label for="q-blocked-custom">Autres sujets à refuser</label>
+            <textarea id="q-blocked-custom" placeholder="Ex : négociation de remise, litiges en cours, recrutement"></textarea></div>
+        </div>
+
+        <button type="submit" class="btn btn--primary">Enregistrer</button>
+        <p class="msg msg--ok" id="qualifOk">Règles de qualification enregistrées.</p>
+        <p class="msg msg--err" id="qualifError"></p>
+      </form>
     </section>
 
     <!-- ============================== WIDGET DU SITE (pas encore développé) -->
@@ -791,6 +904,7 @@ function enterApp() {
     loadLeads();
     loadContent();
     loadWebhook();
+    loadQualification();
   }
 }
 
@@ -914,7 +1028,43 @@ async function loadLeads() {
     var leads = await res.json();
     renderLeadKpis(leads);
     renderLeads(leads);
+    renderOverviewLeads(leads);
   } catch (e) { toast('Impossible de charger les leads.', true); }
+}
+
+// Ajoute un 4e KPI "Leads captés (30 j)" et un aperçu des 5 leads les plus
+// récents sur la Vue d'ensemble — mêmes données réelles que l'onglet Leads.
+function renderOverviewLeads(leads) {
+  var kpiBox = $('#ovKpis');
+  if (kpiBox) {
+    if (!$('#ovLeadsKpiV')) {
+      kpiBox.style.gridTemplateColumns = 'repeat(4,1fr)';
+      kpiBox.insertAdjacentHTML('beforeend',
+        '<div class="kpi"><div class="kpi__l">Leads captés (30 j)</div><div class="kpi__v" id="ovLeadsKpiV">0</div></div>');
+    }
+    var thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    var leads30d = leads.filter(function (l) { return new Date(l.createdAt).getTime() >= thirtyDaysAgo; });
+    $('#ovLeadsKpiV').textContent = leads30d.length;
+  }
+
+  var table = $('#ovLeadsTable');
+  if (!table) return;
+  var recent = leads.slice(0, 5);
+  table.innerHTML =
+    '<thead><tr><th>Contact</th><th>Sujet</th><th>Score</th><th>Statut</th><th class="right">Reçu</th></tr></thead><tbody>' +
+    (recent.length ? recent.map(function (l) {
+      return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
+        '<td class="cell-main">' + esc(l.email) + '</td>' +
+        '<td class="cell-sub">' + esc(truncate(l.message, 40)) + '</td>' +
+        '<td>' + scoreBarHtml(l.score) + '</td>' +
+        '<td><span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span></td>' +
+        '<td class="right cell-sub">' + new Date(l.createdAt).toLocaleString('fr-FR') + '</td></tr>';
+    }).join('') : emptyRow(5, 'Aucun lead pour l\'instant', 'Dès qu\'un visiteur laissera son email dans le chat, il apparaîtra ici.')) +
+    '</tbody>';
+  $$('tr[data-convo]', table).forEach(function (row) {
+    if (!row.classList.contains('clickable')) return;
+    row.addEventListener('click', function () { openTranscript(row.dataset.convo); });
+  });
 }
 
 function renderLeadKpis(leads) {
@@ -1063,6 +1213,122 @@ $('#webhookForm').addEventListener('submit', async function (e) {
     showMsg('#webhookOk');
     toast('Adresse enregistrée');
   } catch (err) { showMsg('#webhookError', 'Impossible de contacter le serveur.', true); }
+});
+
+/* ============================================================
+   QUALIFICATION
+   ============================================================ */
+var qFieldCount = 0;
+function addQFieldRow(field) {
+  field = field || {};
+  qFieldCount += 1;
+  var row = document.createElement('div');
+  row.className = 'qrow';
+  row.dataset.id = field.id || '';
+  row.innerHTML =
+    '<input type="text" class="qf-label" placeholder="Information (ex : Email)" />' +
+    '<input type="text" class="qf-when" placeholder="Quand la demander (ex : dès qu\'un intérêt est confirmé)" />' +
+    '<input type="number" class="qf-points" min="0" max="100" placeholder="Points" />' +
+    '<label class="switch" title="Obligatoire"><input type="checkbox" class="qf-required" /><span class="switch__track"></span></label>' +
+    '<button type="button" class="iconbtn" title="Supprimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>';
+  row.querySelector('.qf-label').value = field.label || '';
+  row.querySelector('.qf-when').value = field.when || '';
+  row.querySelector('.qf-points').value = (field.points === undefined || field.points === null) ? '' : field.points;
+  row.querySelector('.qf-required').checked = !!field.required;
+  row.querySelector('.iconbtn').addEventListener('click', function () {
+    row.remove();
+    updateQFieldEmptyState();
+  });
+  $('#qFieldRows').appendChild(row);
+  updateQFieldEmptyState();
+}
+$('#addQFieldBtn').addEventListener('click', function () { addQFieldRow(); });
+
+function updateQFieldEmptyState() {
+  var hasRows = $$('.qrow', $('#qFieldRows')).length > 0;
+  $('#qFieldEmpty').style.display = hasRows ? 'none' : 'block';
+}
+
+async function loadQualification() {
+  try {
+    var res = await fetch(API + '/api/dashboard/qualification', { credentials: 'include' });
+    var q = await res.json();
+
+    $('#qFieldRows').innerHTML = '';
+    (q.fields || []).forEach(function (f) { addQFieldRow(f); });
+    updateQFieldEmptyState();
+
+    var t = q.thresholds || {};
+    $('#q-hot').value = (t.hot === undefined ? 70 : t.hot);
+    $('#q-warm').value = (t.warm === undefined ? 40 : t.warm);
+    $('#q-appt').value = (t.appointment === undefined ? 55 : t.appointment);
+
+    var esc = q.escalation || {};
+    $('#q-esc-askHuman').checked = !!esc.askHuman;
+    $('#q-esc-threeUnknown').checked = !!esc.threeUnknown;
+    $('#q-esc-angryTone').checked = !!esc.angryTone;
+    $('#q-esc-bigAmount').checked = !!esc.bigAmount;
+    $('#q-esc-bigAmountValue').value = (esc.bigAmountValue === undefined ? 5000 : esc.bigAmountValue);
+    $('#q-esc-dispute').checked = !!esc.dispute;
+    $('#q-esc-email').value = esc.notifyEmail || '';
+    $('#q-esc-phone').value = esc.notifyPhone || '';
+
+    var blocked = q.blockedTopics || {};
+    $('#q-blocked-discount').checked = !!blocked.discount;
+    $('#q-blocked-contract').checked = !!blocked.contract;
+    $('#q-blocked-custom').value = blocked.custom || '';
+  } catch (e) { toast('Impossible de charger la qualification.', true); }
+}
+
+$('#qualifForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideMsg('#qualifOk'); hideMsg('#qualifError');
+
+  var fields = $$('.qrow', $('#qFieldRows')).map(function (row) {
+    return {
+      id: row.dataset.id || undefined,
+      label: row.querySelector('.qf-label').value.trim(),
+      when: row.querySelector('.qf-when').value.trim(),
+      points: Number(row.querySelector('.qf-points').value) || 0,
+      required: row.querySelector('.qf-required').checked,
+    };
+  }).filter(function (f) { return f.label; });
+
+  var payload = {
+    fields: fields,
+    thresholds: {
+      hot: Number($('#q-hot').value) || 0,
+      warm: Number($('#q-warm').value) || 0,
+      appointment: Number($('#q-appt').value) || 0,
+    },
+    escalation: {
+      askHuman: $('#q-esc-askHuman').checked,
+      threeUnknown: $('#q-esc-threeUnknown').checked,
+      angryTone: $('#q-esc-angryTone').checked,
+      bigAmount: $('#q-esc-bigAmount').checked,
+      bigAmountValue: Number($('#q-esc-bigAmountValue').value) || 0,
+      dispute: $('#q-esc-dispute').checked,
+      notifyEmail: $('#q-esc-email').value.trim(),
+      notifyPhone: $('#q-esc-phone').value.trim(),
+    },
+    // Le médical/juridique/financier n'est pas envoyé : toujours actif,
+    // codé en dur côté serveur, pas désactivable depuis ce formulaire.
+    blockedTopics: {
+      discount: $('#q-blocked-discount').checked,
+      contract: $('#q-blocked-contract').checked,
+      custom: $('#q-blocked-custom').value.trim(),
+    },
+  };
+
+  try {
+    var res = await fetch(API + '/api/dashboard/qualification', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload),
+    });
+    var data = await res.json();
+    if (!res.ok) { showMsg('#qualifError', data.error || "Erreur lors de l'enregistrement.", true); return; }
+    showMsg('#qualifOk');
+    toast('Règles de qualification enregistrées');
+  } catch (err) { showMsg('#qualifError', 'Impossible de contacter le serveur.', true); }
 });
 
 /* ============================================================
