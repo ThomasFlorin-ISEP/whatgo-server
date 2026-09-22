@@ -147,7 +147,23 @@ button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit
 .tag--amber{background:var(--amber-soft);color:#96610F}
 .tag--red{background:var(--red-soft);color:var(--red)}
 .tag--grey{background:#EDF1EF;color:var(--ink-soft)}
+.tag--blue{background:var(--blue-soft);color:#28518F}
+.tag--violet{background:var(--violet-soft);color:#4A3AA8}
+.tag--gold{background:var(--gold-soft);color:#8A6F2E}
 .tag--dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
+
+/* canal (badge "Site web" pour l'instant seul canal existant) */
+.chan{display:inline-flex;align-items:center;gap:5px;font-size:.76rem;font-weight:600;color:var(--ink-soft)}
+.chan svg{width:13px;height:13px;stroke-width:2}
+.chan--web svg{stroke:var(--blue)}
+
+/* score de lead (heuristique v1) */
+.score{display:flex;align-items:center;gap:8px;min-width:86px}
+.score__bar{flex:1;height:6px;border-radius:99px;background:var(--line-soft);overflow:hidden;position:relative}
+.score__bar::after{content:"";position:absolute;inset:0;width:var(--pct,50%);border-radius:99px;background:var(--green)}
+.score__bar.mid::after{background:var(--amber)}
+.score__bar.low::after{background:var(--red)}
+.score__n{font-size:.78rem;font-weight:700;color:var(--ink-soft);font-variant-numeric:tabular-nums;width:24px;text-align:right;flex-shrink:0}
 
 .field{margin-bottom:14px}
 .field:last-child{margin-bottom:0}
@@ -352,7 +368,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <span>Vue d'ensemble</span></button>
       <button class="nav-item" data-tab="leads" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke-linecap="round"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87" stroke-linecap="round"/></svg>
-        <span>Leads</span><span class="pill-soon">Bientôt</span></button>
+        <span>Leads</span></button>
       <button class="nav-item" data-tab="conversations" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0112.5 3 8.5 8.5 0 0121 11.5z" stroke-linejoin="round"/></svg>
         <span>Conversations</span></button>
@@ -429,20 +445,12 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       </div>
     </section>
 
-    <!-- ============================== LEADS (pas encore développé) -->
+    <!-- ============================== LEADS (réel) -->
     <section class="tab-page" id="page-leads">
-      <div class="topbar"><div><h2>Leads</h2><p>Suivi des contacts qualifiés issus de vos conversations.</p></div></div>
-      <div class="betahero">
-        <div class="betahero__in">
-          <span class="betahero__ic" style="background:linear-gradient(160deg,#7F7BF0,#3E7BD6)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke-linecap="round"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87" stroke-linecap="round"/></svg>
-          </span>
-          <div class="betahero__t">
-            <span class="soonbadge">Bientôt disponible</span>
-            <h3>Suivi des leads</h3>
-            <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée. Pour l'instant, retrouvez chaque échange dans l'onglet Conversations.</p>
-          </div>
-        </div>
+      <div class="topbar"><div><h2>Leads</h2><p>Les visiteurs qui ont laissé leur email dans le chat.</p></div></div>
+      <div class="kpis" id="leadKpis" style="grid-template-columns:repeat(2,1fr)"></div>
+      <div class="card card--flush">
+        <div class="tablewrap"><table class="tbl" id="leadsTable"></table></div>
       </div>
     </section>
 
@@ -780,6 +788,7 @@ function enterApp() {
     switchTab('overview');
     loadStats();
     loadConversations();
+    loadLeads();
     loadContent();
     loadWebhook();
   }
@@ -880,6 +889,94 @@ async function openTranscript(id) {
       body
     );
   } catch (e) { toast('Impossible de charger cette conversation.', true); }
+}
+
+/* ============================================================
+   LEADS
+   ============================================================ */
+var LEAD_STATUS_LABELS = { nouveau: 'Nouveau', contacte: 'Contacté', rdv_pris: 'RDV pris', gagne: 'Gagné', perdu: 'Perdu' };
+var LEAD_STATUS_TAGCLASS = { nouveau: 'tag--blue', contacte: 'tag--amber', rdv_pris: 'tag--violet', gagne: 'tag--green', perdu: 'tag--red' };
+
+function scoreBarHtml(score) {
+  var cls = score < 40 ? 'low' : (score < 60 ? 'mid' : '');
+  return '<div class="score"><div class="score__bar ' + cls + '" style="--pct:' + Math.max(0, Math.min(100, score)) + '%"></div>' +
+    '<span class="score__n">' + score + '</span></div>';
+}
+
+function truncate(text, max) {
+  var t = String(text || '');
+  return t.length > max ? t.slice(0, max).trim() + '…' : t;
+}
+
+async function loadLeads() {
+  try {
+    var res = await fetch(API + '/api/dashboard/leads', { credentials: 'include' });
+    var leads = await res.json();
+    renderLeadKpis(leads);
+    renderLeads(leads);
+  } catch (e) { toast('Impossible de charger les leads.', true); }
+}
+
+function renderLeadKpis(leads) {
+  var box = $('#leadKpis');
+  if (!box) return;
+  var contactes = leads.filter(function (l) { return l.status !== 'nouveau'; }).length;
+  box.innerHTML =
+    '<div class="kpi kpi--hero"><div class="kpi__l">Leads captés</div><div class="kpi__v">' + leads.length + '</div></div>' +
+    '<div class="kpi"><div class="kpi__l">Déjà pris en charge</div><div class="kpi__v">' + contactes + '</div></div>';
+}
+
+function renderLeads(leads) {
+  var isAdmin = ME.role === 'admin';
+  var body = $('#leadsTable');
+  body.innerHTML =
+    '<thead><tr><th>Contact</th><th>Sujet</th><th>Canal</th><th>Score</th><th>Statut</th><th class="right">Reçu</th></tr></thead><tbody>' +
+    (leads.length ? leads.map(function (l) {
+      var statusCell = isAdmin
+        ? '<select class="lead-status" data-id="' + esc(l.id) + '">' +
+            Object.keys(LEAD_STATUS_LABELS).map(function (k) {
+              return '<option value="' + k + '"' + (k === l.status ? ' selected' : '') + '>' + LEAD_STATUS_LABELS[k] + '</option>';
+            }).join('') +
+          '</select>'
+        : '<span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span>';
+
+      return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
+        '<td class="cell-main">' + esc(l.email) + '</td>' +
+        '<td class="cell-sub">' + esc(truncate(l.message, 60)) + '</td>' +
+        '<td><span class="chan chan--web"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="14" rx="3"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/></svg>Site web</span></td>' +
+        '<td>' + scoreBarHtml(l.score) + '</td>' +
+        '<td class="lead-status-cell">' + statusCell + '</td>' +
+        '<td class="right cell-sub">' + new Date(l.createdAt).toLocaleString('fr-FR') + '</td></tr>';
+    }).join('') : emptyRow(6, 'Aucun lead pour l\'instant', 'Dès qu\'un visiteur laissera son email dans le chat, il apparaîtra ici.')) +
+    '</tbody>';
+
+  $$('tr[data-convo]', body).forEach(function (row) {
+    if (!row.classList.contains('clickable')) return;
+    row.addEventListener('click', function () { openTranscript(row.dataset.convo); });
+  });
+
+  $$('.lead-status', body).forEach(function (sel) {
+    sel.addEventListener('click', function (e) { e.stopPropagation(); });
+    sel.addEventListener('change', async function () {
+      var id = sel.dataset.id;
+      var previous = sel.dataset.prev || sel.value;
+      var next = sel.value;
+      try {
+        var res = await fetch(API + '/api/dashboard/leads/' + id + '/status', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+          body: JSON.stringify({ status: next }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || '');
+        sel.dataset.prev = next;
+        toast('Statut mis à jour');
+      } catch (e) {
+        sel.value = previous;
+        toast('Impossible de mettre à jour le statut.', true);
+      }
+    });
+    sel.dataset.prev = sel.value;
+  });
 }
 
 /* ============================================================
