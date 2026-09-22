@@ -94,6 +94,10 @@ addColumnIfMissing('businesses', "faq TEXT DEFAULT '[]'");
 addColumnIfMissing('businesses', "pricing TEXT DEFAULT ''");
 addColumnIfMissing('businesses', "hours TEXT DEFAULT ''");
 addColumnIfMissing('businesses', "webhook_url TEXT DEFAULT ''");
+// Règles de qualification (infos à collecter, seuils de score, escalade,
+// sujets bloqués) : un blob JSON, pour éviter une migration multi-tables
+// tant que cette structure est encore amenée à évoluer.
+addColumnIfMissing('businesses', "qualification TEXT DEFAULT '{}'");
 
 // Les entreprises qui existaient déjà avant l'introduction du statut
 // brouillon/publié fonctionnaient déjà en direct : on les considère
