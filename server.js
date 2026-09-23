@@ -23,6 +23,14 @@ app.use(express.static('public'));
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MODEL = 'gemini-3.1-flash-lite';
 
+// Clé Groq optionnelle : sert UNIQUEMENT de secours si Gemini est en
+// surcharge (erreur 503) après ses tentatives. Si elle n'est pas
+// configurée (GROQ_API_KEY absente), le fallback est simplement ignoré
+// et le comportement reste identique à avant (l'erreur Gemini est
+// renvoyée telle quelle) — rien ne casse si la clé n'est pas encore mise.
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
+
 const DRAFT_REPLY =
   "Merci pour votre message ! Notre équipe finalise la configuration de cet assistant, il sera bientôt pleinement opérationnel. N'hésitez pas à nous laisser vos coordonnées, nous reviendrons vers vous rapidement.";
 
@@ -301,6 +309,39 @@ async function callGemini(systemPrompt, contents, maxRetries = 3) {
   }
 }
 
+// Appelle Groq (API compatible OpenAI) en secours, uniquement quand
+// Gemini a échoué. Reprend le même "contents" (format Gemini) et le
+// convertit au format attendu par Groq. Si GROQ_API_KEY n'est pas
+// configurée, on ne tente rien et on laisse l'appelant gérer l'échec
+// Gemini normalement (comme avant l'ajout du fallback).
+async function callGroqFallback(systemPrompt, contents) {
+  if (!GROQ_API_KEY) return null;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...contents.map((c) => ({
+      role: c.role === 'model' ? 'assistant' : 'user',
+      content: c.parts?.[0]?.text || '',
+    })),
+  ];
+
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({ model: GROQ_MODEL, messages }),
+  });
+  const data = await response.json();
+
+  if (data.error) {
+    throw new Error(data.error.message || 'Erreur inconnue côté Groq');
+  }
+
+  return data.choices?.[0]?.message?.content || null;
+}
+
 function slugify(name) {
   return name
     .toLowerCase()
@@ -390,13 +431,29 @@ app.post('/api/chat', async (req, res) => {
 
     const data = await callGemini(business.system_prompt, contents);
 
+    let reply;
     if (data.error) {
       console.error('Erreur API Gemini:', data.error);
-      return res.status(500).json({ error: data.error.message });
-    }
+      // Gemini a échoué après ses tentatives (souvent une surcharge 503) :
+      // on tente le fallback Groq avant d'abandonner, pour que le visiteur
+      // ait quand même une réponse plutôt qu'un message d'erreur.
+      let fallbackReply = null;
+      try {
+        fallbackReply = await callGroqFallback(business.system_prompt, contents);
+      } catch (fallbackErr) {
+        console.error('Erreur fallback Groq:', fallbackErr.message);
+      }
 
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text
-      || "Désolé, je n'ai pas pu répondre.";
+      if (fallbackReply) {
+        console.warn(`Bascule sur Groq réussie pour "${business.name}".`);
+        reply = fallbackReply;
+      } else {
+        return res.status(500).json({ error: data.error.message });
+      }
+    } else {
+      reply = data.candidates?.[0]?.content?.parts?.[0]?.text
+        || "Désolé, je n'ai pas pu répondre.";
+    }
 
     // Enregistrer la réponse de l'IA aussi
     await query(
