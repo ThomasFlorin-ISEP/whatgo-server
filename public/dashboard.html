@@ -212,6 +212,18 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
   opacity:0;pointer-events:none;transition:opacity .14s;z-index:5}
 .chart__col:hover .chart__tip{opacity:1}
 
+/* donut (répartition des leads par statut) */
+.donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;min-height:150px}
+.donut{position:relative;width:148px;height:148px;border-radius:50%;flex-shrink:0;transition:background .2s}
+.donut__hole{position:absolute;inset:20px;border-radius:50%;background:var(--panel-solid);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:var(--sh-s)}
+.donut__v{font-family:'Space Grotesk',sans-serif;font-size:1.5rem;font-weight:700;letter-spacing:-.02em;color:var(--ink)}
+.donut__l{font-size:.66rem;color:var(--ink-faint);margin-top:1px}
+.legend{display:flex;flex-direction:column;gap:9px;flex:1;min-width:150px}
+.legend__row{display:flex;align-items:center;gap:8px;font-size:.83rem;color:var(--ink-soft)}
+.legend__dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.legend__n{margin-left:auto;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;padding-left:10px}
+
 /* ============================================================ TABLE */
 .tablewrap{overflow-x:auto}
 table.tbl{width:100%;border-collapse:collapse;font-size:.855rem}
@@ -460,9 +472,15 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <div class="topbar__act"><span class="tag tag--dot" id="statusBadge">—</span></div>
       </div>
       <div class="kpis" id="ovKpis"></div>
-      <div class="card card--chart">
-        <div class="card__head"><div><h3>Conversations — 14 derniers jours</h3></div></div>
-        <div class="chart" id="chart"></div>
+      <div class="split">
+        <div class="card card--chart">
+          <div class="card__head"><div><h3>Conversations — 14 derniers jours</h3></div></div>
+          <div class="chart" id="chart"></div>
+        </div>
+        <div class="card">
+          <div class="card__head"><div><h3>Leads par statut</h3></div></div>
+          <div class="donut-wrap" id="ovDonut"></div>
+        </div>
       </div>
       <div class="card card--flush" id="ovLeadsCard">
         <div class="card__head card__head--pad">
@@ -1029,7 +1047,51 @@ async function loadLeads() {
     renderLeadKpis(leads);
     renderLeads(leads);
     renderOverviewLeads(leads);
+    renderOverviewDonut(leads);
   } catch (e) { toast('Impossible de charger les leads.', true); }
+}
+
+// Anneau "Leads par statut" sur la Vue d'ensemble — mêmes couleurs que les
+// tags de statut utilisés partout ailleurs (LEAD_STATUS_TAGCLASS), pour que
+// la légende reste cohérente avec le reste du tableau de bord. Construit en
+// CSS pur (conic-gradient), sans librairie externe.
+var LEAD_STATUS_ORDER = ['nouveau', 'contacte', 'rdv_pris', 'gagne', 'perdu'];
+var LEAD_STATUS_COLOR = {
+  nouveau: 'var(--blue)', contacte: 'var(--amber)', rdv_pris: 'var(--violet)',
+  gagne: 'var(--green)', perdu: 'var(--red)',
+};
+function renderOverviewDonut(leads) {
+  var box = $('#ovDonut');
+  if (!box) return;
+
+  var counts = {};
+  LEAD_STATUS_ORDER.forEach(function (k) { counts[k] = 0; });
+  leads.forEach(function (l) { if (counts[l.status] !== undefined) counts[l.status]++; });
+  var total = leads.length;
+
+  if (!total) {
+    box.innerHTML = '<p class="card__sub">Aucun lead pour l\'instant — la répartition apparaîtra ici dès le premier lead capté.</p>';
+    return;
+  }
+
+  var acc = 0;
+  var gradient = LEAD_STATUS_ORDER.filter(function (k) { return counts[k] > 0; }).map(function (k) {
+    var pct = (counts[k] / total) * 100;
+    var slice = LEAD_STATUS_COLOR[k] + ' ' + acc + '% ' + (acc + pct) + '%';
+    acc += pct;
+    return slice;
+  }).join(',');
+
+  var legend = LEAD_STATUS_ORDER.filter(function (k) { return counts[k] > 0; }).map(function (k) {
+    return '<div class="legend__row"><span class="legend__dot" style="background:' + LEAD_STATUS_COLOR[k] + '"></span>' +
+      esc(LEAD_STATUS_LABELS[k] || k) + '<span class="legend__n">' + counts[k] + '</span></div>';
+  }).join('');
+
+  box.innerHTML =
+    '<div class="donut" style="background:conic-gradient(' + gradient + ')">' +
+      '<div class="donut__hole"><div class="donut__v">' + total + '</div><div class="donut__l">lead(s)</div></div>' +
+    '</div>' +
+    '<div class="legend">' + legend + '</div>';
 }
 
 // Ajoute un 4e KPI "Leads captés (30 j)" et un aperçu des 5 leads les plus
