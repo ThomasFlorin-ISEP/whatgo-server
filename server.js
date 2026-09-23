@@ -31,7 +31,7 @@ const MODEL = 'gemini-3.1-flash-lite';
 // .trim() : évite qu'un espace ou retour à la ligne collé par erreur
 // dans Render casse silencieusement l'authentification.
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim() || undefined;
-const GROQ_MODEL = 'llama-3.1-8b-instant';
+const GROQ_MODEL = 'openai/gpt-oss-20b';
 
 const DRAFT_REPLY =
   "Merci pour votre message ! Notre équipe finalise la configuration de cet assistant, il sera bientôt pleinement opérationnel. N'hésitez pas à nous laisser vos coordonnées, nous reviendrons vers vous rapidement.";
