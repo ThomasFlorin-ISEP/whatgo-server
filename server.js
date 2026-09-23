@@ -29,7 +29,7 @@ const MODEL = 'gemini-3.1-flash-lite';
 // et le comportement reste identique à avant (l'erreur Gemini est
 // renvoyée telle quelle) — rien ne casse si la clé n'est pas encore mise.
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'llama-3.1-8b-instant';
 
 const DRAFT_REPLY =
   "Merci pour votre message ! Notre équipe finalise la configuration de cet assistant, il sera bientôt pleinement opérationnel. N'hésitez pas à nous laisser vos coordonnées, nous reviendrons vers vous rapidement.";
