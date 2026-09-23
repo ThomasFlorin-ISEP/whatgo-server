@@ -4,7 +4,7 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const db = require('./db');
+const { query, initDb } = require('./db');
 const {
   hashPassword,
   verifyPassword,
@@ -210,7 +210,7 @@ const ESCALATION_UNKNOWN_MARKERS = ['je ne sais pas', "je n'ai pas cette informa
 // message visiteur + 3 derniers messages assistant) : appelée une
 // seule fois par appel à /api/chat, donc pas de risque de déclencher
 // plusieurs fois la même raison pour le même échange.
-function detectEscalation(business, config, lastUserMessage, convoId) {
+async function detectEscalation(business, config, lastUserMessage, convoId) {
   const reasons = [];
   const text = String(lastUserMessage || '').toLowerCase();
   const esc = (config && config.escalation) || {};
@@ -238,9 +238,10 @@ function detectEscalation(business, config, lastUserMessage, convoId) {
   }
 
   if (esc.threeUnknown && convoId) {
-    const lastThree = db.prepare(
-      `SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' ORDER BY created_at DESC, id DESC LIMIT 3`
-    ).all(convoId);
+    const { rows: lastThree } = await query(
+      `SELECT content FROM messages WHERE conversation_id = $1 AND role = 'assistant' ORDER BY created_at DESC, id DESC LIMIT 3`,
+      [convoId]
+    );
     if (lastThree.length === 3 && lastThree.every((m) => {
       const c = String(m.content || '').toLowerCase();
       return ESCALATION_UNKNOWN_MARKERS.some((marker) => c.includes(marker));
@@ -320,7 +321,8 @@ app.post('/api/chat', async (req, res) => {
       return res.status(400).json({ error: 'Aucune entreprise spécifiée (data-business manquant sur le widget).' });
     }
 
-    const business = db.prepare('SELECT * FROM businesses WHERE slug = ?').get(slug);
+    const { rows: businessRows } = await query('SELECT * FROM businesses WHERE slug = $1', [slug]);
+    const business = businessRows[0];
     if (!business) {
       return res.status(404).json({ error: 'Entreprise inconnue.' });
     }
@@ -328,17 +330,19 @@ app.post('/api/chat', async (req, res) => {
     // Retrouver ou créer la conversation, pour pouvoir tout enregistrer
     let convoId = conversationId;
     if (!convoId) {
-      const result = db.prepare(
-        'INSERT INTO conversations (business_id, visitor_label) VALUES (?, ?)'
-      ).run(business.id, 'Visiteur anonyme');
-      convoId = result.lastInsertRowid;
+      const { rows } = await query(
+        'INSERT INTO conversations (business_id, visitor_label) VALUES ($1, $2) RETURNING id',
+        [business.id, 'Visiteur anonyme']
+      );
+      convoId = rows[0].id;
     }
 
     // Enregistrer le dernier message du visiteur
     const lastUserMessage = messages[messages.length - 1];
-    db.prepare(
-      'INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)'
-    ).run(convoId, 'user', lastUserMessage.content);
+    await query(
+      'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+      [convoId, 'user', lastUserMessage.content]
+    );
 
     // Lead qualifié : le visiteur vient de laisser un email pour la première
     // fois dans cette conversation → on l'envoie une seule fois vers Make/Zapier.
@@ -359,19 +363,21 @@ app.post('/api/chat', async (req, res) => {
         // Enregistré localement dans tous les cas, même si aucun webhook
         // Make/Zapier n'est configuré pour cette entreprise.
         const score = computeLeadScore(lastUserMessage.content, priorUserMessages.length === 0);
-        db.prepare(`
-          INSERT INTO leads (business_id, conversation_id, email, message, score, status)
-          VALUES (?, ?, ?, ?, ?, 'nouveau')
-        `).run(business.id, convoId, newEmail, lastUserMessage.content, score);
+        await query(
+          `INSERT INTO leads (business_id, conversation_id, email, message, score, status)
+           VALUES ($1, $2, $3, $4, $5, 'nouveau')`,
+          [business.id, convoId, newEmail, lastUserMessage.content, score]
+        );
       }
     }
 
     // Entreprise pas encore publiée : réponse d'attente, pas d'appel à Gemini
     // (évite d'improviser avec un contenu vide ou incomplet).
     if (business.status !== 'published') {
-      db.prepare(
-        'INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)'
-      ).run(convoId, 'assistant', DRAFT_REPLY);
+      await query(
+        'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+        [convoId, 'assistant', DRAFT_REPLY]
+      );
       return res.json({ reply: DRAFT_REPLY, conversationId: convoId });
     }
 
@@ -393,14 +399,15 @@ app.post('/api/chat', async (req, res) => {
       || "Désolé, je n'ai pas pu répondre.";
 
     // Enregistrer la réponse de l'IA aussi
-    db.prepare(
-      'INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)'
-    ).run(convoId, 'assistant', reply);
+    await query(
+      'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+      [convoId, 'assistant', reply]
+    );
 
     // Escalade vers un humain (page "Qualification") : uniquement sur les
     // entreprises publiées, une fois l'échange complet enregistré.
     const qualification = parseQualification(business);
-    const escalationReasons = detectEscalation(business, qualification, lastUserMessage.content, convoId);
+    const escalationReasons = await detectEscalation(business, qualification, lastUserMessage.content, convoId);
     if (escalationReasons.length) {
       sendEscalationToWebhook(business, {
         business: business.name,
@@ -426,37 +433,44 @@ app.post('/api/chat', async (req, res) => {
 // 2) CONNEXION — un employé d'une entreprise, OU un super-admin WHATGO
 // ============================================================
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email et mot de passe requis.' });
-  }
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email et mot de passe requis.' });
+    }
 
-  // On regarde d'abord côté équipe WHATGO (super-admin)
-  const superAdmin = db.prepare('SELECT * FROM super_admins WHERE email = ?').get(email);
-  if (superAdmin && (await verifyPassword(password, superAdmin.password_hash))) {
-    const token = signToken({ id: superAdmin.id, business_id: null, role: 'super_admin' });
+    // On regarde d'abord côté équipe WHATGO (super-admin)
+    const { rows: superAdmins } = await query('SELECT * FROM super_admins WHERE email = $1', [email]);
+    const superAdmin = superAdmins[0];
+    if (superAdmin && (await verifyPassword(password, superAdmin.password_hash))) {
+      const token = signToken({ id: superAdmin.id, business_id: null, role: 'super_admin' });
+      res.cookie('whatgo_token', token, {
+        httpOnly: true, secure: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      return res.json({ email: superAdmin.email, role: 'super_admin', business: 'WHATGO (équipe)' });
+    }
+
+    // Sinon, compte client classique
+    const { rows: users } = await query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = users[0];
+    if (!user || !(await verifyPassword(password, user.password_hash))) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
+    }
+
+    const token = signToken(user);
     res.cookie('whatgo_token', token, {
-      httpOnly: true, secure: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-    return res.json({ email: superAdmin.email, role: 'super_admin', business: 'WHATGO (équipe)' });
+
+    const { rows: businessRows } = await query('SELECT name FROM businesses WHERE id = $1', [user.business_id]);
+    res.json({ email: user.email, role: user.role, business: businessRows[0].name });
+  } catch (err) {
+    console.error('Erreur /api/auth/login:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
-
-  // Sinon, compte client classique
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
-    return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
-  }
-
-  const token = signToken(user);
-  res.cookie('whatgo_token', token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
-
-  const business = db.prepare('SELECT name FROM businesses WHERE id = ?').get(user.business_id);
-  res.json({ email: user.email, role: user.role, business: business.name });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -465,345 +479,441 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.put('/api/auth/password', requireAuth, async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword || newPassword.length < 8) {
-    return res.status(400).json({ error: 'Mot de passe actuel requis, et nouveau mot de passe d\'au moins 8 caractères.' });
-  }
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Mot de passe actuel requis, et nouveau mot de passe d\'au moins 8 caractères.' });
+    }
 
-  const table = req.user.role === 'super_admin' ? 'super_admins' : 'users';
-  const account = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(req.user.userId);
-  if (!account || !(await verifyPassword(currentPassword, account.password_hash))) {
-    return res.status(401).json({ error: 'Mot de passe actuel incorrect.' });
-  }
+    const table = req.user.role === 'super_admin' ? 'super_admins' : 'users';
+    const { rows } = await query(`SELECT * FROM ${table} WHERE id = $1`, [req.user.userId]);
+    const account = rows[0];
+    if (!account || !(await verifyPassword(currentPassword, account.password_hash))) {
+      return res.status(401).json({ error: 'Mot de passe actuel incorrect.' });
+    }
 
-  const hash = await hashPassword(newPassword);
-  db.prepare(`UPDATE ${table} SET password_hash = ? WHERE id = ?`).run(hash, req.user.userId);
-  res.json({ ok: true });
+    const hash = await hashPassword(newPassword);
+    await query(`UPDATE ${table} SET password_hash = $1 WHERE id = $2`, [hash, req.user.userId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur /api/auth/password:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
 // ============================================================
 // 3) TABLEAU DE BORD CLIENT — routes protégées, filtrées par entreprise
 // ============================================================
-app.get('/api/dashboard/me', requireAuth, (req, res) => {
-  if (req.user.role === 'super_admin') {
-    return res.json({ role: 'super_admin', business: 'WHATGO (équipe)' });
+app.get('/api/dashboard/me', requireAuth, async (req, res) => {
+  try {
+    if (req.user.role === 'super_admin') {
+      return res.json({ role: 'super_admin', business: 'WHATGO (équipe)' });
+    }
+    const { rows } = await query('SELECT name, status FROM businesses WHERE id = $1', [req.user.businessId]);
+    const business = rows[0];
+    res.json({ role: req.user.role, business: business.name, status: business.status });
+  } catch (err) {
+    console.error('Erreur /api/dashboard/me:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
-  const business = db.prepare('SELECT name, status FROM businesses WHERE id = ?').get(req.user.businessId);
-  res.json({ role: req.user.role, business: business.name, status: business.status });
 });
 
-app.get('/api/dashboard/conversations', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
-  const conversations = db.prepare(`
-    SELECT c.id, c.visitor_label, c.started_at,
-           COUNT(m.id) as message_count
-    FROM conversations c
-    LEFT JOIN messages m ON m.conversation_id = c.id
-    WHERE c.business_id = ?
-    GROUP BY c.id
-    ORDER BY c.started_at DESC
-    LIMIT 200
-  `).all(req.user.businessId);
+app.get('/api/dashboard/conversations', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows: conversations } = await query(`
+      SELECT c.id, c.visitor_label, c.started_at,
+             COUNT(m.id) as message_count
+      FROM conversations c
+      LEFT JOIN messages m ON m.conversation_id = c.id
+      WHERE c.business_id = $1
+      GROUP BY c.id
+      ORDER BY c.started_at DESC
+      LIMIT 200
+    `, [req.user.businessId]);
 
-  res.json(conversations);
+    res.json(conversations);
+  } catch (err) {
+    console.error('Erreur /api/dashboard/conversations:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
-app.get('/api/dashboard/conversations/:id', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
-  const convo = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
+app.get('/api/dashboard/conversations/:id', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows: convoRows } = await query('SELECT * FROM conversations WHERE id = $1', [req.params.id]);
+    const convo = convoRows[0];
 
-  if (!convo || convo.business_id !== req.user.businessId) {
-    return res.status(404).json({ error: 'Conversation introuvable.' });
+    if (!convo || convo.business_id !== req.user.businessId) {
+      return res.status(404).json({ error: 'Conversation introuvable.' });
+    }
+
+    const { rows: messages } = await query(
+      'SELECT role, content, created_at FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+      [req.params.id]
+    );
+
+    res.json({ conversation: convo, messages });
+  } catch (err) {
+    console.error('Erreur /api/dashboard/conversations/:id:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
-
-  const messages = db.prepare(
-    'SELECT role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'
-  ).all(req.params.id);
-
-  res.json({ conversation: convo, messages });
 });
 
 // Page "Leads" : les contacts qualifiés captés via le chat (email laissé).
 const LEAD_STATUSES = ['nouveau', 'contacte', 'rdv_pris', 'gagne', 'perdu'];
 
-app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
-  const leads = db.prepare(`
-    SELECT id, email, message, score, status, conversation_id, created_at
-    FROM leads
-    WHERE business_id = ?
-    ORDER BY created_at DESC
-  `).all(req.user.businessId);
+app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows: leads } = await query(`
+      SELECT id, email, message, score, status, conversation_id, created_at
+      FROM leads
+      WHERE business_id = $1
+      ORDER BY created_at DESC
+    `, [req.user.businessId]);
 
-  res.json(leads.map((l) => ({
-    id: l.id,
-    email: l.email,
-    message: l.message,
-    score: l.score,
-    status: l.status,
-    conversationId: l.conversation_id,
-    createdAt: l.created_at,
-  })));
+    res.json(leads.map((l) => ({
+      id: l.id,
+      email: l.email,
+      message: l.message,
+      score: l.score,
+      status: l.status,
+      conversationId: l.conversation_id,
+      createdAt: l.created_at,
+    })));
+  } catch (err) {
+    console.error('Erreur /api/dashboard/leads:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
-app.put('/api/dashboard/leads/:id/status', requireAuth, requireRole('admin'), (req, res) => {
-  const { status } = req.body;
-  if (!LEAD_STATUSES.includes(status)) {
-    return res.status(400).json({ error: 'Statut invalide.' });
-  }
+app.put('/api/dashboard/leads/:id/status', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!LEAD_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'Statut invalide.' });
+    }
 
-  const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(req.params.id);
-  if (!lead || lead.business_id !== req.user.businessId) {
-    return res.status(404).json({ error: 'Lead introuvable.' });
-  }
+    const { rows } = await query('SELECT * FROM leads WHERE id = $1', [req.params.id]);
+    const lead = rows[0];
+    if (!lead || lead.business_id !== req.user.businessId) {
+      return res.status(404).json({ error: 'Lead introuvable.' });
+    }
 
-  db.prepare('UPDATE leads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-    .run(status, req.params.id);
-  res.json({ ok: true });
+    await query('UPDATE leads SET status = $1, updated_at = NOW() WHERE id = $2', [status, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur /api/dashboard/leads/:id/status:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
 // Statistiques pour la vue d'ensemble du tableau de bord
-app.get('/api/dashboard/stats', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
-  const businessId = req.user.businessId;
+app.get('/api/dashboard/stats', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const businessId = req.user.businessId;
 
-  const totals = db.prepare(`
-    SELECT
-      (SELECT COUNT(*) FROM conversations WHERE business_id = ?) as total_conversations,
-      (SELECT COUNT(*) FROM conversations WHERE business_id = ? AND started_at >= datetime('now', '-30 days')) as conversations_30d,
-      (SELECT COUNT(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = ?) as total_messages
-  `).get(businessId, businessId, businessId);
+    const { rows: totalsRows } = await query(`
+      SELECT
+        (SELECT COUNT(*) FROM conversations WHERE business_id = $1) as total_conversations,
+        (SELECT COUNT(*) FROM conversations WHERE business_id = $1 AND started_at >= NOW() - INTERVAL '30 days') as conversations_30d,
+        (SELECT COUNT(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = $1) as total_messages
+    `, [businessId]);
+    const totals = totalsRows[0];
 
-  const perDayRows = db.prepare(`
-    SELECT date(started_at) as day, COUNT(*) as count
-    FROM conversations
-    WHERE business_id = ? AND started_at >= datetime('now', '-13 days')
-    GROUP BY day
-    ORDER BY day ASC
-  `).all(businessId);
+    const { rows: perDayRows } = await query(`
+      SELECT date(started_at) as day, COUNT(*) as count
+      FROM conversations
+      WHERE business_id = $1 AND started_at >= NOW() - INTERVAL '13 days'
+      GROUP BY day
+      ORDER BY day ASC
+    `, [businessId]);
 
-  // On complète les jours sans conversation avec un compteur à 0,
-  // pour que le graphique ait toujours 14 barres alignées sur les 14 derniers jours.
-  const perDay = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    const found = perDayRows.find((r) => r.day === key);
-    perDay.push({ day: key, count: found ? found.count : 0 });
+    // On complète les jours sans conversation avec un compteur à 0,
+    // pour que le graphique ait toujours 14 barres alignées sur les 14 derniers jours.
+    const perDay = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const found = perDayRows.find((r) => {
+        const rowKey = (r.day instanceof Date) ? r.day.toISOString().slice(0, 10) : String(r.day).slice(0, 10);
+        return rowKey === key;
+      });
+      perDay.push({ day: key, count: found ? Number(found.count) : 0 });
+    }
+
+    const totalConversations = Number(totals.total_conversations);
+    const totalMessages = Number(totals.total_messages);
+    const avgMessages = totalConversations
+      ? Math.round((totalMessages / totalConversations) * 10) / 10
+      : 0;
+
+    res.json({
+      totalConversations,
+      conversations30d: Number(totals.conversations_30d),
+      avgMessagesPerConversation: avgMessages,
+      perDay,
+    });
+  } catch (err) {
+    console.error('Erreur /api/dashboard/stats:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
-
-  const avgMessages = totals.total_conversations
-    ? Math.round((totals.total_messages / totals.total_conversations) * 10) / 10
-    : 0;
-
-  res.json({
-    totalConversations: totals.total_conversations,
-    conversations30d: totals.conversations_30d,
-    avgMessagesPerConversation: avgMessages,
-    perDay,
-  });
 });
 
 // Page "Contenu" : lecture et modification de la FAQ, tarifs, horaires...
-app.get('/api/dashboard/content', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
-  const b = db.prepare('SELECT * FROM businesses WHERE id = ?').get(req.user.businessId);
-  let faq = [];
-  try { faq = JSON.parse(b.faq || '[]'); } catch { faq = []; }
-  res.json({
-    name: b.name,
-    slug: b.slug,
-    sector: b.sector || '',
-    status: b.status,
-    intro: b.intro || '',
-    faq,
-    pricing: b.pricing || '',
-    hours: b.hours || '',
-  });
+app.get('/api/dashboard/content', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    const b = rows[0];
+    let faq = [];
+    try { faq = JSON.parse(b.faq || '[]'); } catch { faq = []; }
+    res.json({
+      name: b.name,
+      slug: b.slug,
+      sector: b.sector || '',
+      status: b.status,
+      intro: b.intro || '',
+      faq,
+      pricing: b.pricing || '',
+      hours: b.hours || '',
+    });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/content:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
-app.put('/api/dashboard/content', requireAuth, requireRole('admin'), (req, res) => {
-  const { sector, intro, faq, pricing, hours } = req.body;
-  const faqArr = Array.isArray(faq)
-    ? faq.filter((f) => f && f.question && f.answer)
-    : [];
+app.put('/api/dashboard/content', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { sector, intro, faq, pricing, hours } = req.body;
+    const faqArr = Array.isArray(faq)
+      ? faq.filter((f) => f && f.question && f.answer)
+      : [];
 
-  const business = db.prepare('SELECT * FROM businesses WHERE id = ?').get(req.user.businessId);
-  const updated = {
-    ...business,
-    sector: sector || '',
-    intro: intro || '',
-    faq: JSON.stringify(faqArr),
-    pricing: pricing || '',
-    hours: hours || '',
-  };
-  const newSystemPrompt = buildSystemPrompt(updated);
+    const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    const business = rows[0];
+    const updated = {
+      ...business,
+      sector: sector || '',
+      intro: intro || '',
+      faq: JSON.stringify(faqArr),
+      pricing: pricing || '',
+      hours: hours || '',
+    };
+    const newSystemPrompt = buildSystemPrompt(updated);
 
-  db.prepare(`
-    UPDATE businesses
-    SET sector = ?, intro = ?, faq = ?, pricing = ?, hours = ?, system_prompt = ?
-    WHERE id = ?
-  `).run(sector || '', intro || '', JSON.stringify(faqArr), pricing || '', hours || '', newSystemPrompt, req.user.businessId);
+    await query(`
+      UPDATE businesses
+      SET sector = $1, intro = $2, faq = $3, pricing = $4, hours = $5, system_prompt = $6
+      WHERE id = $7
+    `, [sector || '', intro || '', JSON.stringify(faqArr), pricing || '', hours || '', newSystemPrompt, req.user.businessId]);
 
-  res.json({ ok: true });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/content:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
 // Page "Qualification" : infos à collecter, seuils de score, escalade
 // vers un humain, sujets bloqués. Influence directement le prompt envoyé
 // à Gemini (buildSystemPrompt) et la détection d'escalade dans /api/chat.
-app.get('/api/dashboard/qualification', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
-  const b = db.prepare('SELECT qualification FROM businesses WHERE id = ?').get(req.user.businessId);
-  res.json(parseQualification(b));
+app.get('/api/dashboard/qualification', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT qualification FROM businesses WHERE id = $1', [req.user.businessId]);
+    res.json(parseQualification(rows[0]));
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/qualification:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
-app.put('/api/dashboard/qualification', requireAuth, requireRole('admin'), (req, res) => {
-  const body = req.body || {};
-  const defaults = defaultQualification();
+app.put('/api/dashboard/qualification', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const defaults = defaultQualification();
 
-  const fields = Array.isArray(body.fields)
-    ? body.fields
-        .filter((f) => f && String(f.label || '').trim())
-        .map((f) => ({
-          id: String(f.id || ('f' + Math.random().toString(36).slice(2, 9))),
-          label: String(f.label).trim(),
-          when: String(f.when || '').trim(),
-          points: Math.max(0, Math.min(100, Math.round(Number(f.points)) || 0)),
-          required: !!f.required,
-        }))
-    : [];
+    const fields = Array.isArray(body.fields)
+      ? body.fields
+          .filter((f) => f && String(f.label || '').trim())
+          .map((f) => ({
+            id: String(f.id || ('f' + Math.random().toString(36).slice(2, 9))),
+            label: String(f.label).trim(),
+            when: String(f.when || '').trim(),
+            points: Math.max(0, Math.min(100, Math.round(Number(f.points)) || 0)),
+            required: !!f.required,
+          }))
+      : [];
 
-  const thresholdsIn = (body.thresholds && typeof body.thresholds === 'object') ? body.thresholds : {};
-  const clampPct = (value, fallback) => {
-    const n = Number(value);
-    return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback;
-  };
-  const thresholds = {
-    hot: clampPct(thresholdsIn.hot, defaults.thresholds.hot),
-    warm: clampPct(thresholdsIn.warm, defaults.thresholds.warm),
-    appointment: clampPct(thresholdsIn.appointment, defaults.thresholds.appointment),
-  };
+    const thresholdsIn = (body.thresholds && typeof body.thresholds === 'object') ? body.thresholds : {};
+    const clampPct = (value, fallback) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback;
+    };
+    const thresholds = {
+      hot: clampPct(thresholdsIn.hot, defaults.thresholds.hot),
+      warm: clampPct(thresholdsIn.warm, defaults.thresholds.warm),
+      appointment: clampPct(thresholdsIn.appointment, defaults.thresholds.appointment),
+    };
 
-  const escIn = (body.escalation && typeof body.escalation === 'object') ? body.escalation : {};
-  const escalation = {
-    askHuman: !!escIn.askHuman,
-    threeUnknown: !!escIn.threeUnknown,
-    angryTone: !!escIn.angryTone,
-    bigAmount: !!escIn.bigAmount,
-    bigAmountValue: Math.max(0, Number(escIn.bigAmountValue) || 0) || defaults.escalation.bigAmountValue,
-    dispute: !!escIn.dispute,
-    notifyEmail: String(escIn.notifyEmail || '').trim(),
-    notifyPhone: String(escIn.notifyPhone || '').trim(),
-  };
+    const escIn = (body.escalation && typeof body.escalation === 'object') ? body.escalation : {};
+    const escalation = {
+      askHuman: !!escIn.askHuman,
+      threeUnknown: !!escIn.threeUnknown,
+      angryTone: !!escIn.angryTone,
+      bigAmount: !!escIn.bigAmount,
+      bigAmountValue: Math.max(0, Number(escIn.bigAmountValue) || 0) || defaults.escalation.bigAmountValue,
+      dispute: !!escIn.dispute,
+      notifyEmail: String(escIn.notifyEmail || '').trim(),
+      notifyPhone: String(escIn.notifyPhone || '').trim(),
+    };
 
-  // Sujets bloqués : le médical/juridique/financier n'est même pas
-  // accepté ici, il est codé en dur dans buildSystemPrompt.
-  const blockedIn = (body.blockedTopics && typeof body.blockedTopics === 'object') ? body.blockedTopics : {};
-  const blockedTopics = {
-    discount: !!blockedIn.discount,
-    contract: !!blockedIn.contract,
-    custom: String(blockedIn.custom || '').trim().slice(0, 500),
-  };
+    // Sujets bloqués : le médical/juridique/financier n'est même pas
+    // accepté ici, il est codé en dur dans buildSystemPrompt.
+    const blockedIn = (body.blockedTopics && typeof body.blockedTopics === 'object') ? body.blockedTopics : {};
+    const blockedTopics = {
+      discount: !!blockedIn.discount,
+      contract: !!blockedIn.contract,
+      custom: String(blockedIn.custom || '').trim().slice(0, 500),
+    };
 
-  const qualification = { fields, thresholds, escalation, blockedTopics };
+    const qualification = { fields, thresholds, escalation, blockedTopics };
 
-  const business = db.prepare('SELECT * FROM businesses WHERE id = ?').get(req.user.businessId);
-  const updated = { ...business, qualification: JSON.stringify(qualification) };
-  const newSystemPrompt = buildSystemPrompt(updated);
+    const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    const business = rows[0];
+    const updated = { ...business, qualification: JSON.stringify(qualification) };
+    const newSystemPrompt = buildSystemPrompt(updated);
 
-  db.prepare(`
-    UPDATE businesses
-    SET qualification = ?, system_prompt = ?
-    WHERE id = ?
-  `).run(JSON.stringify(qualification), newSystemPrompt, req.user.businessId);
+    await query(`
+      UPDATE businesses
+      SET qualification = $1, system_prompt = $2
+      WHERE id = $3
+    `, [JSON.stringify(qualification), newSystemPrompt, req.user.businessId]);
 
-  res.json({ ok: true });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/qualification:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
 // Page "Intégrations" : où envoyer les leads qualifiés (via Make/Zapier...)
-app.get('/api/dashboard/webhook', requireAuth, requireRole(['admin', 'lecture']), (req, res) => {
-  const b = db.prepare('SELECT webhook_url FROM businesses WHERE id = ?').get(req.user.businessId);
-  res.json({ webhookUrl: b.webhook_url || '' });
+app.get('/api/dashboard/webhook', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT webhook_url FROM businesses WHERE id = $1', [req.user.businessId]);
+    res.json({ webhookUrl: rows[0].webhook_url || '' });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/webhook:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
-app.put('/api/dashboard/webhook', requireAuth, requireRole('admin'), (req, res) => {
-  const { webhookUrl } = req.body;
-  const value = (webhookUrl || '').trim();
-  if (value && !/^https:\/\//.test(value)) {
-    return res.status(400).json({ error: 'L\'adresse doit commencer par https://' });
+app.put('/api/dashboard/webhook', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { webhookUrl } = req.body;
+    const value = (webhookUrl || '').trim();
+    if (value && !/^https:\/\//.test(value)) {
+      return res.status(400).json({ error: 'L\'adresse doit commencer par https://' });
+    }
+    await query('UPDATE businesses SET webhook_url = $1 WHERE id = $2', [value, req.user.businessId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/webhook:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
-  db.prepare('UPDATE businesses SET webhook_url = ? WHERE id = ?').run(value, req.user.businessId);
-  res.json({ ok: true });
 });
 
 // ============================================================
 // 4) ESPACE ÉQUIPE WHATGO — création et pilotage des clients
 // ============================================================
-app.get('/api/superadmin/clients', requireAuth, requireSuperAdmin, (req, res) => {
-  const clients = db.prepare(`
-    SELECT b.id, b.slug, b.name, b.status, b.sector, b.created_at,
-           COUNT(c.id) as conversation_count
-    FROM businesses b
-    LEFT JOIN conversations c ON c.business_id = b.id
-    GROUP BY b.id
-    ORDER BY b.created_at DESC
-  `).all();
-  res.json(clients);
+app.get('/api/superadmin/clients', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { rows: clients } = await query(`
+      SELECT b.id, b.slug, b.name, b.status, b.sector, b.created_at,
+             COUNT(c.id) as conversation_count
+      FROM businesses b
+      LEFT JOIN conversations c ON c.business_id = b.id
+      GROUP BY b.id
+      ORDER BY b.created_at DESC
+    `);
+    res.json(clients);
+  } catch (err) {
+    console.error('Erreur GET /api/superadmin/clients:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
 app.post('/api/superadmin/clients', requireAuth, requireSuperAdmin, async (req, res) => {
-  const { name, sector, adminEmail, adminPassword } = req.body;
-  if (!name || !adminEmail || !adminPassword) {
-    return res.status(400).json({ error: 'Nom de l\'entreprise, email et mot de passe admin sont requis.' });
-  }
-  if (adminPassword.length < 8) {
-    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' });
-  }
-
-  let slug = slugify(name);
-  if (!slug) slug = 'client';
-  let finalSlug = slug;
-  let attempt = 1;
-  while (db.prepare('SELECT id FROM businesses WHERE slug = ?').get(finalSlug)) {
-    attempt += 1;
-    finalSlug = `${slug}-${attempt}`;
-  }
-
-  const placeholderPrompt = `Tu es l'assistant virtuel de "${name}". Le contenu n'a pas encore été renseigné par l'équipe WHATGO.`;
-
-  const result = db.prepare(`
-    INSERT INTO businesses (slug, name, system_prompt, status, sector)
-    VALUES (?, ?, ?, 'draft', ?)
-  `).run(finalSlug, name, placeholderPrompt, sector || '');
-  const businessId = result.lastInsertRowid;
-
   try {
-    const hash = await hashPassword(adminPassword);
-    db.prepare(`
-      INSERT INTO users (business_id, email, password_hash, role) VALUES (?, ?, ?, 'admin')
-    `).run(businessId, adminEmail, hash);
-  } catch (err) {
-    db.prepare('DELETE FROM businesses WHERE id = ?').run(businessId);
-    if (err.message && err.message.includes('UNIQUE')) {
-      return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte.' });
+    const { name, sector, adminEmail, adminPassword } = req.body;
+    if (!name || !adminEmail || !adminPassword) {
+      return res.status(400).json({ error: 'Nom de l\'entreprise, email et mot de passe admin sont requis.' });
     }
-    throw err;
-  }
+    if (adminPassword.length < 8) {
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' });
+    }
 
-  res.status(201).json({
-    id: businessId,
-    slug: finalSlug,
-    name,
-    status: 'draft',
-    snippet: `<script src="https://whatgo-server.onrender.com/widget.js" data-server="https://whatgo-server.onrender.com/api/chat" data-business="${finalSlug}" data-name="${name}"></script>`,
-  });
+    let slug = slugify(name);
+    if (!slug) slug = 'client';
+    let finalSlug = slug;
+    let attempt = 1;
+    while (true) {
+      const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [finalSlug]);
+      if (!rows[0]) break;
+      attempt += 1;
+      finalSlug = `${slug}-${attempt}`;
+    }
+
+    const placeholderPrompt = `Tu es l'assistant virtuel de "${name}". Le contenu n'a pas encore été renseigné par l'équipe WHATGO.`;
+
+    const { rows: insertedBusiness } = await query(`
+      INSERT INTO businesses (slug, name, system_prompt, status, sector)
+      VALUES ($1, $2, $3, 'draft', $4)
+      RETURNING id
+    `, [finalSlug, name, placeholderPrompt, sector || '']);
+    const businessId = insertedBusiness[0].id;
+
+    try {
+      const hash = await hashPassword(adminPassword);
+      await query(`
+        INSERT INTO users (business_id, email, password_hash, role) VALUES ($1, $2, $3, 'admin')
+      `, [businessId, adminEmail, hash]);
+    } catch (err) {
+      await query('DELETE FROM businesses WHERE id = $1', [businessId]);
+      if (err.code === '23505') { // unique_violation (Postgres)
+        return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte.' });
+      }
+      throw err;
+    }
+
+    res.status(201).json({
+      id: businessId,
+      slug: finalSlug,
+      name,
+      status: 'draft',
+      snippet: `<script src="https://whatgo-server.onrender.com/widget.js" data-server="https://whatgo-server.onrender.com/api/chat" data-business="${finalSlug}" data-name="${name}"></script>`,
+    });
+  } catch (err) {
+    console.error('Erreur POST /api/superadmin/clients:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
-app.put('/api/superadmin/clients/:id/status', requireAuth, requireSuperAdmin, (req, res) => {
-  const { status } = req.body;
-  if (!['draft', 'published'].includes(status)) {
-    return res.status(400).json({ error: 'Statut invalide.' });
-  }
-  const business = db.prepare('SELECT * FROM businesses WHERE id = ?').get(req.params.id);
-  if (!business) return res.status(404).json({ error: 'Entreprise introuvable.' });
+app.put('/api/superadmin/clients/:id/status', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['draft', 'published'].includes(status)) {
+      return res.status(400).json({ error: 'Statut invalide.' });
+    }
+    const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Entreprise introuvable.' });
 
-  db.prepare('UPDATE businesses SET status = ? WHERE id = ?').run(status, req.params.id);
-  res.json({ ok: true });
+    await query('UPDATE businesses SET status = $1 WHERE id = $2', [status, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/superadmin/clients/:id/status:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -813,7 +923,8 @@ const PORT = process.env.PORT || 3000;
 // existent toujours, même sur un serveur tout neuf (comme Render)
 // ============================================================
 async function ensureWhatgoBusiness() {
-  const existing = db.prepare('SELECT * FROM businesses WHERE slug = ?').get('whatgo');
+  const { rows } = await query('SELECT * FROM businesses WHERE slug = $1', ['whatgo']);
+  const existing = rows[0];
 
   if (!existing) {
     const prompt = `
@@ -841,14 +952,16 @@ TON RÔLE :
 4. Reste chaleureux et professionnel, mais sans formules de politesse superflues.
 `.trim();
 
-    const result = db.prepare(
-      "INSERT INTO businesses (slug, name, system_prompt, status, sector) VALUES (?, ?, ?, 'published', 'SaaS')"
-    ).run('whatgo', 'WHATGO AI', prompt);
+    const { rows: inserted } = await query(
+      "INSERT INTO businesses (slug, name, system_prompt, status, sector) VALUES ($1, $2, $3, 'published', $4) RETURNING id",
+      ['whatgo', 'WHATGO AI', prompt, 'SaaS']
+    );
 
     const hash = await hashPassword('motdepasse123');
-    db.prepare(
-      'INSERT INTO users (business_id, email, password_hash, role) VALUES (?, ?, ?, ?)'
-    ).run(result.lastInsertRowid, 'admin@whatgo.ai', hash, 'admin');
+    await query(
+      'INSERT INTO users (business_id, email, password_hash, role) VALUES ($1, $2, $3, $4)',
+      [inserted[0].id, 'admin@whatgo.ai', hash, 'admin']
+    );
 
     console.log('✅ Entreprise WHATGO créée automatiquement (admin@whatgo.ai / motdepasse123)');
   } else {
@@ -864,17 +977,33 @@ async function ensureSuperAdmin() {
   const email = process.env.SUPERADMIN_EMAIL || 'equipe@whatgo.ai';
   const password = process.env.SUPERADMIN_PASSWORD || 'whatgo-superadmin-2026';
 
-  const existing = db.prepare('SELECT * FROM super_admins WHERE email = ?').get(email);
+  const { rows } = await query('SELECT * FROM super_admins WHERE email = $1', [email]);
+  const existing = rows[0];
   if (!existing) {
     const hash = await hashPassword(password);
-    db.prepare('INSERT INTO super_admins (email, password_hash) VALUES (?, ?)').run(email, hash);
+    await query('INSERT INTO super_admins (email, password_hash) VALUES ($1, $2)', [email, hash]);
     console.log(`✅ Compte super-admin créé (${email} / ${password}) — pensez à changer ce mot de passe depuis le tableau de bord.`);
   } else {
     console.log('ℹ️  Compte super-admin déjà présent, rien à faire.');
   }
 }
 
-ensureWhatgoBusiness();
-ensureSuperAdmin();
+// ============================================================
+// DÉMARRAGE : on attend que la base soit prête (schéma créé) et que
+// les comptes par défaut existent avant d'ouvrir le port. Si la base
+// n'est pas joignable (DATABASE_URL manquant/erroné), le serveur ne
+// démarre pas silencieusement à moitié cassé — l'erreur s'affiche.
+// ============================================================
+async function start() {
+  try {
+    await initDb();
+    await ensureWhatgoBusiness();
+    await ensureSuperAdmin();
+    app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT} (Gemini + tableau de bord)`));
+  } catch (err) {
+    console.error('❌ Impossible de démarrer le serveur (problème de connexion à la base ?) :', err);
+    process.exit(1);
+  }
+}
 
-app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT} (Gemini + tableau de bord)`));
+start();
