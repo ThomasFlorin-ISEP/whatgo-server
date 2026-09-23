@@ -140,6 +140,8 @@ button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit
 .card__sub{font-size:.82rem;color:var(--ink-soft);margin-top:3px;max-width:76ch}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
 .split{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start}
+.split--even{grid-template-columns:1fr 1fr}
+.rangepick{width:auto;max-width:170px;padding:7px 30px 7px 12px;font-size:.8rem;font-weight:600;color:var(--ink-soft)}
 
 .tag{display:inline-flex;align-items:center;gap:5px;font-size:.71rem;font-weight:700;
   padding:3px 9px;border-radius:99px;letter-spacing:.02em;white-space:nowrap}
@@ -214,6 +216,7 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 
 /* donut (répartition des leads par statut) */
 .donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;min-height:150px}
+.donut-wrap--solo{justify-content:center;flex-direction:column;gap:14px;text-align:center}
 .donut{position:relative;width:148px;height:148px;border-radius:50%;flex-shrink:0;transition:background .2s}
 .donut__hole{position:absolute;inset:20px;border-radius:50%;background:var(--panel-solid);
   display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:var(--sh-s)}
@@ -487,18 +490,25 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <div class="topbar__act"><span class="tag tag--dot" id="statusBadge">—</span></div>
       </div>
       <div class="kpis" id="ovKpis"></div>
-      <div class="split">
+      <div class="split split--even">
         <div class="card card--chart">
           <div class="card__head"><div><h3>Conversations — 14 derniers jours</h3></div></div>
           <div class="chart" id="chart"></div>
         </div>
         <div class="card">
-          <div class="card__head"><div><h3>Leads par statut</h3></div></div>
-          <div class="donut-wrap" id="ovDonut"></div>
+          <div class="card__head"><div><h3>Taux de conversion</h3></div></div>
+          <div class="donut-wrap donut-wrap--solo" id="ovConvRing"></div>
         </div>
       </div>
       <div class="card card--chart">
-        <div class="card__head"><div><h3>Leads traités — 14 derniers jours</h3></div></div>
+        <div class="card__head">
+          <div><h3>Leads traités</h3></div>
+          <select id="leadsRangeSelect" class="rangepick">
+            <option value="14d">14 derniers jours</option>
+            <option value="week">Cette semaine</option>
+            <option value="24h">Dernières 24h</option>
+          </select>
+        </div>
         <div class="areachart" id="leadsArea"></div>
       </div>
       <div class="card card--flush" id="ovLeadsCard">
@@ -1002,6 +1012,28 @@ function renderOverviewKpis() {
     '<div class="kpi"><div class="kpi__l">Messages / conversation (moy.)</div><div class="kpi__v">' + OV.avgMsg + '</div></div>' +
     '<div class="kpi"><div class="kpi__l">Leads captés (30 j)</div><div class="kpi__v">' + OV.leads30 + '</div></div>' +
     '<div class="kpi"><div class="kpi__l">Taux de conversion</div><div class="kpi__v">' + rate + '</div></div>';
+
+  renderOverviewConversionRing(rate);
+}
+
+// Anneau "Taux de conversion" (leads captés ÷ conversations totales) sur la
+// Vue d'ensemble — un seul repère (le pourcentage), pas de légende multi-
+// couleurs puisqu'il n'y a qu'une seule mesure à lire ici.
+function renderOverviewConversionRing(rate) {
+  var box = $('#ovConvRing');
+  if (!box) return;
+
+  if (!OV.conv) {
+    box.innerHTML = '<p class="card__sub">Pas encore de conversation enregistrée.</p>';
+    return;
+  }
+
+  var pct = Math.min(100, (OV.leads / OV.conv) * 100);
+  box.innerHTML =
+    '<div class="donut" style="background:conic-gradient(var(--green) 0% ' + pct + '%, var(--line-soft) ' + pct + '% 100%)">' +
+      '<div class="donut__hole"><div class="donut__v">' + rate + '</div><div class="donut__l">conversion</div></div>' +
+    '</div>' +
+    '<p class="card__sub">' + OV.leads + ' lead(s) captés sur ' + OV.conv + ' conversation(s).</p>';
 }
 
 async function loadStats() {
@@ -1084,84 +1116,78 @@ async function loadLeads() {
   try {
     var res = await fetch(API + '/api/dashboard/leads', { credentials: 'include' });
     var leads = await res.json();
+    LEADS_CACHE = leads;
     // Chaque affichage dans son propre try/catch : une erreur sur l'un de ces
-    // graphiques (ex. le donut ou l'aire lissée) ne doit jamais empêcher les
-    // autres — ni la table des leads — de s'afficher.
+    // graphiques ne doit jamais empêcher les autres — ni la table des leads —
+    // de s'afficher.
     try { renderLeadKpis(leads); } catch (e2) { console.error('renderLeadKpis:', e2); }
     try { renderLeads(leads); } catch (e2) { console.error('renderLeads:', e2); }
     try { renderOverviewLeads(leads); } catch (e2) { console.error('renderOverviewLeads:', e2); }
-    try { renderOverviewDonut(leads); } catch (e2) { console.error('renderOverviewDonut:', e2); }
     try { renderLeadsArea(leads); } catch (e2) { console.error('renderLeadsArea:', e2); }
   } catch (e) { toast('Impossible de charger les leads.', true); }
 }
 
-// Anneau "Leads par statut" sur la Vue d'ensemble — mêmes couleurs que les
-// tags de statut utilisés partout ailleurs (LEAD_STATUS_TAGCLASS), pour que
-// la légende reste cohérente avec le reste du tableau de bord. Construit en
-// CSS pur (conic-gradient), sans librairie externe.
-var LEAD_STATUS_ORDER = ['nouveau', 'contacte', 'rdv_pris', 'gagne', 'perdu'];
-var LEAD_STATUS_COLOR = {
-  nouveau: 'var(--blue)', contacte: 'var(--amber)', rdv_pris: 'var(--violet)',
-  gagne: 'var(--green)', perdu: 'var(--red)',
-};
-function renderOverviewDonut(leads) {
-  var box = $('#ovDonut');
-  if (!box) return;
+// Graphique en aire lissée "Leads traités", avec sélecteur de période.
+// Construit en SVG pur (courbe lissée par segments de Bézier + dégradé +
+// repère de survol), sans librairie externe. LEADS_CACHE/LEADS_RANGE
+// permettent de changer de période sans refaire d'appel réseau : les leads
+// sont déjà tous chargés, seul le découpage en tranches de temps change.
+var LEADS_CACHE = [];
+var LEADS_RANGE = '14d';
 
-  var counts = {};
-  LEAD_STATUS_ORDER.forEach(function (k) { counts[k] = 0; });
-  leads.forEach(function (l) { if (counts[l.status] !== undefined) counts[l.status]++; });
-  var total = leads.length;
+function buildLeadBuckets(range) {
+  var buckets = [];
+  var now = new Date();
 
-  if (!total) {
-    box.innerHTML = '<p class="card__sub">Aucun lead pour l\'instant — la répartition apparaîtra ici dès le premier lead capté.</p>';
-    return;
+  if (range === '24h') {
+    for (var i = 23; i >= 0; i--) {
+      var start = new Date(now.getTime() - i * 60 * 60 * 1000);
+      start.setMinutes(0, 0, 0);
+      var end = new Date(start.getTime() + 60 * 60 * 1000);
+      buckets.push({ start: start, end: end, label: start.getHours() + 'h', count: 0 });
+    }
+  } else if (range === 'week') {
+    var dow = now.getDay(); // 0=dimanche...6=samedi
+    var diffToMonday = dow === 0 ? 6 : dow - 1;
+    var cursor = new Date(now);
+    cursor.setDate(cursor.getDate() - diffToMonday);
+    cursor.setHours(0, 0, 0, 0);
+    while (cursor <= now) {
+      var bStart = new Date(cursor);
+      var bEnd = new Date(cursor); bEnd.setDate(bEnd.getDate() + 1);
+      buckets.push({ start: bStart, end: bEnd, label: fmtDay(bStart.toISOString().slice(0, 10)), count: 0 });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  } else { // '14d' (par défaut)
+    for (var j = 13; j >= 0; j--) {
+      var s2 = new Date(now); s2.setDate(s2.getDate() - j); s2.setHours(0, 0, 0, 0);
+      var e2 = new Date(s2); e2.setDate(e2.getDate() + 1);
+      buckets.push({ start: s2, end: e2, label: fmtDay(s2.toISOString().slice(0, 10)), count: 0 });
+    }
   }
-
-  var acc = 0;
-  var gradient = LEAD_STATUS_ORDER.filter(function (k) { return counts[k] > 0; }).map(function (k) {
-    var pct = (counts[k] / total) * 100;
-    var slice = LEAD_STATUS_COLOR[k] + ' ' + acc + '% ' + (acc + pct) + '%';
-    acc += pct;
-    return slice;
-  }).join(',');
-
-  var legend = LEAD_STATUS_ORDER.filter(function (k) { return counts[k] > 0; }).map(function (k) {
-    return '<div class="legend__row"><span class="legend__dot" style="background:' + LEAD_STATUS_COLOR[k] + '"></span>' +
-      esc(LEAD_STATUS_LABELS[k] || k) + '<span class="legend__n">' + counts[k] + '</span></div>';
-  }).join('');
-
-  box.innerHTML =
-    '<div class="donut" style="background:conic-gradient(' + gradient + ')">' +
-      '<div class="donut__hole"><div class="donut__v">' + total + '</div><div class="donut__l">lead(s)</div></div>' +
-    '</div>' +
-    '<div class="legend">' + legend + '</div>';
+  return buckets;
 }
 
-// Graphique en aire lissée "Leads traités — 14 derniers jours". Construit
-// en SVG pur (courbe lissée par segments de Bézier + degradé + repère de
-// survol), sans librairie externe — même logique de bucketing par jour que
-// le graphique de conversations (14 derniers jours, jours sans lead à 0).
 function renderLeadsArea(leads) {
   var box = $('#leadsArea');
   if (!box) return;
 
-  var days = [];
-  for (var i = 13; i >= 0; i--) {
-    var d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push({ key: d.toISOString().slice(0, 10), count: 0 });
-  }
-  var byKey = {};
-  days.forEach(function (d) { byKey[d.key] = d; });
+  var buckets = buildLeadBuckets(LEADS_RANGE);
   leads.forEach(function (l) {
-    var key = new Date(l.createdAt).toISOString().slice(0, 10);
-    if (byKey[key]) byKey[key].count++;
+    var t = new Date(l.createdAt).getTime();
+    for (var i = 0; i < buckets.length; i++) {
+      if (t >= buckets[i].start.getTime() && t < buckets[i].end.getTime()) { buckets[i].count++; break; }
+    }
   });
 
+  var n = buckets.length;
+  if (n < 2) {
+    box.innerHTML = '<p class="card__sub">Pas assez de données pour cette période.</p>';
+    return;
+  }
+
   var W = 700, H = 150, PAD_TOP = 14, PAD_BOTTOM = 6;
-  var max = Math.max(1, ...days.map(function (d) { return d.count; }));
-  var n = days.length;
+  var max = Math.max(1, ...buckets.map(function (b) { return b.count; }));
   var stepX = W / (n - 1);
 
   function xAt(i) { return i * stepX; }
@@ -1170,7 +1196,7 @@ function renderLeadsArea(leads) {
     return PAD_TOP + usable - (count / max) * usable;
   }
 
-  var pts = days.map(function (d, i) { return { x: xAt(i), y: yAt(d.count) }; });
+  var pts = buckets.map(function (b, i) { return { x: xAt(i), y: yAt(b.count) }; });
 
   // Courbe lissée : contrôle horizontal à mi-distance entre deux points,
   // simple et stable (jamais de dépassement au-dessus/en dessous des valeurs).
@@ -1196,7 +1222,7 @@ function renderLeadsArea(leads) {
       '<rect id="leadsAreaCapture" x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent"></rect>' +
     '</svg>' +
     '<div class="areachart__tip" id="leadsAreaTip"></div>' +
-    '<div class="areachart__x">' + days.map(function (d) { return '<span>' + fmtDay(d.key) + '</span>'; }).join('') + '</div>';
+    '<div class="areachart__x">' + buckets.map(function (b) { return '<span>' + esc(b.label) + '</span>'; }).join('') + '</div>';
 
   var svg = box.querySelector('svg');
   var capture = box.querySelector('#leadsAreaCapture');
@@ -1211,7 +1237,7 @@ function renderLeadsArea(leads) {
     crosshair.classList.add('is-on'); dot.classList.add('is-on');
     tip.classList.add('is-on');
     tip.style.left = (p.x / W * 100) + '%';
-    tip.innerHTML = '<b>' + days[i].count + ' lead(s)</b>' + fmtDay(days[i].key);
+    tip.innerHTML = '<b>' + buckets[i].count + ' lead(s)</b>' + esc(buckets[i].label);
   }
   function hide() {
     crosshair.classList.remove('is-on'); dot.classList.remove('is-on'); tip.classList.remove('is-on');
@@ -1224,6 +1250,14 @@ function renderLeadsArea(leads) {
     showAt(i);
   });
   capture.addEventListener('mouseleave', hide);
+}
+
+var leadsRangeSelect = $('#leadsRangeSelect');
+if (leadsRangeSelect) {
+  leadsRangeSelect.addEventListener('change', function (e) {
+    LEADS_RANGE = e.target.value;
+    renderLeadsArea(LEADS_CACHE);
+  });
 }
 
 // Alimente OV (leads totaux + leads des 30 derniers jours) pour le KPI de
