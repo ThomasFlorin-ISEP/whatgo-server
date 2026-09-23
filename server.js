@@ -28,7 +28,9 @@ const MODEL = 'gemini-3.1-flash-lite';
 // configurée (GROQ_API_KEY absente), le fallback est simplement ignoré
 // et le comportement reste identique à avant (l'erreur Gemini est
 // renvoyée telle quelle) — rien ne casse si la clé n'est pas encore mise.
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+// .trim() : évite qu'un espace ou retour à la ligne collé par erreur
+// dans Render casse silencieusement l'authentification.
+const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim() || undefined;
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 
 const DRAFT_REPLY =
@@ -336,6 +338,9 @@ async function callGroqFallback(systemPrompt, contents) {
   const data = await response.json();
 
   if (data.error) {
+    // On loggue le statut HTTP + l'objet d'erreur complet (pas juste le
+    // message) pour distinguer un souci de clé (401) d'un souci de modèle.
+    console.error(`Détail erreur Groq (HTTP ${response.status}):`, JSON.stringify(data.error));
     throw new Error(data.error.message || 'Erreur inconnue côté Groq');
   }
 
