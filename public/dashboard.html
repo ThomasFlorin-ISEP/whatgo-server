@@ -400,7 +400,18 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       <div class="field"><label for="password">Mot de passe</label>
         <input type="password" id="password" required autocomplete="current-password" /></div>
       <button type="submit" class="btn btn--primary btn--full" id="loginBtn">Se connecter</button>
-      <p class="msg msg--err is-on" id="loginError"></p>
+      <p class="msg msg--err" id="loginError"></p>
+      <p class="hint"><a href="#" id="forgotLink">Mot de passe oublié ?</a></p>
+    </form>
+
+    <form id="forgotForm" novalidate hidden>
+      <p class="sub" style="margin-bottom:16px">Indiquez votre email, on vous envoie un lien pour choisir un nouveau mot de passe.</p>
+      <div class="field"><label for="forgotEmail">Email</label>
+        <input type="email" id="forgotEmail" required autocomplete="username" placeholder="vous@entreprise.com" /></div>
+      <button type="submit" class="btn btn--primary btn--full" id="forgotBtn">Envoyer le lien</button>
+      <p class="msg msg--ok" id="forgotOk"></p>
+      <p class="msg msg--err" id="forgotError"></p>
+      <p class="hint"><a href="#" id="backToLogin">← Retour à la connexion</a></p>
     </form>
   </div>
 </div>
@@ -920,6 +931,38 @@ $('#loginForm').addEventListener('submit', async function (e) {
     ME = data;
     enterApp();
   } catch (err) { showMsg('#loginError', 'Impossible de contacter le serveur.', true); }
+});
+
+$('#forgotLink').addEventListener('click', function (e) {
+  e.preventDefault();
+  $('#loginForm').hidden = true;
+  $('#forgotForm').hidden = false;
+  hideMsg('#loginError');
+});
+$('#backToLogin').addEventListener('click', function (e) {
+  e.preventDefault();
+  $('#forgotForm').hidden = true;
+  $('#loginForm').hidden = false;
+  hideMsg('#forgotOk'); hideMsg('#forgotError');
+});
+$('#forgotForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideMsg('#forgotError'); hideMsg('#forgotOk');
+  var btn = $('#forgotBtn');
+  btn.disabled = true;
+  try {
+    await fetch(API + '/api/auth/forgot-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('#forgotEmail').value }),
+    });
+    // Message volontairement identique que l'email existe ou non — on ne
+    // révèle jamais quels comptes existent.
+    showMsg('#forgotOk', 'Si un compte existe avec cet email, un lien de réinitialisation vient d\'être envoyé.', true);
+  } catch (err) {
+    showMsg('#forgotError', 'Impossible de contacter le serveur.', true);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 $('#logoutBtn').addEventListener('click', async function () {
