@@ -125,6 +125,11 @@ async function initDb() {
   // seul" reste valide, le téléphone se rajoute si/quand le visiteur le donne.
   await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone TEXT`);
 
+  // Marque les réponses envoyées via le secours Groq (Gemini indisponible),
+  // pour que l'équipe WHATGO (et personne d'autre) puisse suivre à quel
+  // point ce secours est sollicité en pratique.
+  await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS used_fallback BOOLEAN NOT NULL DEFAULT false`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 
