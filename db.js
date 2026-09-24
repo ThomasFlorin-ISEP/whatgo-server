@@ -85,13 +85,15 @@ async function initDb() {
     )
   `);
 
-  // Leads réels captés depuis le chat : un visiteur qui laisse son email.
+  // Leads réels captés depuis le chat : un visiteur qui laisse son email
+  // et/ou son téléphone (l'un des deux suffit — "email obligatoire" était
+  // trop strict maintenant que le bot peut aussi capter un téléphone seul).
   await query(`
     CREATE TABLE IF NOT EXISTS leads (
       id              SERIAL PRIMARY KEY,
       business_id     INTEGER NOT NULL,
       conversation_id INTEGER,
-      email           TEXT NOT NULL,
+      email           TEXT,
       message         TEXT,
       score           INTEGER NOT NULL DEFAULT 40,
       status          TEXT NOT NULL DEFAULT 'nouveau',
@@ -129,6 +131,11 @@ async function initDb() {
   // pour que l'équipe WHATGO (et personne d'autre) puisse suivre à quel
   // point ce secours est sollicité en pratique.
   await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS used_fallback BOOLEAN NOT NULL DEFAULT false`);
+
+  // La base existante a "email" en NOT NULL depuis le tout début — on
+  // retire cette contrainte pour permettre un lead "téléphone seul"
+  // (visiteur qui donne son numéro sans jamais laisser d'email).
+  await query(`ALTER TABLE leads ALTER COLUMN email DROP NOT NULL`);
 
   console.log('✅ Schéma PostgreSQL prêt.');
 }
