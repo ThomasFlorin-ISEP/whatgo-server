@@ -259,21 +259,36 @@ function formatFrenchDateTime(date) {
   return `${dayLabel} à ${String(date.getHours()).padStart(2, '0')}h00`;
 }
 
+// Instruction de langue, ajoutée systématiquement pour TOUTES les
+// entreprises : le bot détecte automatiquement la langue utilisée par le
+// visiteur (à partir de ses messages) et répond dans cette même langue,
+// sans jamais avoir besoin de le configurer par client. Par défaut (langue
+// indétectable, premier message ambigu, etc.) on reste en français.
+const LANGUAGE_INSTRUCTION =
+  `\n\nINSTRUCTION DE LANGUE (permanente) : Détecte la langue utilisée par le visiteur dans ses messages ` +
+  `et réponds toujours dans cette même langue, du début à la fin de la conversation. ` +
+  `Si sa langue n'est pas claire (message trop court, mélange de langues...), réponds en français par défaut. ` +
+  `Ne mentionne jamais explicitement que tu fais cette détection.`;
+
 // Construit le prompt système à utiliser pour CET appel uniquement (ne
 // modifie jamais business.system_prompt en base) : ajoute l'instruction de
-// proposition de démo si ce visiteur vient d'envoyer son 3e message.
+// langue à chaque appel, puis l'instruction de proposition de démo si ce
+// visiteur vient d'envoyer son 3e message (uniquement pour whatgo).
 function buildSystemPromptForCall(business, messages) {
-  if (business.slug !== DEMO_OFFER_SLUG) return business.system_prompt;
+  const basePrompt = business.system_prompt + LANGUAGE_INSTRUCTION;
+
+  if (business.slug !== DEMO_OFFER_SLUG) return basePrompt;
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length;
-  if (userMessageCount !== DEMO_OFFER_AFTER_MESSAGES) return business.system_prompt;
+  if (userMessageCount !== DEMO_OFFER_AFTER_MESSAGES) return basePrompt;
 
   const demoDateLabel = formatFrenchDateTime(nextBusinessDayAt(DEMO_OFFER_BUSINESS_DAYS_AHEAD, DEMO_OFFER_HOUR));
-  return business.system_prompt +
+  return basePrompt +
     `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
     `C'est le ${DEMO_OFFER_AFTER_MESSAGES}e message de ce visiteur. Propose-lui maintenant une démo de WHATGO AI, ` +
     `avec cette date précise : ${demoDateLabel}. Demande-lui de confirmer avec son email ET son numéro de téléphone ` +
-    `pour que l'équipe puisse le recontacter et confirmer le créneau.`;
+    `pour que l'équipe puisse le recontacter et confirmer le créneau. Fais cette proposition dans la langue de la ` +
+    `conversation en cours.`;
 }
 
 // Mots-clés FR laissant penser à une intention d'achat/contact forte.
@@ -602,6 +617,7 @@ app.post('/api/chat', async (req, res) => {
     const data = await callGemini(systemPromptForCall, contents);
 
     let reply;
+    let usedFallback = false;
     if (data.error) {
       console.error('Erreur API Gemini:', data.error);
       // Gemini a échoué après ses tentatives (souvent une surcharge 503) :
@@ -617,6 +633,7 @@ app.post('/api/chat', async (req, res) => {
       if (fallbackReply) {
         console.warn(`Bascule sur Groq réussie pour "${business.name}".`);
         reply = fallbackReply;
+        usedFallback = true;
       } else {
         return res.status(500).json({ error: data.error.message });
       }
@@ -625,10 +642,12 @@ app.post('/api/chat', async (req, res) => {
         || "Désolé, je n'ai pas pu répondre.";
     }
 
-    // Enregistrer la réponse de l'IA aussi
+    // Enregistrer la réponse de l'IA aussi (avec le marqueur used_fallback,
+    // visible seulement côté équipe WHATGO, pour suivre à quel point ce
+    // secours est réellement sollicité en production).
     await query(
-      'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-      [convoId, 'assistant', reply]
+      'INSERT INTO messages (conversation_id, role, content, used_fallback) VALUES ($1, $2, $3, $4)',
+      [convoId, 'assistant', reply, usedFallback]
     );
 
     // Escalade vers un humain (page "Qualification") : uniquement sur les
@@ -889,6 +908,46 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
   }
 });
 
+// Export CSV des leads de l'entreprise connectée — ouvre/télécharge
+// directement un fichier .csv (Excel, Google Sheets, etc. l'ouvrent nativement).
+// Simple échappement CSV : on double les guillemets internes et on entoure
+// chaque champ de guillemets, ce qui suffit à gérer virgules/retours à la ligne.
+function csvField(value) {
+  return '"' + String(value ?? '').replace(/"/g, '""') + '"';
+}
+
+app.get('/api/dashboard/leads/export.csv', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows: leads } = await query(`
+      SELECT email, phone, message, score, status, created_at
+      FROM leads
+      WHERE business_id = $1
+      ORDER BY created_at DESC
+    `, [req.user.businessId]);
+
+    const header = ['Email', 'Téléphone', 'Message', 'Score', 'Statut', 'Date'].map(csvField).join(',');
+    const lines = leads.map((l) => [
+      csvField(l.email),
+      csvField(l.phone || ''),
+      csvField(l.message || ''),
+      csvField(l.score),
+      csvField(l.status),
+      csvField(new Date(l.created_at).toLocaleString('fr-FR')),
+    ].join(','));
+
+    // ﻿ (BOM) devant : évite que les accents s'affichent mal quand le
+    // fichier est ouvert directement dans Excel.
+    const csv = '﻿' + [header, ...lines].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="leads.csv"');
+    res.send(csv);
+  } catch (err) {
+    console.error('Erreur /api/dashboard/leads/export.csv:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
 app.put('/api/dashboard/leads/:id/status', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { status } = req.body;
@@ -1142,6 +1201,33 @@ app.get('/api/superadmin/clients', requireAuth, requireSuperAdmin, async (req, r
     res.json(clients);
   } catch (err) {
     console.error('Erreur GET /api/superadmin/clients:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Taux d'utilisation du secours Groq, tous clients confondus — réservé à
+// l'équipe WHATGO (les clients n'ont aucune raison de savoir qu'un secours
+// existe, encore moins à quelle fréquence il est déclenché).
+app.get('/api/superadmin/stats/fallback', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') as total_30d,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days' AND used_fallback) as fallback_30d,
+        COUNT(*) as total_all,
+        COUNT(*) FILTER (WHERE used_fallback) as fallback_all
+      FROM messages
+      WHERE role = 'assistant'
+    `);
+    const r = rows[0];
+    res.json({
+      total30d: Number(r.total_30d),
+      fallback30d: Number(r.fallback_30d),
+      totalAll: Number(r.total_all),
+      fallbackAll: Number(r.fallback_all),
+    });
+  } catch (err) {
+    console.error('Erreur GET /api/superadmin/stats/fallback:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
