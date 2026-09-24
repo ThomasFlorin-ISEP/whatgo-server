@@ -120,6 +120,11 @@ async function initDb() {
   await query(`ALTER TABLE super_admins ADD COLUMN IF NOT EXISTS reset_token_hash TEXT`);
   await query(`ALTER TABLE super_admins ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ`);
 
+  // Téléphone du lead — demandé notamment quand le bot propose une démo
+  // (email + téléphone pour confirmer). Toujours optionnel : un lead "email
+  // seul" reste valide, le téléphone se rajoute si/quand le visiteur le donne.
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone TEXT`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 
