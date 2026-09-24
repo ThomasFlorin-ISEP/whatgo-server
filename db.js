@@ -113,6 +113,13 @@ async function initDb() {
   // tant que cette structure est encore amenée à évoluer.
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS qualification TEXT DEFAULT '{}'`);
 
+  // Mot de passe oublié : jeton (haché) + expiration, sur les deux tables de
+  // comptes (clients et équipe WHATGO). Le jeton n'est jamais stocké en clair.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash TEXT`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ`);
+  await query(`ALTER TABLE super_admins ADD COLUMN IF NOT EXISTS reset_token_hash TEXT`);
+  await query(`ALTER TABLE super_admins ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 
