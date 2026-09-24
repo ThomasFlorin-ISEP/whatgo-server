@@ -17,6 +17,9 @@
  *   data-position="right"         "right" (défaut) ou "left"
  *   data-autoopen="true"          ouvre la fenêtre toute seule ("false" pour désactiver)
  *   data-delay="1500"             délai avant l'ouverture automatique, en millisecondes
+ *   data-nudge="true"             relance automatique si le visiteur n'a jamais écrit ("false" pour désactiver)
+ *   data-nudge-delay="180000"     délai avant la relance, en millisecondes (3 min par défaut)
+ *   data-nudge-message="Vous avez besoin d'un renseignement ?"   message affiché lors de la relance
  * ============================================================
  */
 (function () {
@@ -36,6 +39,9 @@
   var POSITION = attr('position', 'right');
   var AUTO_OPEN = attr('autoopen', 'true') !== 'false';
   var AUTO_DELAY = parseInt(attr('delay', '1500'), 10) || 1500;
+  var NUDGE_ENABLED = attr('nudge', 'true') !== 'false';
+  var NUDGE_DELAY = parseInt(attr('nudge-delay', '180000'), 10) || 180000;
+  var NUDGE_MESSAGE = attr('nudge-message', "Vous avez besoin d'un renseignement ?");
   var BUSINESS = scriptTag ? scriptTag.getAttribute('data-business') : null;
   var conversationId = null;
 
@@ -171,6 +177,7 @@
 
   var history = [];
   var welcomed = false;
+  var hasInteracted = false; // true dès que le visiteur envoie un premier message
 
   function nowStr() {
     try {
@@ -223,6 +230,14 @@
     try { sessionStorage.setItem('wgt-seen', '1'); } catch (e) {}
   }
 
+  // --- Mémoire "déjà relancé pendant cette visite" (une seule relance par visite) ---
+  function alreadyNudged() {
+    try { return sessionStorage.getItem('wgt-nudged') === '1'; } catch (e) { return false; }
+  }
+  function markNudged() {
+    try { sessionStorage.setItem('wgt-nudged', '1'); } catch (e) {}
+  }
+
   function showWelcome() {
     if (welcomed) return;
     welcomed = true;
@@ -245,6 +260,19 @@
     markSeen();
   }
 
+  // Relance : ré-ouvre la fenêtre avec un message proactif, comme à
+  // l'arrivée sur le site, mais plus tard dans la visite — uniquement si
+  // le visiteur n'a jamais écrit et n'a pas déjà été relancé cette visite.
+  function showNudge() {
+    panel.classList.add('wgt-open');
+    markSeen();
+    var t = showTyping();
+    setTimeout(function () {
+      t.remove();
+      addMessage('bot', NUDGE_MESSAGE);
+    }, 900);
+  }
+
   bubble.addEventListener('click', function () {
     if (panel.classList.contains('wgt-open')) closePanel();
     else openPanel(true);
@@ -258,12 +286,25 @@
     }, AUTO_DELAY);
   }
 
+  // --- Relance après un moment sur le site (3 min par défaut) si le visiteur
+  // n'a jamais écrit et n'a pas fermé la fenêtre sur un vrai échange. Une
+  // seule relance par visite, jamais si le visiteur discute déjà. ---
+  if (NUDGE_ENABLED) {
+    setTimeout(function () {
+      if (hasInteracted || alreadyNudged()) return;
+      if (panel.classList.contains('wgt-open')) return; // déjà en train de regarder le chat
+      markNudged();
+      showNudge();
+    }, NUDGE_DELAY);
+  }
+
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
     var text = input.value.trim();
     if (!text) return;
     input.value = '';
     sendBtn.disabled = true;
+    hasInteracted = true;
 
     addMessage('user', text);
     history.push({ role: 'user', content: text });
