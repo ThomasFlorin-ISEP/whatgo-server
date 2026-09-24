@@ -539,55 +539,62 @@ app.post('/api/chat', async (req, res) => {
     );
 
     // Lead qualifié : le visiteur vient de laisser un email et/ou un
-    // téléphone pour la première fois dans cette conversation. Les deux
-    // arrivent souvent en 2 messages séparés (email d'abord, puis téléphone
-    // quand le bot le demande pour confirmer une démo) — le 2e cas complète
-    // le lead déjà créé plutôt que d'en créer un doublon.
+    // téléphone. Les deux arrivent souvent en 2 messages séparés (email
+    // d'abord, puis téléphone quand le bot le demande pour confirmer une
+    // démo — ou l'inverse). On regarde d'abord s'il existe déjà un lead
+    // pour CETTE conversation : si oui on complète les champs manquants,
+    // si non on en crée un — avec ce qu'on a, même si c'est le téléphone
+    // seul (avant, un téléphone seul sans email préalable n'était jamais
+    // enregistré : c'était le bug).
     const newEmail = extractEmail(lastUserMessage.content);
     const newPhone = extractPhone(lastUserMessage.content);
     if (newEmail || newPhone) {
-      const priorUserMessages = messages.slice(0, -1).filter((m) => m.role === 'user');
-      const alreadyHadEmail = priorUserMessages.some((m) => extractEmail(m.content));
-      const alreadyHadPhone = priorUserMessages.some((m) => extractPhone(m.content));
+      const { rows: existingLeadRows } = await query(
+        `SELECT id, email, phone FROM leads WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [convoId]
+      );
+      const existingLead = existingLeadRows[0];
 
-      if (newEmail && !alreadyHadEmail) {
-        sendLeadToWebhook(business, {
-          business: business.name,
-          slug: business.slug,
-          conversationId: convoId,
-          email: newEmail,
-          phone: newPhone || '',
-          message: lastUserMessage.content,
-          date: new Date().toISOString(),
-        });
-
-        // Enregistré localement dans tous les cas, même si aucun webhook
-        // Make/Zapier n'est configuré pour cette entreprise.
+      if (!existingLead) {
+        // Premier email et/ou téléphone de cette conversation : nouveau lead.
+        const priorUserMessages = messages.slice(0, -1).filter((m) => m.role === 'user');
         const score = computeLeadScore(lastUserMessage.content, priorUserMessages.length === 0);
         await query(
           `INSERT INTO leads (business_id, conversation_id, email, phone, message, score, status)
            VALUES ($1, $2, $3, $4, $5, $6, 'nouveau')`,
-          [business.id, convoId, newEmail, newPhone || null, lastUserMessage.content, score]
+          [business.id, convoId, newEmail || null, newPhone || null, lastUserMessage.content, score]
         );
-      } else if (newPhone && !alreadyHadPhone) {
-        // Email déjà donné avant (lead déjà créé) : on complète avec le
-        // téléphone, sans créer de 2e lead pour la même conversation.
-        const { rows: existingLeadRows } = await query(
-          `SELECT id, email FROM leads WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1`,
-          [convoId]
-        );
-        const existingLead = existingLeadRows[0];
-        if (existingLead) {
-          await query('UPDATE leads SET phone = $1, updated_at = NOW() WHERE id = $2', [newPhone, existingLead.id]);
+        sendLeadToWebhook(business, {
+          business: business.name,
+          slug: business.slug,
+          conversationId: convoId,
+          email: newEmail || '',
+          phone: newPhone || '',
+          message: lastUserMessage.content,
+          date: new Date().toISOString(),
+        });
+      } else {
+        // Lead déjà existant pour cette conversation : on ne complète que
+        // les champs qui manquaient encore (jamais on n'écrase un email ou
+        // un téléphone déjà enregistré).
+        const fieldsToUpdate = [];
+        const params = [];
+        let i = 1;
+        if (newEmail && !existingLead.email) { fieldsToUpdate.push(`email = $${i++}`); params.push(newEmail); }
+        if (newPhone && !existingLead.phone) { fieldsToUpdate.push(`phone = $${i++}`); params.push(newPhone); }
+
+        if (fieldsToUpdate.length) {
+          params.push(existingLead.id);
+          await query(`UPDATE leads SET ${fieldsToUpdate.join(', ')}, updated_at = NOW() WHERE id = $${i}`, params);
           sendLeadToWebhook(business, {
             business: business.name,
             slug: business.slug,
             conversationId: convoId,
-            email: existingLead.email,
-            phone: newPhone,
+            email: newEmail || existingLead.email || '',
+            phone: newPhone || existingLead.phone || '',
             message: lastUserMessage.content,
             date: new Date().toISOString(),
-            type: 'phone_added',
+            type: 'lead_updated',
           });
         }
       }
