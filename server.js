@@ -4,6 +4,7 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const crypto = require('crypto');
 const { query, initDb } = require('./db');
 const {
   hashPassword,
@@ -32,6 +33,78 @@ const MODEL = 'gemini-3.1-flash-lite';
 // dans Render casse silencieusement l'authentification.
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim() || undefined;
 const GROQ_MODEL = 'openai/gpt-oss-20b';
+
+// Clé Resend optionnelle : sert à envoyer l'email "mot de passe oublié". Si
+// elle n'est pas configurée, le lien de réinitialisation est simplement
+// affiché dans les logs Render au lieu d'être envoyé par email (utile pour
+// tester avant d'avoir configuré Resend, sans jamais faire planter le
+// serveur si la clé manque).
+const RESEND_API_KEY = (process.env.RESEND_API_KEY || '').trim() || undefined;
+const RESEND_FROM = process.env.RESEND_FROM || 'WHATGO AI <no-reply@whatgo.ai>';
+const APP_URL = (process.env.APP_URL || 'https://whatgo-server.onrender.com').replace(/\/$/, '');
+
+// ------------------------------------------------------------
+// Limiteur anti-abus (en mémoire, par IP) : le serveur tourne sur une seule
+// instance (WEB_CONCURRENCY=1 sur Render), donc pas besoin d'un stockage
+// partagé type Redis pour ça. Chaque compteur garde juste les horodatages
+// des derniers appels dans la fenêtre de temps, et les entrées inactives
+// sont nettoyées périodiquement pour ne pas accumuler de la mémoire.
+const rateLimitBuckets = new Map(); // clé ("route:ip") -> [timestamps]
+function isRateLimited(key, max, windowMs) {
+  const now = Date.now();
+  const hits = (rateLimitBuckets.get(key) || []).filter((t) => now - t < windowMs);
+  hits.push(now);
+  rateLimitBuckets.set(key, hits);
+  return hits.length > max;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, hits] of rateLimitBuckets) {
+    const fresh = hits.filter((t) => now - t < 15 * 60 * 1000);
+    if (fresh.length) rateLimitBuckets.set(key, fresh);
+    else rateLimitBuckets.delete(key);
+  }
+}, 5 * 60 * 1000);
+
+function clientIp(req) {
+  const fwd = req.headers['x-forwarded-for'];
+  return (fwd ? fwd.split(',')[0].trim() : null) || req.socket.remoteAddress || 'unknown';
+}
+
+function hashResetToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+// Envoie l'email "mot de passe oublié" via Resend (API HTTP simple, pas de
+// SMTP à configurer). Ne bloque et ne casse jamais /api/auth/forgot-password
+// si Resend est mal configuré ou indisponible — l'utilisateur reçoit toujours
+// la même réponse générique, et l'erreur reste seulement dans les logs.
+async function sendPasswordResetEmail(toEmail, resetLink) {
+  if (!RESEND_API_KEY) {
+    console.warn(`RESEND_API_KEY non configurée : email non envoyé. Lien de réinitialisation pour ${toEmail} : ${resetLink}`);
+    return;
+  }
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+      body: JSON.stringify({
+        from: RESEND_FROM,
+        to: [toEmail],
+        subject: 'Réinitialisation de votre mot de passe WHATGO',
+        html: `<p>Bonjour,</p><p>Cliquez sur ce lien pour choisir un nouveau mot de passe (valable 1 heure) :</p>
+               <p><a href="${resetLink}">${resetLink}</a></p>
+               <p>Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.</p>`,
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error(`Erreur envoi email Resend (HTTP ${response.status}):`, detail);
+    }
+  } catch (err) {
+    console.error('Erreur envoi email de réinitialisation:', err.message);
+  }
+}
 
 const DRAFT_REPLY =
   "Merci pour votre message ! Notre équipe finalise la configuration de cet assistant, il sera bientôt pleinement opérationnel. N'hésitez pas à nous laisser vos coordonnées, nous reviendrons vers vous rapidement.";
@@ -361,6 +434,13 @@ function slugify(name) {
 // ============================================================
 app.post('/api/chat', async (req, res) => {
   try {
+    // Anti-abus : évite qu'un visiteur (ou un script) fasse exploser la
+    // facture Gemini/Groq en spammant le chat. 20 messages/minute/IP laisse
+    // large pour un vrai visiteur, tout en bloquant un usage automatisé.
+    if (isRateLimited(`chat:${clientIp(req)}`, 20, 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de messages envoyés trop rapidement. Merci de patienter une minute.' });
+    }
+
     const { messages, business: slug, conversationId } = req.body;
 
     if (!slug) {
@@ -496,6 +576,13 @@ app.post('/api/chat', async (req, res) => {
 // ============================================================
 app.post('/api/auth/login', async (req, res) => {
   try {
+    // Anti-abus : ralentit le brute-force de mot de passe (8 tentatives
+    // toutes les 15 minutes par IP), sans jamais bloquer un vrai utilisateur
+    // qui se trompe une ou deux fois.
+    if (isRateLimited(`login:${clientIp(req)}`, 8, 15 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de tentatives de connexion. Réessayez dans quelques minutes.' });
+    }
+
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email et mot de passe requis.' });
@@ -538,6 +625,74 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   res.clearCookie('whatgo_token');
   res.json({ ok: true });
+});
+
+// Mot de passe oublié : demande le lien par email. Répond TOUJOURS pareil,
+// que l'email corresponde à un compte ou non — sinon on révèle quels
+// comptes existent à quiconque essaie des adresses au hasard.
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    if (isRateLimited(`forgot:${clientIp(req)}`, 5, 15 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de demandes. Réessayez plus tard.' });
+    }
+
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email requis.' });
+
+    const { rows: userRows } = await query('SELECT id FROM users WHERE email = $1', [email]);
+    const { rows: adminRows } = await query('SELECT id FROM super_admins WHERE email = $1', [email]);
+    const account = userRows[0] || adminRows[0];
+    const table = userRows[0] ? 'users' : 'super_admins';
+
+    if (account) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashResetToken(token);
+      const expires = new Date(Date.now() + 60 * 60 * 1000); // valable 1h
+      await query(`UPDATE ${table} SET reset_token_hash = $1, reset_token_expires = $2 WHERE id = $3`, [tokenHash, expires, account.id]);
+
+      const resetLink = `${APP_URL}/reset-password.html?token=${token}&email=${encodeURIComponent(email)}`;
+      await sendPasswordResetEmail(email, resetLink);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur /api/auth/forgot-password:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Choix du nouveau mot de passe à partir du lien reçu par email.
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { email, token, newPassword } = req.body;
+    if (!email || !token || !newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Lien invalide ou mot de passe trop court (8 caractères minimum).' });
+    }
+
+    const emailLower = String(email).trim().toLowerCase();
+    const tokenHash = hashResetToken(token);
+
+    const { rows: userRows } = await query('SELECT * FROM users WHERE email = $1', [emailLower]);
+    const { rows: adminRows } = await query('SELECT * FROM super_admins WHERE email = $1', [emailLower]);
+    const account = userRows[0] || adminRows[0];
+    const table = userRows[0] ? 'users' : 'super_admins';
+
+    const valid = account
+      && account.reset_token_hash === tokenHash
+      && account.reset_token_expires
+      && new Date(account.reset_token_expires) > new Date();
+
+    if (!valid) {
+      return res.status(400).json({ error: 'Ce lien de réinitialisation est invalide ou a expiré. Refaites une demande.' });
+    }
+
+    const hash = await hashPassword(newPassword);
+    await query(`UPDATE ${table} SET password_hash = $1, reset_token_hash = NULL, reset_token_expires = NULL WHERE id = $2`, [hash, account.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur /api/auth/reset-password:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
 });
 
 app.put('/api/auth/password', requireAuth, async (req, res) => {
