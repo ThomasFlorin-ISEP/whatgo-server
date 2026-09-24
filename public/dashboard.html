@@ -1325,7 +1325,7 @@ function renderOverviewLeads(leads) {
     '<thead><tr><th>Contact</th><th>Sujet</th><th>Score</th><th>Statut</th><th class="right">Reçu</th></tr></thead><tbody>' +
     (recent.length ? recent.map(function (l) {
       return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
-        '<td><div class="cell-main">' + esc(l.email) + '</div>' + (l.phone ? '<div class="cell-sub">' + esc(l.phone) + '</div>' : '') + '</td>' +
+        '<td><div class="cell-main">' + esc(l.email || l.phone || '—') + '</div>' + (l.email && l.phone ? '<div class="cell-sub">' + esc(l.phone) + '</div>' : '') + '</td>' +
         '<td class="cell-sub">' + esc(truncate(l.message, 40)) + '</td>' +
         '<td>' + scoreBarHtml(l.score) + '</td>' +
         '<td><span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span></td>' +
@@ -1362,7 +1362,7 @@ function renderLeads(leads) {
         : '<span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span>';
 
       return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
-        '<td><div class="cell-main">' + esc(l.email) + '</div>' + (l.phone ? '<div class="cell-sub">' + esc(l.phone) + '</div>' : '') + '</td>' +
+        '<td><div class="cell-main">' + esc(l.email || l.phone || '—') + '</div>' + (l.email && l.phone ? '<div class="cell-sub">' + esc(l.phone) + '</div>' : '') + '</td>' +
         '<td class="cell-sub">' + esc(truncate(l.message, 60)) + '</td>' +
         '<td><span class="chan chan--web"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="14" rx="3"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/></svg>Site web</span></td>' +
         '<td>' + scoreBarHtml(l.score) + '</td>' +
