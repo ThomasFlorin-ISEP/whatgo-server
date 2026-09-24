@@ -223,6 +223,59 @@ function extractEmail(text) {
   return match ? match[0] : null;
 }
 
+// Détecte un numéro de téléphone français dans un message (mobile ou fixe,
+// avec ou sans espaces/points/tirets, en format national 0X... ou +33X...).
+function extractPhone(text) {
+  const match = String(text || '').match(/(?:(?:\+33|0033)[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}/);
+  return match ? match[0] : null;
+}
+
+// ------------------------------------------------------------
+// Proposition automatique de démo : sur le bot WHATGO lui-même (le nôtre,
+// sur whatgo.ai — pas encore un réglage disponible par client), on propose
+// une démo au visiteur dès son 3e message, avec une date précise calculée
+// ici (jamais laissée à l'IA, qui pourrait halluciner un jour/heure faux),
+// et on lui demande son email ET son téléphone pour confirmer.
+// ------------------------------------------------------------
+const DEMO_OFFER_SLUG = 'whatgo';
+const DEMO_OFFER_AFTER_MESSAGES = 3;
+const DEMO_OFFER_BUSINESS_DAYS_AHEAD = 3;
+const DEMO_OFFER_HOUR = 14;
+
+function nextBusinessDayAt(businessDaysAhead, hour) {
+  const d = new Date();
+  let added = 0;
+  while (added < businessDaysAhead) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay(); // 0 = dimanche, 6 = samedi
+    if (day !== 0 && day !== 6) added++;
+  }
+  d.setHours(hour, 0, 0, 0);
+  return d;
+}
+
+function formatFrenchDateTime(date) {
+  const dayLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return `${dayLabel} à ${String(date.getHours()).padStart(2, '0')}h00`;
+}
+
+// Construit le prompt système à utiliser pour CET appel uniquement (ne
+// modifie jamais business.system_prompt en base) : ajoute l'instruction de
+// proposition de démo si ce visiteur vient d'envoyer son 3e message.
+function buildSystemPromptForCall(business, messages) {
+  if (business.slug !== DEMO_OFFER_SLUG) return business.system_prompt;
+
+  const userMessageCount = messages.filter((m) => m.role === 'user').length;
+  if (userMessageCount !== DEMO_OFFER_AFTER_MESSAGES) return business.system_prompt;
+
+  const demoDateLabel = formatFrenchDateTime(nextBusinessDayAt(DEMO_OFFER_BUSINESS_DAYS_AHEAD, DEMO_OFFER_HOUR));
+  return business.system_prompt +
+    `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
+    `C'est le ${DEMO_OFFER_AFTER_MESSAGES}e message de ce visiteur. Propose-lui maintenant une démo de WHATGO AI, ` +
+    `avec cette date précise : ${demoDateLabel}. Demande-lui de confirmer avec son email ET son numéro de téléphone ` +
+    `pour que l'équipe puisse le recontacter et confirmer le créneau.`;
+}
+
 // Mots-clés FR laissant penser à une intention d'achat/contact forte.
 const LEAD_INTENT_KEYWORDS = [
   'devis', 'tarif', 'prix', 'réserv', 'rendez-vous', 'rdv', 'disponibilité', 'urgent', 'contact',
@@ -470,18 +523,25 @@ app.post('/api/chat', async (req, res) => {
       [convoId, 'user', lastUserMessage.content]
     );
 
-    // Lead qualifié : le visiteur vient de laisser un email pour la première
-    // fois dans cette conversation → on l'envoie une seule fois vers Make/Zapier.
+    // Lead qualifié : le visiteur vient de laisser un email et/ou un
+    // téléphone pour la première fois dans cette conversation. Les deux
+    // arrivent souvent en 2 messages séparés (email d'abord, puis téléphone
+    // quand le bot le demande pour confirmer une démo) — le 2e cas complète
+    // le lead déjà créé plutôt que d'en créer un doublon.
     const newEmail = extractEmail(lastUserMessage.content);
-    if (newEmail) {
+    const newPhone = extractPhone(lastUserMessage.content);
+    if (newEmail || newPhone) {
       const priorUserMessages = messages.slice(0, -1).filter((m) => m.role === 'user');
       const alreadyHadEmail = priorUserMessages.some((m) => extractEmail(m.content));
-      if (!alreadyHadEmail) {
+      const alreadyHadPhone = priorUserMessages.some((m) => extractPhone(m.content));
+
+      if (newEmail && !alreadyHadEmail) {
         sendLeadToWebhook(business, {
           business: business.name,
           slug: business.slug,
           conversationId: convoId,
           email: newEmail,
+          phone: newPhone || '',
           message: lastUserMessage.content,
           date: new Date().toISOString(),
         });
@@ -490,10 +550,31 @@ app.post('/api/chat', async (req, res) => {
         // Make/Zapier n'est configuré pour cette entreprise.
         const score = computeLeadScore(lastUserMessage.content, priorUserMessages.length === 0);
         await query(
-          `INSERT INTO leads (business_id, conversation_id, email, message, score, status)
-           VALUES ($1, $2, $3, $4, $5, 'nouveau')`,
-          [business.id, convoId, newEmail, lastUserMessage.content, score]
+          `INSERT INTO leads (business_id, conversation_id, email, phone, message, score, status)
+           VALUES ($1, $2, $3, $4, $5, $6, 'nouveau')`,
+          [business.id, convoId, newEmail, newPhone || null, lastUserMessage.content, score]
         );
+      } else if (newPhone && !alreadyHadPhone) {
+        // Email déjà donné avant (lead déjà créé) : on complète avec le
+        // téléphone, sans créer de 2e lead pour la même conversation.
+        const { rows: existingLeadRows } = await query(
+          `SELECT id, email FROM leads WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          [convoId]
+        );
+        const existingLead = existingLeadRows[0];
+        if (existingLead) {
+          await query('UPDATE leads SET phone = $1, updated_at = NOW() WHERE id = $2', [newPhone, existingLead.id]);
+          sendLeadToWebhook(business, {
+            business: business.name,
+            slug: business.slug,
+            conversationId: convoId,
+            email: existingLead.email,
+            phone: newPhone,
+            message: lastUserMessage.content,
+            date: new Date().toISOString(),
+            type: 'phone_added',
+          });
+        }
       }
     }
 
@@ -514,7 +595,11 @@ app.post('/api/chat', async (req, res) => {
       parts: [{ text: m.content }],
     }));
 
-    const data = await callGemini(business.system_prompt, contents);
+    // Prompt enrichi pour CET appel seulement (ex : proposition de démo au
+    // 3e message sur le bot WHATGO) — business.system_prompt en base ne
+    // change jamais.
+    const systemPromptForCall = buildSystemPromptForCall(business, messages);
+    const data = await callGemini(systemPromptForCall, contents);
 
     let reply;
     if (data.error) {
@@ -524,7 +609,7 @@ app.post('/api/chat', async (req, res) => {
       // ait quand même une réponse plutôt qu'un message d'erreur.
       let fallbackReply = null;
       try {
-        fallbackReply = await callGroqFallback(business.system_prompt, contents);
+        fallbackReply = await callGroqFallback(systemPromptForCall, contents);
       } catch (fallbackErr) {
         console.error('Erreur fallback Groq:', fallbackErr.message);
       }
@@ -782,7 +867,7 @@ const LEAD_STATUSES = ['nouveau', 'contacte', 'rdv_pris', 'gagne', 'perdu'];
 app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
     const { rows: leads } = await query(`
-      SELECT id, email, message, score, status, conversation_id, created_at
+      SELECT id, email, phone, message, score, status, conversation_id, created_at
       FROM leads
       WHERE business_id = $1
       ORDER BY created_at DESC
@@ -791,6 +876,7 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
     res.json(leads.map((l) => ({
       id: l.id,
       email: l.email,
+      phone: l.phone || '',
       message: l.message,
       score: l.score,
       status: l.status,
