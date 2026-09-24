@@ -533,7 +533,10 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 
     <!-- ============================== LEADS (réel) -->
     <section class="tab-page" id="page-leads">
-      <div class="topbar"><div><h2>Leads</h2><p>Les visiteurs qui ont laissé leur email dans le chat.</p></div></div>
+      <div class="topbar">
+        <div><h2>Leads</h2><p>Les visiteurs qui ont laissé leur email dans le chat.</p></div>
+        <div class="topbar__act"><a class="btn btn--ghost" href="/api/dashboard/leads/export.csv" download>Exporter en CSV</a></div>
+      </div>
       <div class="kpis" id="leadKpis" style="grid-template-columns:repeat(2,1fr)"></div>
       <div class="card card--flush">
         <div class="tablewrap"><table class="tbl" id="leadsTable"></table></div>
@@ -801,6 +804,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     <!-- ============================== CLIENTS (super-admin, réel) -->
     <section class="tab-page" id="page-clients">
       <div class="topbar"><div><h2>Clients WHATGO</h2><p>Création, publication et suivi des déploiements.</p></div></div>
+      <div class="kpis" id="fallbackKpis" style="grid-template-columns:repeat(2,1fr)"></div>
       <div class="card">
         <div class="card__head"><div><h3>Créer un nouveau client</h3></div></div>
         <form id="newClientForm" novalidate>
@@ -983,6 +987,7 @@ function enterApp() {
     $('#clientsNavItem').hidden = false;
     switchTab('clients');
     loadClients();
+    loadFallbackStats();
   } else {
     $('#clientsNavItem').hidden = true;
     var b = $('#statusBadge');
@@ -1600,6 +1605,22 @@ $('#qualifForm').addEventListener('submit', async function (e) {
 /* ============================================================
    CLIENTS (super-admin)
    ============================================================ */
+async function loadFallbackStats() {
+  try {
+    var res = await fetch(API + '/api/superadmin/stats/fallback', { credentials: 'include' });
+    var s = await res.json();
+    var box = $('#fallbackKpis');
+    if (!box) return;
+    var rate30 = s.total30d > 0 ? ((s.fallback30d / s.total30d) * 100).toFixed(1) + '%' : '—';
+    var rateAll = s.totalAll > 0 ? ((s.fallbackAll / s.totalAll) * 100).toFixed(1) + '%' : '—';
+    box.innerHTML =
+      '<div class="kpi kpi--hero"><div class="kpi__l">Secours Groq utilisé (30 derniers jours)</div>' +
+        '<div class="kpi__v">' + rate30 + '</div></div>' +
+      '<div class="kpi"><div class="kpi__l">Secours Groq utilisé (depuis le début)</div>' +
+        '<div class="kpi__v">' + rateAll + '</div></div>';
+  } catch (e) { console.error('loadFallbackStats:', e); }
+}
+
 async function loadClients() {
   try {
     var res = await fetch(API + '/api/superadmin/clients', { credentials: 'include' });
