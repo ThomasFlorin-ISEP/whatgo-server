@@ -148,6 +148,14 @@ async function initDb() {
   // dans l'onglet "Rendez-vous" du dashboard.
   await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS appointment_at TIMESTAMPTZ`);
 
+  // Vraie fiche lead : nom (détecté automatiquement si le visiteur le donne,
+  // sinon modifiable à la main), résumé du besoin (généré par l'IA à partir
+  // de la conversation, en arrière-plan), et notes internes libres pour que
+  // l'équipe commerciale annote son suivi.
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS name TEXT`);
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS summary TEXT`);
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes TEXT`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 
