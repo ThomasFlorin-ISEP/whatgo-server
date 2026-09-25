@@ -139,8 +139,14 @@ async function initDb() {
 
   // Marque qu'un rendez-vous a déjà été proposé sur cette conversation
   // (seuil "Proposer un RDV" de la page Qualification), pour ne jamais le
-  // reproposer deux fois dans le même échange.
+  // reproposer deux fois dans le même échange. appointment_at garde la date
+  // précise annoncée au visiteur.
   await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS rdv_offered BOOLEAN NOT NULL DEFAULT false`);
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS appointment_at TIMESTAMPTZ`);
+
+  // Même date, reportée sur le lead correspondant pour qu'elle s'affiche
+  // dans l'onglet "Rendez-vous" du dashboard.
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS appointment_at TIMESTAMPTZ`);
 
   console.log('✅ Schéma PostgreSQL prêt.');
 }
