@@ -1239,6 +1239,83 @@ app.get('/api/superadmin/stats/fallback', requireAuth, requireSuperAdmin, async 
   }
 });
 
+// Conversations suspectes, tous clients confondus — réservé à l'équipe
+// WHATGO. Deux cas détectés :
+//  1) "no_reply" : le visiteur a écrit mais AUCUNE réponse assistant n'a
+//     jamais été enregistrée (Gemini ET Groq ont échoué avant qu'une
+//     réponse puisse être sauvegardée — voir /api/chat).
+//  2) "generic_failure" : une réponse a bien été enregistrée, mais c'est le
+//     texte de repli générique ("Désolé, je n'ai pas pu répondre.") plutôt
+//     qu'une vraie réponse de l'IA.
+const GENERIC_FAILURE_TEXT = "Désolé, je n'ai pas pu répondre.";
+
+app.get('/api/superadmin/diagnostics/broken-conversations', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT
+        c.id as conversation_id,
+        c.visitor_label,
+        c.started_at,
+        b.name as business_name,
+        b.slug as business_slug,
+        COUNT(m.id) as message_count,
+        COUNT(m.id) FILTER (WHERE m.role = 'assistant') as assistant_count,
+        COUNT(m.id) FILTER (WHERE m.role = 'assistant' AND m.content = $1) as generic_failure_count,
+        MAX(m.content) FILTER (WHERE m.role = 'user') as last_user_message
+      FROM conversations c
+      JOIN businesses b ON b.id = c.business_id
+      LEFT JOIN messages m ON m.conversation_id = c.id
+      GROUP BY c.id, b.name, b.slug
+      HAVING
+        COUNT(m.id) FILTER (WHERE m.role = 'assistant') = 0
+        OR COUNT(m.id) FILTER (WHERE m.role = 'assistant' AND m.content = $1) > 0
+      ORDER BY c.started_at DESC
+      LIMIT 200
+    `, [GENERIC_FAILURE_TEXT]);
+
+    res.json(rows.map((r) => ({
+      conversationId: r.conversation_id,
+      visitorLabel: r.visitor_label,
+      startedAt: r.started_at,
+      businessName: r.business_name,
+      businessSlug: r.business_slug,
+      messageCount: Number(r.message_count),
+      reason: Number(r.assistant_count) === 0 ? 'no_reply' : 'generic_failure',
+      lastUserMessage: r.last_user_message,
+    })));
+  } catch (err) {
+    console.error('Erreur GET /api/superadmin/diagnostics/broken-conversations:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Détail d'une conversation, pour l'équipe WHATGO — sans restriction de
+// business_id (contrairement à /api/dashboard/conversations/:id, réservée
+// au client propriétaire), puisque l'équipe doit pouvoir inspecter la
+// conversation de n'importe quel client pour diagnostiquer un problème.
+app.get('/api/superadmin/conversations/:id', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { rows: convoRows } = await query(
+      `SELECT c.*, b.name as business_name FROM conversations c JOIN businesses b ON b.id = c.business_id WHERE c.id = $1`,
+      [req.params.id]
+    );
+    const convo = convoRows[0];
+    if (!convo) {
+      return res.status(404).json({ error: 'Conversation introuvable.' });
+    }
+
+    const { rows: messages } = await query(
+      'SELECT role, content, used_fallback, created_at FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+      [req.params.id]
+    );
+
+    res.json({ conversation: convo, messages });
+  } catch (err) {
+    console.error('Erreur GET /api/superadmin/conversations/:id:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
 app.post('/api/superadmin/clients', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const { name, sector, adminEmail, adminPassword } = req.body;
