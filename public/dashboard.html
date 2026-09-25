@@ -262,6 +262,13 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .empty b{display:block;color:var(--ink-soft);font-size:.92rem;font-weight:600;margin-bottom:4px}
 .empty p{font-size:.84rem;max-width:44ch;margin:0 auto}
 
+.rdv-edit__view{display:inline-flex;align-items:center;gap:8px}
+.rdv-edit__btn{background:none;border:0;padding:0;color:var(--brand,#1FAA59);font-size:.77rem;font-weight:600;cursor:pointer;text-decoration:underline}
+.rdv-edit__form{display:inline-flex;align-items:center;gap:6px}
+.rdv-edit__input{font-size:.82rem;padding:4px 6px;border:1px solid var(--line);border-radius:6px}
+.rdv-edit__save,.rdv-edit__cancel{font-size:.77rem;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer}
+.rdv-edit__save{background:var(--brand,#1FAA59);border-color:var(--brand,#1FAA59);color:#fff;font-weight:600}
+
 /* ============================================================ DRAWER */
 .overlay{position:fixed;inset:0;background:rgba(11,26,20,.4);z-index:90;opacity:0;visibility:hidden;
   transition:opacity .2s,visibility .2s;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -1181,26 +1188,90 @@ async function loadLeads() {
   } catch (e) { toast('Impossible de charger les leads.', true); }
 }
 
+// Convertit une date en valeur compatible avec un <input type="datetime-local">
+// (heure LOCALE du navigateur, pas UTC — sinon le champ afficherait une heure
+// décalée par rapport à ce que l'équipe a en tête).
+function toLocalInputValue(date) {
+  var d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+    'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
 // Page "Rendez-vous" : pas encore de vrai calendrier (aucune connexion
 // Google Calendar/Calendly), donc en attendant on affiche simplement les
-// leads déjà marqués "RDV pris" dans l'onglet Leads — une vraie liste
-// plutôt qu'un "Bientôt disponible" qui n'affiche rien du tout.
+// leads déjà marqués "RDV pris" dans l'onglet Leads. La date est détectée
+// automatiquement quand le bot confirme un rendez-vous dans le chat (même
+// renégocié par le visiteur), mais reste modifiable à la main ici en secours
+// (date mal captée, RDV pris par téléphone, etc.).
 function renderAppointments(leads) {
   var body = $('#appointmentsTable');
   if (!body) return;
+  var isAdmin = ME.role === 'admin';
   var rdv = leads.filter(function (l) { return l.status === 'rdv_pris'; });
   body.innerHTML =
-    '<thead><tr><th>Contact</th><th>Message</th><th class="right">Enregistré</th></tr></thead><tbody>' +
+    '<thead><tr><th>Contact</th><th>Date du RDV</th><th>Message</th><th class="right">Enregistré</th></tr></thead><tbody>' +
     (rdv.length ? rdv.map(function (l) {
+      var dateCell = l.appointmentAt
+        ? '<span class="tag tag--green">' + esc(new Date(l.appointmentAt).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</span>'
+        : '<span class="cell-sub">Proposée hors chat</span>';
+      var editCell = isAdmin
+        ? '<div class="rdv-edit" data-id="' + esc(l.id) + '">' +
+            '<span class="rdv-edit__view">' + dateCell + ' <button type="button" class="rdv-edit__btn" title="Modifier la date">Modifier</button></span>' +
+            '<span class="rdv-edit__form" style="display:none">' +
+              '<input type="datetime-local" class="rdv-edit__input" value="' + esc(l.appointmentAt ? toLocalInputValue(l.appointmentAt) : '') + '">' +
+              '<button type="button" class="rdv-edit__save">Enregistrer</button>' +
+              '<button type="button" class="rdv-edit__cancel">Annuler</button>' +
+            '</span>' +
+          '</div>'
+        : dateCell;
       return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
         '<td><div class="cell-main">' + esc(l.email || l.phone || '—') + '</div>' + (l.email && l.phone ? '<div class="cell-sub">' + esc(l.phone) + '</div>' : '') + '</td>' +
+        '<td>' + editCell + '</td>' +
         '<td class="cell-sub">' + esc(truncate(l.message, 60)) + '</td>' +
         '<td class="right cell-sub">' + new Date(l.createdAt).toLocaleString('fr-FR') + '</td></tr>';
-    }).join('') : emptyRow(3, 'Aucun rendez-vous pour le moment', 'Passez un lead en statut « RDV pris » dans l\'onglet Leads pour qu\'il apparaisse ici.')) +
+    }).join('') : emptyRow(4, 'Aucun rendez-vous pour le moment', 'Passez un lead en statut « RDV pris » dans l\'onglet Leads pour qu\'il apparaisse ici.')) +
     '</tbody>';
 
   $$('tr[data-convo]', body).forEach(function (row) {
     row.addEventListener('click', function () { openTranscript(row.dataset.convo); });
+  });
+
+  // Édition manuelle de la date : toute la zone stoppe la propagation du
+  // clic, sinon ouvrir le champ déclencherait aussi l'ouverture de la
+  // transcription (clic sur la ligne).
+  $$('.rdv-edit', body).forEach(function (wrap) {
+    wrap.addEventListener('click', function (e) { e.stopPropagation(); });
+    var viewEl = $('.rdv-edit__view', wrap);
+    var formEl = $('.rdv-edit__form', wrap);
+    var input = $('.rdv-edit__input', wrap);
+
+    $('.rdv-edit__btn', wrap).addEventListener('click', function () {
+      viewEl.style.display = 'none';
+      formEl.style.display = 'inline-flex';
+      input.focus();
+    });
+    $('.rdv-edit__cancel', wrap).addEventListener('click', function () {
+      formEl.style.display = 'none';
+      viewEl.style.display = '';
+    });
+    $('.rdv-edit__save', wrap).addEventListener('click', async function () {
+      var id = wrap.dataset.id;
+      var value = input.value; // "" si le champ est vidé -> efface la date
+      try {
+        var res = await fetch(API + '/api/dashboard/leads/' + id + '/appointment', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+          body: JSON.stringify({ appointmentAt: value ? new Date(value).toISOString() : null }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || '');
+        toast('Date du rendez-vous mise à jour');
+        loadLeads();
+      } catch (e) {
+        toast('Impossible de mettre à jour la date.', true);
+      }
+    });
   });
 }
 
