@@ -475,6 +475,9 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       <button class="nav-item" data-tab="clients" data-grp="admin" id="clientsNavItem" type="button" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21V8l7-5 7 5v13" stroke-linejoin="round"/><path d="M9 21v-6h4v6M21 21H3" stroke-linecap="round"/></svg>
         <span>Clients WHATGO</span></button>
+      <button class="nav-item" data-tab="diagnostics" data-grp="admin" id="diagnosticsNavItem" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 9v4M12 17h.01" stroke-linecap="round"/><path d="M10.3 3.9 2.5 17.5A2 2 0 0 0 4.2 20.5h15.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke-linejoin="round"/></svg>
+        <span>Diagnostic</span></button>
       <button class="nav-item" data-tab="settings" data-grp="all" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.6 1.6 0 009 19.4a1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1A1.6 1.6 0 004.6 9a1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z" stroke-linejoin="round"/></svg>
         <span>Paramètres</span></button>
@@ -834,6 +837,14 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       </div>
     </section>
 
+    <!-- ============================== DIAGNOSTIC (super-admin, réel) -->
+    <section class="tab-page" id="page-diagnostics">
+      <div class="topbar"><div><h2>Diagnostic</h2><p>Conversations où le bot n'a jamais répondu, ou a renvoyé une réponse générique d'échec — tous clients confondus.</p></div></div>
+      <div class="card card--flush">
+        <div class="tablewrap"><table class="tbl" id="diagnosticsTable"></table></div>
+      </div>
+    </section>
+
     <!-- ============================== PARAMÈTRES (réel) -->
     <section class="tab-page" id="page-settings">
       <div class="topbar"><div><h2>Paramètres</h2><p>Votre compte.</p></div></div>
@@ -985,6 +996,7 @@ function enterApp() {
   if (ME.role === 'super_admin') {
     $$('[data-grp="client"]').forEach(function (el) { el.hidden = true; });
     $('#clientsNavItem').hidden = false;
+    $('#diagnosticsNavItem').hidden = false;
     switchTab('clients');
     loadClients();
     loadFallbackStats();
@@ -1009,6 +1021,8 @@ function enterApp() {
 $$('.nav-item').forEach(function (el) {
   el.addEventListener('click', function () { switchTab(el.dataset.tab); });
 });
+var diagnosticsNavItem = $('#diagnosticsNavItem');
+if (diagnosticsNavItem) diagnosticsNavItem.addEventListener('click', loadDiagnostics);
 function switchTab(tab) {
   $$('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
   $$('.tab-page').forEach(function (el) { el.classList.toggle('active', el.id === 'page-' + tab); });
@@ -1627,6 +1641,65 @@ async function loadClients() {
     var clients = await res.json();
     renderClients(clients);
   } catch (e) { toast('Impossible de charger les clients.', true); }
+}
+
+/* ============================================================
+   DIAGNOSTIC (super-admin) : conversations où le bot n'a jamais
+   répondu, ou a renvoyé le texte générique d'échec.
+   ============================================================ */
+var DIAGNOSTICS_REASON_LABEL = {
+  no_reply: 'Aucune réponse du bot',
+  generic_failure: 'Réponse générique d\'échec',
+};
+
+async function loadDiagnostics() {
+  var body = $('#diagnosticsTable');
+  if (!body) return;
+  body.innerHTML = '<tbody><tr><td style="padding:20px">Chargement…</td></tr></tbody>';
+  try {
+    var res = await fetch(API + '/api/superadmin/diagnostics/broken-conversations', { credentials: 'include' });
+    var rows = await res.json();
+    renderDiagnostics(rows);
+  } catch (e) { toast('Impossible de charger le diagnostic.', true); }
+}
+
+function renderDiagnostics(rows) {
+  var body = $('#diagnosticsTable');
+  body.innerHTML =
+    '<thead><tr><th>Client</th><th>Dernier message visiteur</th><th>Messages</th><th>Raison</th><th class="right">Reçu</th></tr></thead><tbody>' +
+    (rows.length ? rows.map(function (r) {
+      return '<tr class="clickable" data-convo="' + esc(r.conversationId) + '">' +
+        '<td class="cell-main">' + esc(r.businessName) + '</td>' +
+        '<td class="cell-sub">' + esc(truncate(r.lastUserMessage, 60)) + '</td>' +
+        '<td class="num">' + r.messageCount + '</td>' +
+        '<td><span class="tag ' + (r.reason === 'no_reply' ? 'tag--red' : 'tag--amber') + '">' +
+          esc(DIAGNOSTICS_REASON_LABEL[r.reason] || r.reason) + '</span></td>' +
+        '<td class="right cell-sub">' + new Date(r.startedAt).toLocaleString('fr-FR') + '</td></tr>';
+    }).join('') : emptyRow(5, 'Aucune conversation suspecte', 'Toutes les conversations enregistrées ont reçu une vraie réponse.')) +
+    '</tbody>';
+
+  $$('tr[data-convo]', body).forEach(function (row) {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', function () { openSuperAdminTranscript(row.dataset.convo); });
+  });
+}
+
+async function openSuperAdminTranscript(id) {
+  try {
+    var res = await fetch(API + '/api/superadmin/conversations/' + id, { credentials: 'include' });
+    var data = await res.json();
+    var body = '<div class="thread">' + (data.messages.length
+      ? data.messages.map(function (m) {
+          return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + esc(m.content) +
+            (m.used_fallback ? ' <span class="cell-sub">(via secours Groq)</span>' : '') + '</div>';
+        }).join('')
+      : '<p class="card__sub">Aucun message enregistré.</p>') + '</div>';
+    openDrawer(
+      data.conversation.business_name + ' — ' + (data.conversation.visitor_label || 'Visiteur anonyme'),
+      new Date(data.conversation.started_at).toLocaleString('fr-FR') + ' · ' + data.messages.length + ' message(s)',
+      body
+    );
+  } catch (e) { toast('Impossible de charger cette conversation.', true); }
 }
 
 function renderClients(clients) {
