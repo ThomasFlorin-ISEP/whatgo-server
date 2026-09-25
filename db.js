@@ -137,6 +137,11 @@ async function initDb() {
   // (visiteur qui donne son numéro sans jamais laisser d'email).
   await query(`ALTER TABLE leads ALTER COLUMN email DROP NOT NULL`);
 
+  // Marque qu'un rendez-vous a déjà été proposé sur cette conversation
+  // (seuil "Proposer un RDV" de la page Qualification), pour ne jamais le
+  // reproposer deux fois dans le même échange.
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS rdv_offered BOOLEAN NOT NULL DEFAULT false`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 
