@@ -436,7 +436,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <span>Conversations</span></button>
       <button class="nav-item" data-tab="appointments" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4" stroke-linecap="round"/></svg>
-        <span>Rendez-vous</span><span class="pill-soon">Bientôt</span></button>
+        <span>Rendez-vous</span></button>
 
       <div class="navgroup" data-grp="client">Assistant</div>
       <button class="nav-item" data-tab="content" data-grp="client" type="button">
@@ -554,20 +554,11 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       </div>
     </section>
 
-    <!-- ============================== RENDEZ-VOUS (pas encore développé) -->
+    <!-- ============================== RENDEZ-VOUS (réel, version simple) -->
     <section class="tab-page" id="page-appointments">
-      <div class="topbar"><div><h2>Rendez-vous</h2><p>Les créneaux réservés automatiquement par l'assistant.</p></div></div>
-      <div class="betahero">
-        <div class="betahero__in">
-          <span class="betahero__ic" style="background:linear-gradient(160deg,#31C273,#0E8A47)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4" stroke-linecap="round"/></svg>
-          </span>
-          <div class="betahero__t">
-            <span class="soonbadge">Bientôt disponible</span>
-            <h3>Prise de rendez-vous</h3>
-            <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée.</p>
-          </div>
-        </div>
+      <div class="topbar"><div><h2>Rendez-vous</h2><p>Les leads marqués « RDV pris ». Pas encore de connexion à un vrai calendrier — passez un lead en statut « RDV pris » depuis l'onglet Leads pour qu'il apparaisse ici.</p></div></div>
+      <div class="card card--flush">
+        <div class="tablewrap"><table class="tbl" id="appointmentsTable"></table></div>
       </div>
     </section>
 
@@ -1186,7 +1177,31 @@ async function loadLeads() {
     try { renderLeads(leads); } catch (e2) { console.error('renderLeads:', e2); }
     try { renderOverviewLeads(leads); } catch (e2) { console.error('renderOverviewLeads:', e2); }
     try { renderLeadsArea(leads); } catch (e2) { console.error('renderLeadsArea:', e2); }
+    try { renderAppointments(leads); } catch (e2) { console.error('renderAppointments:', e2); }
   } catch (e) { toast('Impossible de charger les leads.', true); }
+}
+
+// Page "Rendez-vous" : pas encore de vrai calendrier (aucune connexion
+// Google Calendar/Calendly), donc en attendant on affiche simplement les
+// leads déjà marqués "RDV pris" dans l'onglet Leads — une vraie liste
+// plutôt qu'un "Bientôt disponible" qui n'affiche rien du tout.
+function renderAppointments(leads) {
+  var body = $('#appointmentsTable');
+  if (!body) return;
+  var rdv = leads.filter(function (l) { return l.status === 'rdv_pris'; });
+  body.innerHTML =
+    '<thead><tr><th>Contact</th><th>Message</th><th class="right">Enregistré</th></tr></thead><tbody>' +
+    (rdv.length ? rdv.map(function (l) {
+      return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
+        '<td><div class="cell-main">' + esc(l.email || l.phone || '—') + '</div>' + (l.email && l.phone ? '<div class="cell-sub">' + esc(l.phone) + '</div>' : '') + '</td>' +
+        '<td class="cell-sub">' + esc(truncate(l.message, 60)) + '</td>' +
+        '<td class="right cell-sub">' + new Date(l.createdAt).toLocaleString('fr-FR') + '</td></tr>';
+    }).join('') : emptyRow(3, 'Aucun rendez-vous pour le moment', 'Passez un lead en statut « RDV pris » dans l\'onglet Leads pour qu\'il apparaisse ici.')) +
+    '</tbody>';
+
+  $$('tr[data-convo]', body).forEach(function (row) {
+    row.addEventListener('click', function () { openTranscript(row.dataset.convo); });
+  });
 }
 
 // Graphique en aire lissée "Leads traités", avec sélecteur de période.
