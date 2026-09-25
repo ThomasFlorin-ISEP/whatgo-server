@@ -237,10 +237,8 @@ function extractPhone(text) {
 // ici (jamais laissée à l'IA, qui pourrait halluciner un jour/heure faux),
 // et on lui demande son email ET son téléphone pour confirmer.
 // ------------------------------------------------------------
-const DEMO_OFFER_SLUG = 'whatgo';
-const DEMO_OFFER_AFTER_MESSAGES = 3;
-const DEMO_OFFER_BUSINESS_DAYS_AHEAD = 3;
-const DEMO_OFFER_HOUR = 14;
+const APPOINTMENT_OFFER_BUSINESS_DAYS_AHEAD = 3;
+const APPOINTMENT_OFFER_HOUR = 14;
 
 function nextBusinessDayAt(businessDaysAhead, hour) {
   const d = new Date();
@@ -272,21 +270,20 @@ const LANGUAGE_INSTRUCTION =
 
 // Construit le prompt système à utiliser pour CET appel uniquement (ne
 // modifie jamais business.system_prompt en base) : ajoute l'instruction de
-// langue à chaque appel, puis l'instruction de proposition de démo si ce
-// visiteur vient d'envoyer son 3e message (uniquement pour whatgo).
-function buildSystemPromptForCall(business, messages) {
+// langue à chaque appel, puis — pour TOUS les clients, pas seulement WHATGO
+// — l'instruction de proposition de rendez-vous quand ce visiteur vient de
+// franchir le seuil "Proposer un RDV" réglé dans la page Qualification de
+// cette entreprise (calculé par l'appelant, voir /api/chat).
+function buildSystemPromptForCall(business, shouldOfferAppointment) {
   const basePrompt = business.system_prompt + LANGUAGE_INSTRUCTION;
 
-  if (business.slug !== DEMO_OFFER_SLUG) return basePrompt;
+  if (!shouldOfferAppointment) return basePrompt;
 
-  const userMessageCount = messages.filter((m) => m.role === 'user').length;
-  if (userMessageCount !== DEMO_OFFER_AFTER_MESSAGES) return basePrompt;
-
-  const demoDateLabel = formatFrenchDateTime(nextBusinessDayAt(DEMO_OFFER_BUSINESS_DAYS_AHEAD, DEMO_OFFER_HOUR));
+  const dateLabel = formatFrenchDateTime(nextBusinessDayAt(APPOINTMENT_OFFER_BUSINESS_DAYS_AHEAD, APPOINTMENT_OFFER_HOUR));
   return basePrompt +
     `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
-    `C'est le ${DEMO_OFFER_AFTER_MESSAGES}e message de ce visiteur. Propose-lui maintenant une démo de WHATGO AI, ` +
-    `avec cette date précise : ${demoDateLabel}. Demande-lui de confirmer avec son email ET son numéro de téléphone ` +
+    `Ce visiteur montre assez d'intérêt pour qu'on lui propose un rendez-vous. Propose-lui maintenant un rendez-vous, ` +
+    `avec cette date précise : ${dateLabel}. Demande-lui de confirmer avec son email ET son numéro de téléphone ` +
     `pour que l'équipe puisse le recontacter et confirmer le créneau. Fais cette proposition dans la langue de la ` +
     `conversation en cours.`;
 }
@@ -521,14 +518,26 @@ app.post('/api/chat', async (req, res) => {
       return res.status(404).json({ error: 'Entreprise inconnue.' });
     }
 
-    // Retrouver ou créer la conversation, pour pouvoir tout enregistrer
+    // Chargée une seule fois pour cet appel : sert à la fois au seuil
+    // "Proposer un RDV" (plus bas) et à l'escalade (plus loin, après la
+    // réponse de l'IA).
+    const qualification = parseQualification(business);
+
+    // Retrouver ou créer la conversation, pour pouvoir tout enregistrer.
+    // Pour une conversation déjà existante, on regarde aussi si un
+    // rendez-vous a déjà été proposé dessus (pour ne jamais le repropose
+    // deux fois — voir plus bas).
     let convoId = conversationId;
+    let rdvAlreadyOffered = false;
     if (!convoId) {
       const { rows } = await query(
         'INSERT INTO conversations (business_id, visitor_label) VALUES ($1, $2) RETURNING id',
         [business.id, 'Visiteur anonyme']
       );
       convoId = rows[0].id;
+    } else {
+      const { rows: convoFlagRows } = await query('SELECT rdv_offered FROM conversations WHERE id = $1', [convoId]);
+      rdvAlreadyOffered = convoFlagRows[0] ? convoFlagRows[0].rdv_offered : false;
     }
 
     // Enregistrer le dernier message du visiteur
@@ -617,10 +626,22 @@ app.post('/api/chat', async (req, res) => {
       parts: [{ text: m.content }],
     }));
 
-    // Prompt enrichi pour CET appel seulement (ex : proposition de démo au
-    // 3e message sur le bot WHATGO) — business.system_prompt en base ne
-    // change jamais.
-    const systemPromptForCall = buildSystemPromptForCall(business, messages);
+    // Score de qualification de CETTE conversation (pas juste du dernier
+    // message) : le plus haut score atteint par un message du visiteur
+    // jusqu'ici, avec la même heuristique que le score des leads. Dès qu'il
+    // franchit le seuil "Proposer un RDV" réglé par le client (page
+    // Qualification), et si ce n'est pas déjà fait pour cette conversation,
+    // le prompt de CET appel propose un rendez-vous.
+    const userMessagesSoFar = messages.filter((m) => m.role === 'user');
+    const conversationScore = userMessagesSoFar.reduce(
+      (max, m, idx) => Math.max(max, computeLeadScore(m.content, idx === 0)),
+      0
+    );
+    const shouldOfferAppointment = !rdvAlreadyOffered && conversationScore >= qualification.thresholds.appointment;
+
+    // Prompt enrichi pour CET appel seulement — business.system_prompt en
+    // base ne change jamais.
+    const systemPromptForCall = buildSystemPromptForCall(business, shouldOfferAppointment);
     const data = await callGemini(systemPromptForCall, contents);
 
     let reply;
@@ -657,9 +678,15 @@ app.post('/api/chat', async (req, res) => {
       [convoId, 'assistant', reply, usedFallback]
     );
 
+    // Le rendez-vous vient d'être proposé dans cette réponse : on le note
+    // pour cette conversation, pour ne jamais le reproposer une 2e fois
+    // même si le score reste au-dessus du seuil aux messages suivants.
+    if (shouldOfferAppointment) {
+      await query('UPDATE conversations SET rdv_offered = true WHERE id = $1', [convoId]);
+    }
+
     // Escalade vers un humain (page "Qualification") : uniquement sur les
     // entreprises publiées, une fois l'échange complet enregistré.
-    const qualification = parseQualification(business);
     const escalationReasons = await detectEscalation(business, qualification, lastUserMessage.content, convoId);
     if (escalationReasons.length) {
       sendEscalationToWebhook(business, {
