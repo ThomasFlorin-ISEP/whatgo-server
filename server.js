@@ -268,24 +268,53 @@ const LANGUAGE_INSTRUCTION =
   `Si sa langue n'est pas claire (message trop court, mélange de langues...), réponds en français par défaut. ` +
   `Ne mentionne jamais explicitement que tu fais cette détection.`;
 
+// Marqueur que le bot doit ajouter (et JAMAIS commenter au visiteur) dès
+// que le rendez-vous est vraiment confirmé — avec la date/heure exacte, au
+// cas où le visiteur négocie une autre date que celle proposée au départ.
+// Un format rigide, qu'on valide nous-mêmes avant de l'utiliser (voir
+// parseAppointmentConfirmation) : pas de "deviner la date" côté serveur à
+// partir de texte libre, seulement lire ce que l'IA a été instruite d'écrire.
+const RDV_CONFIRM_REGEX = /\[RDV_CONFIRME:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\]/;
+
+function parseAppointmentConfirmation(replyText) {
+  const match = String(replyText || '').match(RDV_CONFIRM_REGEX);
+  if (!match) return { cleanedReply: replyText, confirmedDate: null };
+
+  const [full, dd, mm, yyyy, hh, min] = match;
+  const candidate = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(min), 0, 0);
+  const confirmedDate = Number.isNaN(candidate.getTime()) ? null : candidate;
+  const cleanedReply = replyText.replace(full, '').trim();
+  return { cleanedReply, confirmedDate };
+}
+
 // Construit le prompt système à utiliser pour CET appel uniquement (ne
 // modifie jamais business.system_prompt en base) : ajoute l'instruction de
 // langue à chaque appel, puis — pour TOUS les clients, pas seulement WHATGO
 // — l'instruction de proposition de rendez-vous quand ce visiteur vient de
 // franchir le seuil "Proposer un RDV" réglé dans la page Qualification de
-// cette entreprise (calculé par l'appelant, voir /api/chat).
-function buildSystemPromptForCall(business, shouldOfferAppointment) {
-  const basePrompt = business.system_prompt + LANGUAGE_INSTRUCTION;
+// cette entreprise, et/ou l'instruction de confirmation tant que le
+// rendez-vous de cette conversation n'est pas encore acté (calculé par
+// l'appelant, voir /api/chat).
+function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress) {
+  let prompt = business.system_prompt + LANGUAGE_INSTRUCTION;
 
-  if (!shouldOfferAppointment) return basePrompt;
+  if (shouldOfferAppointment) {
+    prompt += `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
+      `Ce visiteur montre assez d'intérêt pour qu'on lui propose un rendez-vous. Propose-lui maintenant un rendez-vous, ` +
+      `avec cette date précise : ${appointmentDateLabel}. Demande-lui de confirmer avec son email ET son numéro de téléphone ` +
+      `pour que l'équipe puisse le recontacter et confirmer le créneau. Fais cette proposition dans la langue de la ` +
+      `conversation en cours.`;
+  }
 
-  const dateLabel = formatFrenchDateTime(nextBusinessDayAt(APPOINTMENT_OFFER_BUSINESS_DAYS_AHEAD, APPOINTMENT_OFFER_HOUR));
-  return basePrompt +
-    `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
-    `Ce visiteur montre assez d'intérêt pour qu'on lui propose un rendez-vous. Propose-lui maintenant un rendez-vous, ` +
-    `avec cette date précise : ${dateLabel}. Demande-lui de confirmer avec son email ET son numéro de téléphone ` +
-    `pour que l'équipe puisse le recontacter et confirmer le créneau. Fais cette proposition dans la langue de la ` +
-    `conversation en cours.`;
+  if (appointmentInProgress) {
+    prompt += `\n\nINSTRUCTION DE CONFIRMATION DE RENDEZ-VOUS (permanente pour cette conversation) :\n` +
+      `Si le visiteur accepte une date de rendez-vous, ou en propose/confirme une autre précise (même différente de celle ` +
+      `annoncée au départ), termine ta réponse par ce marqueur exact, sur sa propre ligne, sans jamais l'expliquer ni le ` +
+      `commenter au visiteur : [RDV_CONFIRME: JJ/MM/AAAA HH:MM] (heure locale, format 24h). N'ajoute ce marqueur QUE si la ` +
+      `date et l'heure sont vraiment confirmées, jamais sur une simple proposition ou une hésitation.`;
+  }
+
+  return prompt;
 }
 
 // Mots-clés FR laissant penser à une intention d'achat/contact forte.
@@ -529,6 +558,7 @@ app.post('/api/chat', async (req, res) => {
     // deux fois — voir plus bas).
     let convoId = conversationId;
     let rdvAlreadyOffered = false;
+    let existingAppointmentAt = null;
     if (!convoId) {
       const { rows } = await query(
         'INSERT INTO conversations (business_id, visitor_label) VALUES ($1, $2) RETURNING id',
@@ -536,8 +566,9 @@ app.post('/api/chat', async (req, res) => {
       );
       convoId = rows[0].id;
     } else {
-      const { rows: convoFlagRows } = await query('SELECT rdv_offered FROM conversations WHERE id = $1', [convoId]);
+      const { rows: convoFlagRows } = await query('SELECT rdv_offered, appointment_at FROM conversations WHERE id = $1', [convoId]);
       rdvAlreadyOffered = convoFlagRows[0] ? convoFlagRows[0].rdv_offered : false;
+      existingAppointmentAt = convoFlagRows[0] ? convoFlagRows[0].appointment_at : null;
     }
 
     // Enregistrer le dernier message du visiteur
@@ -568,10 +599,13 @@ app.post('/api/chat', async (req, res) => {
         // Premier email et/ou téléphone de cette conversation : nouveau lead.
         const priorUserMessages = messages.slice(0, -1).filter((m) => m.role === 'user');
         const score = computeLeadScore(lastUserMessage.content, priorUserMessages.length === 0);
+        // Le RDV a pu être proposé à un tour précédent, avant que ce lead
+        // n'existe (visiteur intéressé mais pas encore d'email/téléphone) :
+        // on reporte alors cette date sur le lead qu'on crée maintenant.
         await query(
-          `INSERT INTO leads (business_id, conversation_id, email, phone, message, score, status)
-           VALUES ($1, $2, $3, $4, $5, $6, 'nouveau')`,
-          [business.id, convoId, newEmail || null, newPhone || null, lastUserMessage.content, score]
+          `INSERT INTO leads (business_id, conversation_id, email, phone, message, score, status, appointment_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 'nouveau', $7)`,
+          [business.id, convoId, newEmail || null, newPhone || null, lastUserMessage.content, score, existingAppointmentAt]
         );
         sendLeadToWebhook(business, {
           business: business.name,
@@ -639,9 +673,27 @@ app.post('/api/chat', async (req, res) => {
     );
     const shouldOfferAppointment = !rdvAlreadyOffered && conversationScore >= qualification.thresholds.appointment;
 
+    // Calculée une seule fois ici (pas dans buildSystemPromptForCall) pour
+    // pouvoir à la fois l'écrire dans le prompt ET l'enregistrer plus bas
+    // sur la conversation/le lead — les deux doivent être exactement la
+    // même date que celle que le bot vient d'annoncer au visiteur.
+    const appointmentDate = shouldOfferAppointment
+      ? nextBusinessDayAt(APPOINTMENT_OFFER_BUSINESS_DAYS_AHEAD, APPOINTMENT_OFFER_HOUR)
+      : null;
+    const appointmentDateLabel = appointmentDate ? formatFrenchDateTime(appointmentDate) : null;
+
+    // Tant qu'un rendez-vous a été proposé (ce tour-ci OU un tour précédent
+    // pour cette conversation) et qu'aucune date n'a encore été confirmée
+    // par le visiteur, on garde l'instruction de confirmation active — pour
+    // capter une date renégociée ("plutôt vendredi 13h") aussi bien qu'une
+    // simple confirmation de la date proposée au départ.
+    const appointmentInProgress = shouldOfferAppointment || rdvAlreadyOffered;
+
     // Prompt enrichi pour CET appel seulement — business.system_prompt en
     // base ne change jamais.
-    const systemPromptForCall = buildSystemPromptForCall(business, shouldOfferAppointment);
+    const systemPromptForCall = buildSystemPromptForCall(
+      business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress
+    );
     const data = await callGemini(systemPromptForCall, contents);
 
     let reply;
@@ -670,6 +722,15 @@ app.post('/api/chat', async (req, res) => {
         || "Désolé, je n'ai pas pu répondre.";
     }
 
+    // Si l'IA a confirmé un rendez-vous dans sa réponse (marqueur
+    // [RDV_CONFIRME: ...]), on extrait la date et on retire le marqueur —
+    // le visiteur ne doit jamais le voir. C'est la SEULE source pour une
+    // date de rendez-vous : jamais de "deviner" une date depuis le texte
+    // libre du visiteur, seulement lire ce que l'IA a été explicitement
+    // instruite d'écrire (voir buildSystemPromptForCall).
+    const { cleanedReply, confirmedDate } = parseAppointmentConfirmation(reply);
+    reply = cleanedReply;
+
     // Enregistrer la réponse de l'IA aussi (avec le marqueur used_fallback,
     // visible seulement côté équipe WHATGO, pour suivre à quel point ce
     // secours est réellement sollicité en production).
@@ -679,10 +740,29 @@ app.post('/api/chat', async (req, res) => {
     );
 
     // Le rendez-vous vient d'être proposé dans cette réponse : on le note
-    // pour cette conversation, pour ne jamais le reproposer une 2e fois
-    // même si le score reste au-dessus du seuil aux messages suivants.
+    // pour cette conversation (pour ne jamais le reproposer une 2e fois),
+    // avec la date exacte annoncée au visiteur. Si un lead existe déjà pour
+    // cette conversation, on la reporte aussi dessus, pour qu'elle
+    // s'affiche dans l'onglet "Rendez-vous" du dashboard.
     if (shouldOfferAppointment) {
-      await query('UPDATE conversations SET rdv_offered = true WHERE id = $1', [convoId]);
+      await query(
+        'UPDATE conversations SET rdv_offered = true, appointment_at = $1 WHERE id = $2',
+        [appointmentDate, convoId]
+      );
+      await query('UPDATE leads SET appointment_at = $1 WHERE conversation_id = $2', [appointmentDate, convoId]);
+    }
+
+    // Le visiteur a confirmé (ou renégocié) une date précise dans ce tour :
+    // elle prime toujours sur la date initialement proposée, qu'il s'agisse
+    // du même rendez-vous ou d'un nouveau créneau. On l'enregistre même si
+    // "shouldOfferAppointment" est faux ce tour-ci (le rendez-vous a pu être
+    // proposé plusieurs messages plus tôt).
+    if (confirmedDate) {
+      await query(
+        'UPDATE conversations SET rdv_offered = true, appointment_at = $1 WHERE id = $2',
+        [confirmedDate, convoId]
+      );
+      await query('UPDATE leads SET appointment_at = $1 WHERE conversation_id = $2', [confirmedDate, convoId]);
     }
 
     // Escalade vers un humain (page "Qualification") : uniquement sur les
@@ -920,7 +1000,7 @@ const LEAD_STATUSES = ['nouveau', 'contacte', 'rdv_pris', 'gagne', 'perdu'];
 app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
     const { rows: leads } = await query(`
-      SELECT id, email, phone, message, score, status, conversation_id, created_at
+      SELECT id, email, phone, message, score, status, conversation_id, created_at, appointment_at
       FROM leads
       WHERE business_id = $1
       ORDER BY created_at DESC
@@ -935,6 +1015,7 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
       status: l.status,
       conversationId: l.conversation_id,
       createdAt: l.created_at,
+      appointmentAt: l.appointment_at,
     })));
   } catch (err) {
     console.error('Erreur /api/dashboard/leads:', err);
@@ -999,6 +1080,39 @@ app.put('/api/dashboard/leads/:id/status', requireAuth, requireRole('admin'), as
     res.json({ ok: true });
   } catch (err) {
     console.error('Erreur /api/dashboard/leads/:id/status:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Modifier manuellement la date d'un rendez-vous — secours quand la
+// détection automatique (marqueur [RDV_CONFIRME: ...] dans les réponses du
+// bot) n'a pas capté la bonne date, ou pour la renseigner à la main.
+// appointmentAt: null efface la date (redevient "Proposée hors chat").
+app.put('/api/dashboard/leads/:id/appointment', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { appointmentAt } = req.body;
+
+    let parsedDate = null;
+    if (appointmentAt) {
+      parsedDate = new Date(appointmentAt);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ error: 'Date invalide.' });
+      }
+    }
+
+    const { rows } = await query('SELECT * FROM leads WHERE id = $1', [req.params.id]);
+    const lead = rows[0];
+    if (!lead || lead.business_id !== req.user.businessId) {
+      return res.status(404).json({ error: 'Lead introuvable.' });
+    }
+
+    await query('UPDATE leads SET appointment_at = $1, updated_at = NOW() WHERE id = $2', [parsedDate, req.params.id]);
+    if (lead.conversation_id) {
+      await query('UPDATE conversations SET appointment_at = $1 WHERE id = $2', [parsedDate, lead.conversation_id]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur /api/dashboard/leads/:id/appointment:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
