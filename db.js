@@ -156,6 +156,10 @@ async function initDb() {
   await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS summary TEXT`);
   await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes TEXT`);
 
+  // Instructions spécifiques (page "Base de connaissances") : texte libre
+  // du client, en plus des documents, que le bot doit toujours respecter.
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS instructions TEXT DEFAULT ''`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 
