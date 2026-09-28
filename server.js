@@ -155,8 +155,11 @@ function parseQualification(business) {
 }
 
 // ------------------------------------------------------------
-// Construit le prompt système envoyé à Gemini à partir des
-// champs remplis dans la page "Contenu" du tableau de bord.
+// Construit le prompt système envoyé à Gemini à partir des champs du
+// tableau de bord. Les anciens champs de la page "Contenu" (supprimée du
+// dashboard) restent pris en compte pour ne rien perdre chez les clients
+// existants ; les "Instructions spécifiques" (Base de connaissances) s'y
+// ajoutent.
 // ------------------------------------------------------------
 function buildSystemPrompt(business) {
   let faqItems = [];
@@ -181,6 +184,10 @@ function buildSystemPrompt(business) {
   if (faqItems.length) {
     prompt += `\n\nQUESTIONS FRÉQUENTES :\n` +
       faqItems.map((f) => `- Q : ${f.question}\n  R : ${f.answer}`).join('\n');
+  }
+  if (business.instructions && business.instructions.trim()) {
+    prompt += `\n\nINSTRUCTIONS SPÉCIFIQUES DE L'ENTREPRISE (à respecter en priorité sur les informations ci-dessus, ` +
+      `sauf si elles contredisent les sujets interdits ou les règles de sécurité) :\n${business.instructions.trim()}`;
   }
 
   // Qualification : infos à collecter (page "Qualification") + sujets
@@ -1373,7 +1380,36 @@ app.get('/api/dashboard/stats', requireAuth, requireRole(['admin', 'lecture']), 
   }
 });
 
-// Page "Contenu" : lecture et modification de la FAQ, tarifs, horaires...
+// Base de connaissances : instructions spécifiques du client, en texte libre.
+app.get('/api/dashboard/instructions', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT instructions FROM businesses WHERE id = $1', [req.user.businessId]);
+    res.json({ instructions: (rows[0] && rows[0].instructions) || '' });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/instructions:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.put('/api/dashboard/instructions', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const instructions = typeof req.body.instructions === 'string' ? req.body.instructions.trim().slice(0, 8000) : '';
+    const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    const business = rows[0];
+    if (!business) return res.status(404).json({ error: 'Entreprise introuvable.' });
+
+    const newSystemPrompt = buildSystemPrompt({ ...business, instructions });
+    await query('UPDATE businesses SET instructions = $1, system_prompt = $2 WHERE id = $3',
+      [instructions, newSystemPrompt, req.user.businessId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/instructions:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Ancienne page "Contenu" (retirée du dashboard) : routes gardées pour
+// compatibilité, elles ne sont plus appelées par l'interface.
 app.get('/api/dashboard/content', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
