@@ -455,12 +455,9 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <span>Rendez-vous</span></button>
 
       <div class="navgroup" data-grp="client">Assistant</div>
-      <button class="nav-item" data-tab="content" data-grp="client" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM4 9h16M9 9v11"/></svg>
-        <span>Contenu</span></button>
       <button class="nav-item" data-tab="knowledge" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5V5a2 2 0 012-2h13v18H6a2 2 0 01-2-1.5z" stroke-linejoin="round"/><path d="M8 7h7M8 11h5" stroke-linecap="round"/></svg>
-        <span>Base de connaissances</span><span class="pill-soon">Bientôt</span></button>
+        <span>Base de connaissances</span></button>
       <button class="nav-item" data-tab="qualification" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M6 12h12M10 19h4" stroke-linecap="round"/></svg>
         <span>Qualification</span></button>
@@ -578,40 +575,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       </div>
     </section>
 
-    <!-- ============================== CONTENU (réel) -->
-    <section class="tab-page" id="page-content">
-      <div class="topbar"><div><h2>Contenu de l'assistant</h2><p>Ce que l'IA sait sur votre entreprise pour répondre aux visiteurs.</p></div></div>
-      <form id="contentForm" novalidate>
-        <div class="card">
-          <div class="card__head"><div><h3>Présentation</h3></div></div>
-          <div class="field"><label for="c-sector">Secteur d'activité</label>
-            <select id="c-sector">
-              <option value="">— Choisir —</option>
-              <option>Hôtellerie</option><option>Services locaux</option><option>E-commerce</option><option>Autre</option>
-            </select></div>
-          <div class="field"><label for="c-intro">Description de l'entreprise (ce que l'IA doit savoir)</label>
-            <textarea id="c-intro" placeholder="Ex : Hôtel 4 étoiles au centre de Lyon, 40 chambres, spa, restaurant gastronomique…"></textarea></div>
-        </div>
-        <div class="card">
-          <div class="card__head"><div><h3>Tarifs</h3></div></div>
-          <div class="field"><textarea id="c-pricing" placeholder="Ex : Chambre double 120€/nuit, suite 220€/nuit, petit-déjeuner 15€…"></textarea></div>
-        </div>
-        <div class="card">
-          <div class="card__head"><div><h3>Horaires</h3></div></div>
-          <div class="field"><textarea id="c-hours" style="min-height:62px" placeholder="Ex : Réception ouverte 24h/24. Restaurant : 12h-14h et 19h-22h."></textarea></div>
-        </div>
-        <div class="card">
-          <div class="card__head"><div><h3>Questions fréquentes</h3></div></div>
-          <div id="faqRows"></div>
-          <button type="button" class="btn btn--ghost btn--sm" id="addFaqBtn" style="margin-top:6px">+ Ajouter une question</button>
-        </div>
-        <button type="submit" class="btn btn--primary">Enregistrer le contenu</button>
-        <p class="msg msg--ok" id="contentOk">Contenu enregistré.</p>
-        <p class="msg msg--err" id="contentError"></p>
-      </form>
-    </section>
-
-    <!-- ============================== BASE DE CONNAISSANCES (pas encore développé) -->
+    <!-- ============================== BASE DE CONNAISSANCES -->
     <section class="tab-page" id="page-knowledge">
       <div class="topbar"><div><h2>Base de connaissances</h2><p>Indexation de documents et pages web pour enrichir l'assistant.</p></div></div>
       <div class="betahero">
@@ -620,7 +584,20 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         </div>
         <span class="soonbadge">Bientôt disponible</span>
         <h3>Import de documents</h3>
-        <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée. Utilisez pour l'instant l'onglet Contenu pour renseigner l'assistant.</p>
+        <p>Bientôt disponible — l'import de documents et de pages web n'est pas encore développé. En attendant, renseignez l'assistant avec les instructions spécifiques ci-dessous.</p>
+      </div>
+
+      <div class="card">
+        <div class="card__head"><div><h3>Instructions spécifiques</h3>
+          <p class="card__sub">Informations et consignes que l'assistant prendra toujours en compte, en plus de vos documents : présentation de l'entreprise, tarifs, horaires, ton à adopter, ce qu'il doit ou ne doit pas dire…</p></div></div>
+        <form id="instructionsForm" novalidate>
+          <div class="field"><label for="k-instructions" class="lbl">Instructions</label>
+            <textarea id="k-instructions" maxlength="8000" style="min-height:200px" placeholder="Ex : Nous sommes un hôtel 4 étoiles au centre de Lyon. Chambre double à partir de 120€/nuit. Toujours vouvoyer le client. Ne jamais promettre de surclassement."></textarea>
+            <p class="help"><span id="k-count">0</span> / 8000 caractères</p></div>
+          <button type="submit" class="btn btn--primary">Enregistrer</button>
+          <p class="msg msg--ok" id="instructionsOk">Instructions enregistrées.</p>
+          <p class="msg msg--err" id="instructionsError"></p>
+        </form>
       </div>
     </section>
 
@@ -1016,7 +993,7 @@ function enterApp() {
     loadStats();
     loadConversations();
     loadLeads();
-    loadContent();
+    loadInstructions();
     loadWebhook();
     loadQualification();
   }
@@ -1614,63 +1591,39 @@ function renderLeads(leads) {
 }
 
 /* ============================================================
-   CONTENU
+   BASE DE CONNAISSANCES — instructions spécifiques
    ============================================================ */
-var faqCount = 0;
-function addFaqRow(question, answer) {
-  faqCount += 1;
-  var row = document.createElement('div');
-  row.className = 'faqrow';
-  row.innerHTML =
-    '<textarea placeholder="Question" class="faq-q"></textarea>' +
-    '<textarea placeholder="Réponse" class="faq-a"></textarea>' +
-    '<button type="button" class="iconbtn" title="Supprimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>';
-  row.querySelector('.faq-q').value = question || '';
-  row.querySelector('.faq-a').value = answer || '';
-  row.querySelector('button').addEventListener('click', function () { row.remove(); });
-  $('#faqRows').appendChild(row);
+function updateInstructionsCount() {
+  $('#k-count').textContent = $('#k-instructions').value.length;
 }
-$('#addFaqBtn').addEventListener('click', function () { addFaqRow(); });
+$('#k-instructions').addEventListener('input', updateInstructionsCount);
 
-async function loadContent() {
+async function loadInstructions() {
   try {
-    var res = await fetch(API + '/api/dashboard/content', { credentials: 'include' });
-    var c = await res.json();
-    $('#c-sector').value = c.sector || '';
-    $('#c-intro').value = c.intro || '';
-    $('#c-pricing').value = c.pricing || '';
-    $('#c-hours').value = c.hours || '';
-    $('#faqRows').innerHTML = '';
-    if (c.faq && c.faq.length) c.faq.forEach(function (f) { addFaqRow(f.question, f.answer); });
-    else addFaqRow();
-  } catch (e) { toast('Impossible de charger le contenu.', true); }
+    var res = await fetch(API + '/api/dashboard/instructions', { credentials: 'include' });
+    var data = await res.json();
+    $('#k-instructions').value = data.instructions || '';
+    updateInstructionsCount();
+    if (ME.role !== 'admin') {
+      $('#k-instructions').disabled = true;
+      $('#instructionsForm button[type=submit]').hidden = true;
+    }
+  } catch (e) { toast('Impossible de charger les instructions.', true); }
 }
 
-$('#contentForm').addEventListener('submit', async function (e) {
+$('#instructionsForm').addEventListener('submit', async function (e) {
   e.preventDefault();
-  hideMsg('#contentOk'); hideMsg('#contentError');
-
-  var faq = $$('.faqrow').map(function (row) {
-    return { question: row.querySelector('.faq-q').value.trim(), answer: row.querySelector('.faq-a').value.trim() };
-  }).filter(function (f) { return f.question && f.answer; });
-
-  var payload = {
-    sector: $('#c-sector').value,
-    intro: $('#c-intro').value,
-    pricing: $('#c-pricing').value,
-    hours: $('#c-hours').value,
-    faq: faq,
-  };
-
+  hideMsg('#instructionsOk'); hideMsg('#instructionsError');
   try {
-    var res = await fetch(API + '/api/dashboard/content', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload),
+    var res = await fetch(API + '/api/dashboard/instructions', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ instructions: $('#k-instructions').value.trim() }),
     });
     var data = await res.json();
-    if (!res.ok) { showMsg('#contentError', data.error || "Erreur lors de l'enregistrement.", true); return; }
-    showMsg('#contentOk');
-    toast('Contenu enregistré');
-  } catch (err) { showMsg('#contentError', 'Impossible de contacter le serveur.', true); }
+    if (!res.ok) { showMsg('#instructionsError', data.error || "Erreur lors de l'enregistrement.", true); return; }
+    showMsg('#instructionsOk');
+    toast('Instructions enregistrées');
+  } catch (err) { showMsg('#instructionsError', 'Impossible de contacter le serveur.', true); }
 });
 
 /* ============================================================
