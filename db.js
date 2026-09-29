@@ -164,6 +164,11 @@ async function initDb() {
   // capacité… en JSON, comme la qualification.
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS booking TEXT DEFAULT '{}'`);
 
+  // Type d'activité : décide des pages affichées dans le dashboard du client
+  // ('rdv' = services sur rendez-vous, 'ecommerce' = boutique en ligne,
+  // 'autre' = ni l'un ni l'autre, comme WHATGO lui-même).
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS business_type TEXT NOT NULL DEFAULT 'autre'`);
+
   // Rendez-vous réservés (par le visiteur via le chat, ou ajoutés à la main
   // par le commerçant pour ceux pris par téléphone). C'est l'agenda WHATGO.
   await query(`

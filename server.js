@@ -1560,8 +1560,11 @@ app.post('/api/auth/login', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    const { rows: businessRows } = await query('SELECT name FROM businesses WHERE id = $1', [user.business_id]);
-    res.json({ email: user.email, role: user.role, business: businessRows[0].name });
+    const { rows: businessRows } = await query('SELECT name, status, business_type FROM businesses WHERE id = $1', [user.business_id]);
+    res.json({
+      email: user.email, role: user.role, business: businessRows[0].name,
+      status: businessRows[0].status, businessType: businessRows[0].business_type || 'autre',
+    });
   } catch (err) {
     console.error('Erreur /api/auth/login:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
@@ -1672,9 +1675,9 @@ app.get('/api/dashboard/me', requireAuth, async (req, res) => {
     if (req.user.role === 'super_admin') {
       return res.json({ role: 'super_admin', business: 'WHATGO (équipe)' });
     }
-    const { rows } = await query('SELECT name, status FROM businesses WHERE id = $1', [req.user.businessId]);
+    const { rows } = await query('SELECT name, status, business_type FROM businesses WHERE id = $1', [req.user.businessId]);
     const business = rows[0];
-    res.json({ role: req.user.role, business: business.name, status: business.status });
+    res.json({ role: req.user.role, business: business.name, status: business.status, businessType: business.business_type || 'autre' });
   } catch (err) {
     console.error('Erreur /api/dashboard/me:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
@@ -1929,6 +1932,20 @@ app.get('/api/dashboard/stats', requireAuth, requireRole(['admin', 'lecture']), 
     });
   } catch (err) {
     console.error('Erreur /api/dashboard/stats:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Type d'activité du client (page Paramètres) : adapte les pages du dashboard.
+const BUSINESS_TYPES = ['rdv', 'ecommerce', 'autre'];
+app.put('/api/dashboard/business-type', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const type = req.body && req.body.businessType;
+    if (!BUSINESS_TYPES.includes(type)) return res.status(400).json({ error: 'Type d\'activité invalide.' });
+    await query('UPDATE businesses SET business_type = $1 WHERE id = $2', [type, req.user.businessId]);
+    res.json({ ok: true, businessType: type });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/business-type:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
@@ -2480,6 +2497,7 @@ app.get('/api/superadmin/conversations/:id', requireAuth, requireSuperAdmin, asy
 app.post('/api/superadmin/clients', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const { name, sector, adminEmail, adminPassword } = req.body;
+    const businessType = BUSINESS_TYPES.includes(req.body.businessType) ? req.body.businessType : 'autre';
     if (!name || !adminEmail || !adminPassword) {
       return res.status(400).json({ error: 'Nom de l\'entreprise, email et mot de passe admin sont requis.' });
     }
@@ -2501,10 +2519,10 @@ app.post('/api/superadmin/clients', requireAuth, requireSuperAdmin, async (req, 
     const placeholderPrompt = `Tu es l'assistant virtuel de "${name}". Le contenu n'a pas encore été renseigné par l'équipe WHATGO.`;
 
     const { rows: insertedBusiness } = await query(`
-      INSERT INTO businesses (slug, name, system_prompt, status, sector)
-      VALUES ($1, $2, $3, 'draft', $4)
+      INSERT INTO businesses (slug, name, system_prompt, status, sector, business_type)
+      VALUES ($1, $2, $3, 'draft', $4, $5)
       RETURNING id
-    `, [finalSlug, name, placeholderPrompt, sector || '']);
+    `, [finalSlug, name, placeholderPrompt, sector || '', businessType]);
     const businessId = insertedBusiness[0].id;
 
     try {
@@ -2613,6 +2631,8 @@ TON RÔLE :
 const DEMO_SLUG = 'salon-demo';
 
 async function ensureDemoSalon() {
+  // Type "rendez-vous" (aussi pour une démo créée avant l'ajout de ce réglage).
+  await query(`UPDATE businesses SET business_type = 'rdv' WHERE slug = $1 AND business_type = 'autre'`, [DEMO_SLUG]);
   const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [DEMO_SLUG]);
   if (rows[0]) {
     console.log('ℹ️  Client de démo "Salon Élégance" déjà présent.');
@@ -2651,8 +2671,8 @@ async function ensureDemoSalon() {
   const prompt = buildSystemPrompt(business);
 
   const { rows: inserted } = await query(
-    `INSERT INTO businesses (slug, name, system_prompt, status, sector, instructions, booking)
-     VALUES ($1, $2, $3, 'published', $4, $5, $6) RETURNING id`,
+    `INSERT INTO businesses (slug, name, system_prompt, status, sector, instructions, booking, business_type)
+     VALUES ($1, $2, $3, 'published', $4, $5, $6, 'rdv') RETURNING id`,
     [DEMO_SLUG, business.name, prompt, business.sector, instructions, JSON.stringify(config)]
   );
   const businessId = inserted[0].id;
@@ -2698,6 +2718,7 @@ async function ensureDemoSalon() {
 const DEMO_SHOP_SLUG = 'boutique-demo';
 
 async function ensureDemoShop() {
+  await query(`UPDATE businesses SET business_type = 'ecommerce' WHERE slug = $1 AND business_type = 'autre'`, [DEMO_SHOP_SLUG]);
   const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [DEMO_SHOP_SLUG]);
   if (rows[0]) {
     console.log('ℹ️  Boutique de démo "Maison Verte" déjà présente.');
@@ -2718,8 +2739,8 @@ async function ensureDemoShop() {
 
   const business = { name: 'Maison Verte', sector: 'E-commerce — plantes & déco', instructions, faq: '[]', intro: '', pricing: '', hours: '', qualification: '{}' };
   const { rows: inserted } = await query(
-    `INSERT INTO businesses (slug, name, system_prompt, status, sector, instructions)
-     VALUES ($1, $2, $3, 'published', $4, $5) RETURNING id`,
+    `INSERT INTO businesses (slug, name, system_prompt, status, sector, instructions, business_type)
+     VALUES ($1, $2, $3, 'published', $4, $5, 'ecommerce') RETURNING id`,
     [DEMO_SHOP_SLUG, business.name, buildSystemPrompt(business), business.sector, instructions]
   );
   const businessId = inserted[0].id;

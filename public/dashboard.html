@@ -483,7 +483,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       <button class="nav-item" data-tab="conversations" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0112.5 3 8.5 8.5 0 0121 11.5z" stroke-linejoin="round"/></svg>
         <span>Conversations</span></button>
-      <button class="nav-item" data-tab="appointments" data-grp="client" type="button">
+      <button class="nav-item" data-tab="appointments" data-grp="client" data-need="rdv autre" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4" stroke-linecap="round"/></svg>
         <span>Rendez-vous</span></button>
 
@@ -491,7 +491,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       <button class="nav-item" data-tab="knowledge" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5V5a2 2 0 012-2h13v18H6a2 2 0 01-2-1.5z" stroke-linejoin="round"/><path d="M8 7h7M8 11h5" stroke-linecap="round"/></svg>
         <span>Base de connaissances</span></button>
-      <button class="nav-item" data-tab="catalog" data-grp="client" type="button">
+      <button class="nav-item" data-tab="catalog" data-grp="client" data-need="ecommerce" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 7h12l-1 13H7L6 7z" stroke-linejoin="round"/><path d="M9 7a3 3 0 016 0" stroke-linecap="round"/></svg>
         <span>Catalogue</span></button>
       <button class="nav-item" data-tab="qualification" data-grp="client" type="button">
@@ -606,7 +606,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     <!-- ============================== RENDEZ-VOUS : agenda + réservation en ligne -->
     <section class="tab-page" id="page-appointments">
       <div class="topbar">
-        <div><h2>Rendez-vous</h2><p>Votre agenda : les rendez-vous réservés par vos visiteurs directement dans le chat, et ceux que vous ajoutez vous-même (pris par téléphone, au comptoir…).</p></div>
+        <div><h2>Rendez-vous</h2><p id="rdvIntro">Votre agenda : les rendez-vous réservés par vos visiteurs directement dans le chat, et ceux que vous ajoutez vous-même (pris par téléphone, au comptoir…).</p></div>
         <div class="topbar__act"><button class="btn btn--primary" type="button" id="bkAddToggle" hidden>+ Ajouter un rendez-vous</button></div>
       </div>
 
@@ -630,7 +630,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         </form>
       </div>
 
-      <div class="card card--flush">
+      <div class="card card--flush" id="bkAgendaCard">
         <div class="card__head card__head--pad"><div><h3>Agenda</h3>
           <p class="card__sub">Rendez-vous d'aujourd'hui et à venir. Cliquez sur un rendez-vous pris dans le chat pour relire la conversation.</p></div></div>
         <div id="bkList" style="margin-top:6px"></div>
@@ -940,6 +940,12 @@ table.tbl tbody tr:last-child td{border-bottom:none}
                 <option>Hôtellerie</option><option>Services locaux</option><option>E-commerce</option><option>Autre</option>
               </select></div>
           </div>
+          <div class="field"><label for="nc-type">Type d'activité (pages du dashboard)</label>
+            <select id="nc-type">
+              <option value="rdv">Services sur rendez-vous : agenda et réservation</option>
+              <option value="ecommerce">Boutique en ligne : catalogue et suivi de commande</option>
+              <option value="autre" selected>Autre : assistant et leads uniquement</option>
+            </select></div>
           <div class="row2">
             <div class="field"><label for="nc-email">Email admin (pour se connecter)</label><input type="email" id="nc-email" required /></div>
             <div class="field"><label for="nc-password">Mot de passe admin</label><input type="text" id="nc-password" required minlength="8" placeholder="8 caractères minimum" /></div>
@@ -969,6 +975,17 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     <!-- ============================== PARAMÈTRES (réel) -->
     <section class="tab-page" id="page-settings">
       <div class="topbar"><div><h2>Paramètres</h2><p>Votre compte.</p></div></div>
+      <div class="card" style="max-width:560px" id="typeCard" data-grp="client">
+        <div class="card__head"><div><h3>Type d'activité</h3>
+          <p class="card__sub">Adapte votre tableau de bord et votre assistant à votre métier.</p></div></div>
+        <div class="field"><label for="biz-type">Votre activité</label>
+          <select id="biz-type">
+            <option value="rdv">Services sur rendez-vous (salon, institut, restaurant…) : agenda et réservation</option>
+            <option value="ecommerce">Boutique en ligne : catalogue, panier et suivi de commande</option>
+            <option value="autre">Autre : assistant et leads uniquement</option>
+          </select></div>
+        <button type="button" class="btn btn--primary" id="bizTypeSave">Enregistrer</button>
+      </div>
       <div class="card" style="max-width:420px">
         <div class="card__head"><div><h3>Changer mon mot de passe</h3></div></div>
         <form id="passwordForm" novalidate>
@@ -1126,6 +1143,7 @@ function enterApp() {
     var b = $('#statusBadge');
     b.textContent = ME.status === 'published' ? 'Publié' : 'Brouillon';
     b.className = 'tag tag--dot ' + (ME.status === 'published' ? 'tag--green' : 'tag--amber');
+    applyBusinessType(ME.businessType || 'autre');
     switchTab('overview');
     loadStats();
     loadConversations();
@@ -1139,6 +1157,42 @@ function enterApp() {
     loadQualification();
   }
 }
+
+/* ============================================================
+   TYPE D'ACTIVITÉ : pages affichées selon le métier du client
+   ============================================================ */
+function applyBusinessType(type) {
+  ME.businessType = type;
+  $$('.nav-item[data-need]').forEach(function (el) {
+    el.hidden = el.dataset.need.split(' ').indexOf(type) < 0;
+  });
+  // Rendez-vous : l'agenda et la réservation en ligne ne concernent que les
+  // activités sur rendez-vous ; les autres gardent seulement les RDV
+  // proposés dans la conversation.
+  var isRdv = type === 'rdv';
+  ['#bkAgendaCard', '#bkSettingsForm'].forEach(function (sel) { var n = $(sel); if (n) n.hidden = !isRdv; });
+  var addBtn = $('#bkAddToggle'); if (addBtn && !isRdv) addBtn.hidden = true;
+  var legacy = $('#legacyRdvCard'); if (legacy && !isRdv) legacy.hidden = false;
+  var intro = $('#rdvIntro');
+  if (intro) intro.textContent = isRdv
+    ? 'Votre agenda : les rendez-vous réservés par vos visiteurs directement dans le chat, et ceux que vous ajoutez vous-même (pris par téléphone, au comptoir…).'
+    : "Les rendez-vous proposés par l'assistant dans la conversation.";
+  var sel = $('#biz-type'); if (sel) { sel.value = type; sel.disabled = ME.role !== 'admin'; }
+  var saveBtn = $('#bizTypeSave'); if (saveBtn) saveBtn.hidden = ME.role !== 'admin';
+}
+
+$('#bizTypeSave').addEventListener('click', async function () {
+  var type = $('#biz-type').value;
+  try {
+    var res = await fetch(API + '/api/dashboard/business-type', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ businessType: type }),
+    });
+    if (!res.ok) throw new Error();
+    applyBusinessType(type);
+    toast("Type d'activité enregistré");
+  } catch (e) { toast("Impossible d'enregistrer le type d'activité.", true); }
+});
 
 /* ============================================================
    NAVIGATION
@@ -1363,7 +1417,9 @@ function renderAppointments(leads) {
   // Les RDV réservés en ligne sont déjà dans l'agenda : on ne les répète pas ici.
   var rdv = leads.filter(function (l) { return l.status === 'rdv_pris' && !l.hasBooking; });
   var legacyCard = $('#legacyRdvCard');
-  if (legacyCard) legacyCard.hidden = !rdv.length;
+  // Activité sur rendez-vous : l'agenda suffit, ce tableau n'apparaît que s'il
+  // y a des RDV captés dans la conversation. Sinon, c'est la seule vue RDV.
+  if (legacyCard) legacyCard.hidden = ME.businessType === 'rdv' ? !rdv.length : false;
   body.innerHTML =
     '<thead><tr><th>Contact</th><th>Date du RDV</th><th>Message</th><th class="right">Enregistré</th></tr></thead><tbody>' +
     (rdv.length ? rdv.map(function (l) {
@@ -1794,7 +1850,7 @@ function renderBookingSettings(cfg) {
   $$('#bkSettingsForm input, #bkSettingsForm select, #bkSettingsForm button').forEach(function (n) {
     if (!isAdmin) n.disabled = true;
   });
-  $('#bkAddToggle').hidden = !isAdmin;
+  $('#bkAddToggle').hidden = !isAdmin || ME.businessType !== 'rdv';
 }
 
 async function loadBookingSettings() {
@@ -2318,6 +2374,7 @@ $('#newClientForm').addEventListener('submit', async function (e) {
   var payload = {
     name: $('#nc-name').value,
     sector: $('#nc-sector').value,
+    businessType: $('#nc-type').value,
     adminEmail: $('#nc-email').value,
     adminPassword: $('#nc-password').value,
   };
