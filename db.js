@@ -160,6 +160,34 @@ async function initDb() {
   // du client, en plus des documents, que le bot doit toujours respecter.
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS instructions TEXT DEFAULT ''`);
 
+  // Prise de rendez-vous (page "Rendez-vous") : prestations, horaires,
+  // capacité… en JSON, comme la qualification.
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS booking TEXT DEFAULT '{}'`);
+
+  // Rendez-vous réservés (par le visiteur via le chat, ou ajoutés à la main
+  // par le commerçant pour ceux pris par téléphone). C'est l'agenda WHATGO.
+  await query(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id              SERIAL PRIMARY KEY,
+      business_id     INTEGER NOT NULL REFERENCES businesses(id),
+      conversation_id INTEGER,
+      lead_id         INTEGER,
+      service_name    TEXT NOT NULL,
+      duration        INTEGER NOT NULL,
+      price           TEXT DEFAULT '',
+      start_at        TIMESTAMPTZ NOT NULL,
+      end_at          TIMESTAMPTZ NOT NULL,
+      customer_name   TEXT,
+      phone           TEXT,
+      email           TEXT,
+      notes           TEXT,
+      status          TEXT NOT NULL DEFAULT 'confirme',
+      source          TEXT NOT NULL DEFAULT 'chat',
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS bookings_business_start_idx ON bookings (business_id, start_at)`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 

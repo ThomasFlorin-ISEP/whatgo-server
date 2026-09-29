@@ -5,7 +5,8 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
-const { query, initDb } = require('./db');
+const { query, pool, initDb } = require('./db');
+const booking = require('./booking');
 const {
   hashPassword,
   verifyPassword,
@@ -235,6 +236,39 @@ function extractEmail(text) {
 function extractPhone(text) {
   const match = String(text || '').match(/(?:(?:\+33|0033)[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}/);
   return match ? match[0] : null;
+}
+
+// ------------------------------------------------------------
+// Prise de rendez-vous par le bot (entreprises avec la réservation activée).
+// L'IA ne choisit JAMAIS elle-même un horaire : elle ajoute seulement un
+// marqueur quand le visiteur veut réserver, et c'est le widget qui affiche
+// les vrais créneaux libres, calculés par le serveur à partir de l'agenda.
+// Impossible donc d'inventer une disponibilité ou de créer un doublon.
+// ------------------------------------------------------------
+const BOOKING_MARKER = '[OUVRIR_RESERVATION]';
+const BOOKING_INTENT_REGEX = /\b(rdv|rendez[- ]?vous|r[ée]serv\w*|cr[ée]neau\w*|disponibilit\w*|book\w*|appointment)\b/i;
+
+function isBookingOn(config) {
+  return !!(config && config.enabled && config.services.length);
+}
+
+function buildBookingInstruction(config) {
+  const services = config.services
+    .map((s) => `- ${s.name} (${s.duration} min${s.price ? `, ${s.price}` : ''})`)
+    .join('\n');
+  const hours = booking.WEEKDAYS
+    .map((day, i) => `- ${day} : ${config.hours[i] ? config.hours[i] : 'fermé'}`)
+    .join('\n');
+  return `\n\nINFORMATIONS OFFICIELLES COMPLÉMENTAIRES (tu peux t'en servir pour répondre, au même titre que ` +
+    `les informations ci-dessus).\n\nPRESTATIONS PROPOSÉES :\n${services}\n\nHORAIRES D'OUVERTURE :\n${hours}` +
+    `\n\nPRISE DE RENDEZ-VOUS EN LIGNE :\n` +
+    `Le visiteur peut réserver directement dans cette fenêtre de discussion. Quand il souhaite prendre rendez-vous, ` +
+    `réserver, connaître les disponibilités, ou dès qu'il montre un intérêt clair pour une prestation, réponds en une ` +
+    `phrase courte (ex : "Avec plaisir, choisissez votre prestation et votre créneau ci-dessous.") puis termine ta ` +
+    `réponse par ce marqueur exact, seul sur sa ligne, sans jamais l'expliquer : ${BOOKING_MARKER}\n` +
+    `Ne propose JAMAIS toi-même de date ni d'heure précise, n'affirme jamais qu'un créneau est libre ou pris, et ne ` +
+    `confirme jamais un rendez-vous toi-même : le système de réservation s'en charge. Ne demande pas le téléphone ou ` +
+    `l'email pour réserver, le formulaire de réservation le demande.`;
 }
 
 // ------------------------------------------------------------
@@ -676,6 +710,8 @@ app.post('/api/chat', async (req, res) => {
     // "Proposer un RDV" (plus bas) et à l'escalade (plus loin, après la
     // réponse de l'IA).
     const qualification = parseQualification(business);
+    const bookingConfig = booking.parseBooking(business);
+    const bookingOn = isBookingOn(bookingConfig);
 
     // Retrouver ou créer la conversation, pour pouvoir tout enregistrer.
     // Pour une conversation déjà existante, on regarde aussi si un
@@ -813,7 +849,10 @@ app.post('/api/chat', async (req, res) => {
       (max, m, idx) => Math.max(max, computeLeadScore(m.content, idx === 0)),
       0
     );
-    const shouldOfferAppointment = !rdvAlreadyOffered && conversationScore >= qualification.thresholds.appointment;
+    // Entreprise avec la réservation en ligne activée : l'ancienne
+    // proposition de RDV à date fixe est désactivée, c'est le parcours de
+    // réservation (vrais créneaux) qui prend le relais.
+    const shouldOfferAppointment = !bookingOn && !rdvAlreadyOffered && conversationScore >= qualification.thresholds.appointment;
 
     // Calculée une seule fois ici (pas dans buildSystemPromptForCall) pour
     // pouvoir à la fois l'écrire dans le prompt ET l'enregistrer plus bas
@@ -829,13 +868,14 @@ app.post('/api/chat', async (req, res) => {
     // par le visiteur, on garde l'instruction de confirmation active — pour
     // capter une date renégociée ("plutôt vendredi 13h") aussi bien qu'une
     // simple confirmation de la date proposée au départ.
-    const appointmentInProgress = shouldOfferAppointment || rdvAlreadyOffered;
+    const appointmentInProgress = !bookingOn && (shouldOfferAppointment || rdvAlreadyOffered);
 
     // Prompt enrichi pour CET appel seulement — business.system_prompt en
     // base ne change jamais.
-    const systemPromptForCall = buildSystemPromptForCall(
+    let systemPromptForCall = buildSystemPromptForCall(
       business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo
     );
+    if (bookingOn) systemPromptForCall += buildBookingInstruction(bookingConfig);
     const data = await callGemini(systemPromptForCall, contents);
 
     let reply;
@@ -876,6 +916,17 @@ app.post('/api/chat', async (req, res) => {
     // consigne, on n'enregistre jamais un rendez-vous "confirmé" sans
     // aucun moyen de recontacter le visiteur (ça ne servirait à rien).
     const confirmedDate = hasContactInfo ? parsedConfirmation.confirmedDate : null;
+
+    // Ouverture du parcours de réservation dans le widget : marqueur posé par
+    // l'IA, ou (filet de sécurité) demande explicite du visiteur si l'IA a
+    // oublié le marqueur. Le marqueur est toujours retiré du texte affiché.
+    let ui = null;
+    const hadBookingMarker = reply.includes(BOOKING_MARKER);
+    reply = reply.split(BOOKING_MARKER).join('').trim();
+    if (bookingOn && (hadBookingMarker || BOOKING_INTENT_REGEX.test(lastUserMessage.content))) {
+      ui = { type: 'booking' };
+    }
+    if (!reply) reply = 'Avec plaisir, choisissez votre prestation et votre créneau ci-dessous.';
 
     // Enregistrer la réponse de l'IA aussi (avec le marqueur used_fallback,
     // visible seulement côté équipe WHATGO, pour suivre à quel point ce
@@ -953,7 +1004,7 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    res.json({ reply, conversationId: convoId });
+    res.json({ reply, conversationId: convoId, ui });
 
     // Fiche lead (nom + résumé du besoin) : en arrière-plan, APRÈS avoir
     // répondu au visiteur — jamais bloquant, jamais visible dans le chat.
@@ -965,6 +1016,264 @@ app.post('/api/chat', async (req, res) => {
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
+
+// ============================================================
+// 1 bis) RÉSERVATION EN LIGNE — routes publiques utilisées par le widget
+// ============================================================
+// Ces routes ne demandent pas de connexion (le visiteur n'a pas de compte),
+// mais elles ne renvoient que ce qui est nécessaire pour réserver : jamais
+// le nom ni le téléphone des autres clients, seulement des horaires libres.
+
+async function getBookableBusiness(slug) {
+  const { rows } = await query('SELECT * FROM businesses WHERE slug = $1', [slug]);
+  const business = rows[0];
+  if (!business || business.status !== 'published') return null;
+  const config = booking.parseBooking(business);
+  if (!isBookingOn(config)) return null;
+  return { business, config };
+}
+
+// Rendez-vous déjà pris qui touchent une journée (heure de Paris).
+async function loadDayBookings(businessId, dateStr, db = { query }) {
+  const dayStart = booking.parisToDate(dateStr, 0);
+  const dayEnd = booking.parisToDate(booking.addDays(dateStr, 1), 0);
+  const { rows } = await db.query(
+    `SELECT start_at, end_at FROM bookings
+     WHERE business_id = $1 AND status = 'confirme' AND start_at < $3 AND end_at > $2`,
+    [businessId, dayStart, dayEnd]
+  );
+  return rows.map((r) => ({ start: new Date(r.start_at), end: new Date(r.end_at) }));
+}
+
+function isValidDateStr(v) {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+
+app.get('/api/booking/:slug/config', async (req, res) => {
+  try {
+    const found = await getBookableBusiness(req.params.slug);
+    if (!found) return res.json({ enabled: false });
+    res.json({
+      enabled: true,
+      services: found.config.services.map((s) => ({ id: s.id, name: s.name, duration: s.duration, price: s.price })),
+    });
+  } catch (err) {
+    console.error('Erreur /api/booking/config:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Prochains jours ouverts avec au moins un créneau libre pour la prestation.
+app.get('/api/booking/:slug/days', async (req, res) => {
+  try {
+    if (isRateLimited(`booking-read:${clientIp(req)}`, 60, 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de requêtes, patientez une minute.' });
+    }
+    const found = await getBookableBusiness(req.params.slug);
+    if (!found) return res.status(404).json({ error: 'Réservation indisponible.' });
+    const service = found.config.services.find((s) => s.id === req.query.service);
+    if (!service) return res.status(400).json({ error: 'Prestation inconnue.' });
+
+    const today = booking.dateToParis(new Date()).dateStr;
+    const lastDay = booking.addDays(today, found.config.maxDaysAhead);
+    const { rows } = await query(
+      `SELECT start_at, end_at FROM bookings
+       WHERE business_id = $1 AND status = 'confirme' AND end_at > NOW() AND start_at < $2`,
+      [found.business.id, booking.parisToDate(booking.addDays(lastDay, 1), 0)]
+    );
+    const existing = rows.map((r) => ({ start: new Date(r.start_at), end: new Date(r.end_at) }));
+
+    // On s'arrête aux 14 premiers jours qui ont de la place : largement
+    // assez pour choisir, et la liste reste lisible dans le widget.
+    const days = [];
+    for (let i = 0; i <= found.config.maxDaysAhead && days.length < 14; i++) {
+      const dateStr = booking.addDays(today, i);
+      const count = booking.slotsForDay(found.config, dateStr, service.duration, existing).length;
+      if (count) days.push({ date: dateStr, slots: count });
+    }
+    res.json({ days });
+  } catch (err) {
+    console.error('Erreur /api/booking/days:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.get('/api/booking/:slug/slots', async (req, res) => {
+  try {
+    if (isRateLimited(`booking-read:${clientIp(req)}`, 60, 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de requêtes, patientez une minute.' });
+    }
+    const found = await getBookableBusiness(req.params.slug);
+    if (!found) return res.status(404).json({ error: 'Réservation indisponible.' });
+    const service = found.config.services.find((s) => s.id === req.query.service);
+    if (!service || !isValidDateStr(req.query.date)) return res.status(400).json({ error: 'Demande invalide.' });
+
+    const existing = await loadDayBookings(found.business.id, req.query.date);
+    const slots = booking.slotsForDay(found.config, req.query.date, service.duration, existing);
+    res.json({ slots: slots.map((s) => s.time) });
+  } catch (err) {
+    console.error('Erreur /api/booking/slots:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Le visiteur confirme son rendez-vous depuis le widget.
+app.post('/api/booking/:slug', async (req, res) => {
+  const db = await pool.connect();
+  try {
+    if (isRateLimited(`booking-write:${clientIp(req)}`, 5, 10 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de réservations envoyées, réessayez un peu plus tard.' });
+    }
+    const found = await getBookableBusiness(req.params.slug);
+    if (!found) return res.status(404).json({ error: 'Réservation indisponible.' });
+    const { business, config } = found;
+
+    const body = req.body || {};
+    const service = config.services.find((s) => s.id === body.serviceId);
+    const name = String(body.name || '').trim().slice(0, 120);
+    const phone = String(body.phone || '').trim().slice(0, 40);
+    const email = String(body.email || '').trim().slice(0, 200);
+    const minutes = booking.hhmmToMinutes(body.time);
+
+    if (!service || !isValidDateStr(body.date) || minutes === null) {
+      return res.status(400).json({ error: 'Créneau invalide.' });
+    }
+    if (!name) return res.status(400).json({ error: 'Merci d\'indiquer votre nom.' });
+    if (!extractPhone(phone) && !extractEmail(email)) {
+      return res.status(400).json({ error: 'Merci d\'indiquer un numéro de téléphone valide.' });
+    }
+    if (email && !extractEmail(email)) {
+      return res.status(400).json({ error: 'Adresse email invalide.' });
+    }
+
+    const start = booking.parisToDate(body.date, minutes);
+    const end = new Date(start.getTime() + service.duration * 60000);
+    const label = booking.formatSlotLabel(start);
+
+    // Verrou par entreprise le temps de revérifier et d'enregistrer : deux
+    // visiteurs qui cliquent sur le même dernier créneau à la même seconde
+    // ne peuvent pas le réserver tous les deux.
+    await db.query('BEGIN');
+    await db.query('SELECT pg_advisory_xact_lock($1)', [business.id]);
+    const existing = await loadDayBookings(business.id, body.date, db);
+    const stillFree = booking.slotsForDay(config, body.date, service.duration, existing)
+      .some((s) => s.time === booking.minutesToHHMM(minutes));
+    if (!stillFree) {
+      await db.query('ROLLBACK');
+      return res.status(409).json({ error: 'Désolé, ce créneau n\'est plus disponible. Choisissez-en un autre.' });
+    }
+
+    // Conversation : celle du chat en cours si le visiteur a déjà écrit,
+    // sinon on en crée une (réservation directe sans message).
+    let convoId = Number(body.conversationId) || null;
+    if (convoId) {
+      const { rows: c } = await db.query('SELECT id FROM conversations WHERE id = $1 AND business_id = $2', [convoId, business.id]);
+      if (!c[0]) convoId = null;
+      else await db.query('UPDATE conversations SET visitor_label = $1 WHERE id = $2', [name, convoId]);
+    }
+    if (!convoId) {
+      const { rows: c } = await db.query(
+        'INSERT INTO conversations (business_id, visitor_label) VALUES ($1, $2) RETURNING id',
+        [business.id, name || 'Visiteur anonyme']
+      );
+      convoId = c[0].id;
+    }
+
+    // Lead : on complète celui de la conversation s'il existe (sans jamais
+    // écraser un email/téléphone/nom déjà connu), sinon on le crée.
+    const summary = `RDV réservé : ${service.name}, ${label}`;
+    const { rows: leadRows } = await db.query(
+      'SELECT * FROM leads WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1', [convoId]
+    );
+    let leadId;
+    const cleanPhone = extractPhone(phone) || phone || null;
+    const cleanEmail = extractEmail(email) || null;
+    if (leadRows[0]) {
+      const l = leadRows[0];
+      leadId = l.id;
+      await db.query(
+        `UPDATE leads SET name = COALESCE(name, $1), phone = COALESCE(phone, $2), email = COALESCE(email, $3),
+           status = 'rdv_pris', appointment_at = $4, summary = $5, score = GREATEST(score, 80), updated_at = NOW()
+         WHERE id = $6`,
+        [name, cleanPhone, cleanEmail, start, summary, l.id]
+      );
+    } else {
+      const { rows: inserted } = await db.query(
+        `INSERT INTO leads (business_id, conversation_id, email, phone, name, message, summary, score, status, appointment_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 80, 'rdv_pris', $8) RETURNING id`,
+        [business.id, convoId, cleanEmail, cleanPhone, name, summary, summary, start]
+      );
+      leadId = inserted[0].id;
+    }
+
+    const { rows: bookingRows } = await db.query(
+      `INSERT INTO bookings (business_id, conversation_id, lead_id, service_name, duration, price, start_at, end_at,
+                             customer_name, phone, email, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'chat') RETURNING id`,
+      [business.id, convoId, leadId, service.name, service.duration, service.price, start, end, name, cleanPhone, cleanEmail]
+    );
+
+    const confirmation = `✅ C'est réservé ! ${service.name}, ${label}. À bientôt${name ? ', ' + name.split(' ')[0] : ''} !`;
+    await db.query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)', [convoId, 'user', `Réservation : ${service.name}, ${label}`]);
+    await db.query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)', [convoId, 'assistant', confirmation]);
+    await db.query('UPDATE conversations SET rdv_offered = true, appointment_at = $1 WHERE id = $2', [start, convoId]);
+    await db.query('COMMIT');
+
+    res.json({ ok: true, bookingId: bookingRows[0].id, conversationId: convoId, label, confirmation });
+
+    // Après la réponse : webhook (Make/CRM) et email de confirmation au
+    // visiteur. Jamais bloquant pour la réservation elle-même.
+    sendLeadToWebhook(business, {
+      type: 'booking',
+      business: business.name,
+      slug: business.slug,
+      conversationId: convoId,
+      name,
+      email: cleanEmail || '',
+      phone: cleanPhone || '',
+      service: service.name,
+      appointment: start.toISOString(),
+      appointmentLabel: label,
+      date: new Date().toISOString(),
+    });
+    if (cleanEmail) {
+      sendBookingConfirmationEmail(business, cleanEmail, name, service, label)
+        .catch((e) => console.error('Email confirmation RDV:', e.message));
+    }
+  } catch (err) {
+    try { await db.query('ROLLBACK'); } catch (e) { /* déjà annulé */ }
+    console.error('Erreur POST /api/booking:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur interne du serveur.' });
+  } finally {
+    db.release();
+  }
+});
+
+function escapeHtmlText(s) {
+  return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function sendBookingConfirmationEmail(business, toEmail, name, service, label) {
+  if (!RESEND_API_KEY) {
+    console.warn(`RESEND_API_KEY non configurée : confirmation de RDV non envoyée à ${toEmail}.`);
+    return;
+  }
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: RESEND_FROM,
+      to: [toEmail],
+      subject: `Votre rendez-vous chez ${business.name} est confirmé`,
+      html: `<p>Bonjour ${escapeHtmlText(name)},</p>
+             <p>Votre rendez-vous chez <b>${escapeHtmlText(business.name)}</b> est confirmé :</p>
+             <p><b>${escapeHtmlText(service.name)}</b> — ${escapeHtmlText(label)}${service.price ? ` (${escapeHtmlText(service.price)})` : ''}</p>
+             <p>Pour modifier ou annuler, répondez simplement à ce message ou contactez directement l'établissement.</p>
+             <p>À bientôt !</p>`,
+    }),
+  });
+  if (!response.ok) console.error(`Erreur email RDV (HTTP ${response.status}):`, await response.text());
+}
 
 // ============================================================
 // 2) CONNEXION — un employé d'une entreprise, OU un super-admin WHATGO
@@ -1178,7 +1487,8 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
   try {
     const { rows: leads } = await query(`
       SELECT id, email, phone, message, score, status, conversation_id, created_at, appointment_at,
-             name, summary, notes
+             name, summary, notes,
+             EXISTS (SELECT 1 FROM bookings b WHERE b.lead_id = leads.id) AS has_booking
       FROM leads
       WHERE business_id = $1
       ORDER BY created_at DESC
@@ -1197,6 +1507,7 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
       name: l.name || '',
       summary: l.summary || '',
       notes: l.notes || '',
+      hasBooking: !!l.has_booking, // RDV réservé en ligne : déjà affiché dans l'agenda
     })));
   } catch (err) {
     console.error('Erreur /api/dashboard/leads:', err);
@@ -1376,6 +1687,121 @@ app.get('/api/dashboard/stats', requireAuth, requireRole(['admin', 'lecture']), 
     });
   } catch (err) {
     console.error('Erreur /api/dashboard/stats:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// ============================================================
+// Page "Rendez-vous" : réglages de réservation + agenda WHATGO
+// ============================================================
+app.get('/api/dashboard/booking-settings', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Entreprise introuvable.' });
+    res.json(booking.parseBooking(rows[0]));
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/booking-settings:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.put('/api/dashboard/booking-settings', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (body.hours && typeof body.hours === 'object') {
+      for (let i = 0; i < 7; i++) {
+        if (!booking.isValidRanges(body.hours[i])) {
+          return res.status(400).json({
+            error: `Horaires du ${booking.WEEKDAYS[i]} invalides. Format attendu : 09:00-12:00, 14:00-19:00 (ou vide si fermé).`,
+          });
+        }
+      }
+    }
+    const config = booking.sanitizeBooking(body);
+    if (config.enabled && !config.services.length) {
+      return res.status(400).json({ error: 'Ajoutez au moins une prestation avant d\'activer la réservation en ligne.' });
+    }
+    await query('UPDATE businesses SET booking = $1 WHERE id = $2', [JSON.stringify(config), req.user.businessId]);
+    res.json({ ok: true, settings: config });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/booking-settings:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Agenda : rendez-vous à venir (et ceux du jour déjà passés), du plus proche au plus lointain.
+app.get('/api/dashboard/bookings', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const todayStart = booking.parisToDate(booking.dateToParis(new Date()).dateStr, 0);
+    const { rows } = await query(
+      `SELECT * FROM bookings WHERE business_id = $1 AND start_at >= $2 ORDER BY start_at ASC LIMIT 300`,
+      [req.user.businessId, todayStart]
+    );
+    res.json(rows.map((b) => ({
+      id: b.id,
+      service: b.service_name,
+      duration: b.duration,
+      price: b.price || '',
+      start: b.start_at,
+      end: b.end_at,
+      day: booking.dateToParis(new Date(b.start_at)).dateStr,
+      time: booking.minutesToHHMM(booking.dateToParis(new Date(b.start_at)).minutes),
+      name: b.customer_name || '',
+      phone: b.phone || '',
+      email: b.email || '',
+      notes: b.notes || '',
+      status: b.status,
+      source: b.source,
+      conversationId: b.conversation_id,
+      leadId: b.lead_id,
+    })));
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/bookings:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Ajout manuel (RDV pris par téléphone ou au comptoir), pour que le bot ne
+// propose jamais ce créneau à quelqu'un d'autre.
+app.post('/api/dashboard/bookings', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    const config = booking.parseBooking(rows[0]);
+    const service = config.services.find((s) => s.id === body.serviceId);
+    const serviceName = service ? service.name : String(body.serviceName || '').trim().slice(0, 80);
+    const duration = service ? service.duration : Math.max(5, Math.min(600, Math.round(Number(body.duration)) || 30));
+    const minutes = booking.hhmmToMinutes(body.time);
+    if (!serviceName || !isValidDateStr(body.date) || minutes === null) {
+      return res.status(400).json({ error: 'Prestation, date et heure obligatoires.' });
+    }
+    const start = booking.parisToDate(body.date, minutes);
+    const end = new Date(start.getTime() + duration * 60000);
+    const { rows: inserted } = await query(
+      `INSERT INTO bookings (business_id, service_name, duration, price, start_at, end_at, customer_name, phone, email, notes, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'manuel') RETURNING id`,
+      [req.user.businessId, serviceName, duration, service ? service.price : '', start, end,
+        String(body.name || '').trim().slice(0, 120) || null, String(body.phone || '').trim().slice(0, 40) || null,
+        String(body.email || '').trim().slice(0, 200) || null, String(body.notes || '').trim().slice(0, 1000) || null]
+    );
+    res.json({ ok: true, id: inserted[0].id });
+  } catch (err) {
+    console.error('Erreur POST /api/dashboard/bookings:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.put('/api/dashboard/bookings/:id/status', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const status = req.body && req.body.status;
+    if (!['confirme', 'annule'].includes(status)) return res.status(400).json({ error: 'Statut invalide.' });
+    const { rows } = await query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
+    const b = rows[0];
+    if (!b || b.business_id !== req.user.businessId) return res.status(404).json({ error: 'Rendez-vous introuvable.' });
+    await query('UPDATE bookings SET status = $1 WHERE id = $2', [status, b.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/bookings/:id/status:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
@@ -1823,6 +2249,92 @@ TON RÔLE :
 }
 
 // ============================================================
+// AUTO-CRÉATION : client de démonstration "Salon Élégance" (coiffure)
+// ============================================================
+// Sert aux rendez-vous commerciaux : page vitrine /demo-salon.html avec le
+// widget, et un compte dashboard pour montrer l'agenda. Créé une seule fois ;
+// ensuite il se modifie depuis son dashboard comme un vrai client.
+// Mot de passe : variable DEMO_PASSWORD sur Render (sinon valeur par défaut).
+const DEMO_SLUG = 'salon-demo';
+
+async function ensureDemoSalon() {
+  const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [DEMO_SLUG]);
+  if (rows[0]) {
+    console.log('ℹ️  Client de démo "Salon Élégance" déjà présent.');
+    return;
+  }
+
+  const instructions = [
+    "Salon Élégance est un salon de coiffure mixte situé 12 rue des Lilas, 69003 Lyon (métro Saxe-Gambetta).",
+    "Équipe de 2 coiffeuses expérimentées, spécialistes des couleurs et des balayages. Produits professionnels.",
+    "Paiement par carte, espèces ou chèque. Pas d'acompte demandé à la réservation.",
+    "Annulation gratuite jusqu'à 24h avant le rendez-vous, par téléphone au 04 78 00 00 00.",
+    "Toujours vouvoyer le client, ton chaleureux et élégant.",
+  ].join('\n');
+
+  const config = booking.sanitizeBooking({
+    enabled: true,
+    services: [
+      { id: 'coupe-f', name: 'Coupe femme + brushing', duration: 60, price: '45 €' },
+      { id: 'coupe-h', name: 'Coupe homme', duration: 30, price: '25 €' },
+      { id: 'brushing', name: 'Brushing', duration: 30, price: '28 €' },
+      { id: 'couleur', name: 'Couleur + brushing', duration: 90, price: '75 €' },
+      { id: 'balayage', name: 'Balayage + brushing', duration: 120, price: '110 €' },
+      { id: 'enfant', name: 'Coupe enfant (-12 ans)', duration: 30, price: '18 €' },
+    ],
+    hours: { 0: '', 1: '', 2: '09:00-19:00', 3: '09:00-19:00', 4: '09:00-19:00', 5: '09:00-20:00', 6: '09:00-18:00' },
+    capacity: 2,
+    slotStep: 30,
+    minNoticeHours: 2,
+    maxDaysAhead: 30,
+  });
+
+  const business = {
+    name: 'Salon Élégance', sector: 'Salon de coiffure', instructions,
+    faq: '[]', intro: '', pricing: '', hours: '', qualification: '{}',
+  };
+  const prompt = buildSystemPrompt(business);
+
+  const { rows: inserted } = await query(
+    `INSERT INTO businesses (slug, name, system_prompt, status, sector, instructions, booking)
+     VALUES ($1, $2, $3, 'published', $4, $5, $6) RETURNING id`,
+    [DEMO_SLUG, business.name, prompt, business.sector, instructions, JSON.stringify(config)]
+  );
+  const businessId = inserted[0].id;
+
+  const email = process.env.DEMO_EMAIL || 'demo@whatgo.ai';
+  const password = process.env.DEMO_PASSWORD || 'demo-salon-2026';
+  const hash = await hashPassword(password);
+  await query(
+    `INSERT INTO users (business_id, email, password_hash, role) VALUES ($1, $2, $3, 'admin')
+     ON CONFLICT (email) DO NOTHING`,
+    [businessId, email, hash]
+  );
+
+  // Quelques rendez-vous déjà pris, pour que l'agenda de démo ne soit pas vide.
+  const today = booking.dateToParis(new Date()).dateStr;
+  const samples = [
+    [1, 600, 'Coupe femme + brushing', 60, '45 €', 'Julie Martin', '06 12 34 56 78'],
+    [1, 840, 'Couleur + brushing', 90, '75 €', 'Sophie Bernard', '06 98 76 54 32'],
+    [2, 660, 'Coupe homme', 30, '25 €', 'Karim Benali', '07 11 22 33 44'],
+    [3, 570, 'Balayage + brushing', 120, '110 €', 'Claire Dubois', '06 55 44 33 22'],
+  ];
+  for (const [dayOffset, minutes, service, duration, price, name, phone] of samples) {
+    let day = booking.addDays(today, dayOffset);
+    // On décale sur le prochain jour ouvert si besoin.
+    for (let i = 0; i < 7 && !config.hours[booking.weekdayOf(day)]; i++) day = booking.addDays(day, 1);
+    const start = booking.parisToDate(day, minutes);
+    await query(
+      `INSERT INTO bookings (business_id, service_name, duration, price, start_at, end_at, customer_name, phone, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manuel')`,
+      [businessId, service, duration, price, start, new Date(start.getTime() + duration * 60000), name, phone]
+    );
+  }
+
+  console.log(`✅ Client de démo "Salon Élégance" créé (${email}) — page vitrine : /demo-salon.html`);
+}
+
+// ============================================================
 // AUTO-CRÉATION : compte super-admin par défaut pour l'équipe WHATGO
 // (identifiants personnalisables via variables d'environnement Render)
 // ============================================================
@@ -1852,6 +2364,7 @@ async function start() {
     await initDb();
     await ensureWhatgoBusiness();
     await ensureSuperAdmin();
+    await ensureDemoSalon();
     app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT} (Gemini + tableau de bord)`));
   } catch (err) {
     console.error('❌ Impossible de démarrer le serveur (problème de connexion à la base ?) :', err);

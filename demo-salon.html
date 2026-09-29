@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Salon Élégance — Coiffure à Lyon</title>
+<meta name="robots" content="noindex, nofollow" />
+<!-- Page de DÉMONSTRATION WHATGO : établissement fictif, sert à montrer le
+     chatbot avec prise de rendez-vous en rendez-vous commercial. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#221C1A; --ink-soft:#6B605B; --cream:#FBF7F3; --sand:#F1E8DF; --rose:#B97A63; --rose-deep:#8F5643; --line:#E6DAD0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--cream);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+  .demo-banner{background:var(--ink);color:#F1E8DF;font-size:.78rem;text-align:center;padding:7px 16px;letter-spacing:.02em}
+  .demo-banner b{color:#E8B9A6}
+  header{position:sticky;top:0;z-index:10;background:rgba(251,247,243,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;height:68px;gap:16px}
+  .logo{font-family:'Cormorant Garamond',serif;font-size:1.65rem;font-weight:700;letter-spacing:.01em}
+  .logo span{color:var(--rose)}
+  nav{display:flex;gap:26px;font-size:.9rem;color:var(--ink-soft)}
+  nav a:hover{color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;border-radius:999px;font:600 .92rem 'Inter',sans-serif;padding:12px 22px;transition:transform .15s,background .15s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn--dark{background:var(--ink);color:#fff}
+  .btn--rose{background:var(--rose);color:#fff}
+  .btn--rose:hover{background:var(--rose-deep)}
+  .btn--ghost{background:transparent;border:1.5px solid var(--ink);color:var(--ink)}
+  .hero{padding:72px 0 64px}
+  .hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
+  .eyebrow{font-size:.78rem;letter-spacing:.18em;text-transform:uppercase;color:var(--rose-deep);font-weight:600;margin-bottom:14px}
+  h1{font-family:'Cormorant Garamond',serif;font-size:clamp(2.6rem,6vw,4.1rem);line-height:1.02;font-weight:600;margin-bottom:18px}
+  h1 em{font-style:italic;color:var(--rose)}
+  .hero p{font-size:1.05rem;color:var(--ink-soft);max-width:46ch;margin-bottom:28px}
+  .hero__cta{display:flex;gap:12px;flex-wrap:wrap}
+  .hero__note{margin-top:18px;font-size:.84rem;color:var(--ink-soft)}
+  .visual{aspect-ratio:4/5;border-radius:220px 220px 28px 28px;background:
+      radial-gradient(circle at 30% 25%,rgba(255,255,255,.55),transparent 45%),
+      linear-gradient(160deg,#E7C9B8 0%,#C9937C 45%,#8F5643 100%);position:relative;overflow:hidden;box-shadow:0 30px 60px rgba(143,86,67,.25)}
+  .visual svg{position:absolute;inset:0;width:100%;height:100%}
+  .badge{position:absolute;left:-18px;bottom:36px;background:#fff;border-radius:18px;padding:14px 16px;box-shadow:0 18px 40px rgba(34,28,26,.14);font-size:.82rem}
+  .badge b{display:block;font-size:1.05rem;font-family:'Cormorant Garamond',serif}
+  section{padding:64px 0}
+  h2{font-family:'Cormorant Garamond',serif;font-size:clamp(2rem,4vw,2.6rem);font-weight:600;margin-bottom:8px}
+  .lead{color:var(--ink-soft);margin-bottom:34px;max-width:60ch}
+  .services{background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:0 48px}
+  .svc{display:flex;align-items:baseline;gap:12px;padding:18px 0;border-bottom:1px dashed var(--line)}
+  .svc h3{font-size:1rem;font-weight:600}
+  .svc small{display:block;color:var(--ink-soft);font-size:.82rem}
+  .svc .dots{flex:1;border-bottom:1px dotted #CDBFB4;transform:translateY(-4px)}
+  .svc .price{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:700;color:var(--rose-deep)}
+  .info .wrap{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+  .card{background:var(--sand);border-radius:24px;padding:30px}
+  .hours li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(34,28,26,.08);font-size:.95rem;list-style:none}
+  .hours li span:last-child{color:var(--ink-soft)}
+  .closed{opacity:.55}
+  footer{padding:34px 0;color:var(--ink-soft);font-size:.82rem;border-top:1px solid var(--line)}
+  footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  @media (max-width:820px){
+    nav{display:none}
+    .hero{padding:44px 0}
+    .hero .wrap,.info .wrap,.grid{grid-template-columns:1fr}
+    .visual{max-width:340px;margin:0 auto;width:100%}
+    .badge{left:8px}
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-banner">Site de <b>démonstration</b> — établissement fictif. Essayez l'assistant en bas à droite : il prend de vrais rendez-vous dans l'agenda de démo.</div>
+
+<header>
+  <div class="wrap">
+    <a href="#" class="logo">Salon <span>Élégance</span></a>
+    <nav>
+      <a href="#prestations">Prestations</a>
+      <a href="#infos">Horaires &amp; accès</a>
+    </nav>
+    <button class="btn btn--dark" type="button" onclick="WHATGO.book()">Réserver</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">Coiffure mixte · Lyon 3e</p>
+        <h1>Votre coiffure,<br><em>sublimée</em> en toute simplicité.</h1>
+        <p>Coupes, couleurs et balayages sur mesure, avec des produits professionnels. Réservez votre rendez-vous en ligne en moins d'une minute, 7j/7.</p>
+        <div class="hero__cta">
+          <button class="btn btn--rose" type="button" onclick="WHATGO.book()">Prendre rendez-vous</button>
+          <a class="btn btn--ghost" href="#prestations">Voir les tarifs</a>
+        </div>
+        <p class="hero__note">Annulation gratuite jusqu'à 24h avant · Sans acompte</p>
+      </div>
+      <div style="position:relative">
+        <div class="visual" aria-hidden="true">
+          <svg viewBox="0 0 400 500" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.4">
+            <path d="M120 470 C 110 360, 150 300, 200 290 C 250 300, 290 360, 280 470"/>
+            <circle cx="200" cy="215" r="62"/>
+            <path d="M138 205 C 130 120, 190 95, 230 112 C 280 130, 290 190, 262 240 C 300 250, 310 330, 290 380"/>
+            <path d="M150 230 C 120 280, 118 330, 140 380"/>
+            <path d="M60 80 C 110 60, 150 70, 180 40"/>
+            <path d="M300 60 C 330 90, 350 120, 345 160"/>
+          </svg>
+        </div>
+        <div class="badge"><b>Réservation 24h/24</b>Directement dans le chat</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="services" id="prestations">
+    <div class="wrap">
+      <h2>Prestations &amp; tarifs</h2>
+      <p class="lead">Tous nos tarifs incluent le shampoing et le diagnostic personnalisé.</p>
+      <div class="grid">
+        <div class="svc"><div><h3>Coupe femme + brushing</h3><small>1 h</small></div><span class="dots"></span><span class="price">45 €</span></div>
+        <div class="svc"><div><h3>Coupe homme</h3><small>30 min</small></div><span class="dots"></span><span class="price">25 €</span></div>
+        <div class="svc"><div><h3>Brushing</h3><small>30 min</small></div><span class="dots"></span><span class="price">28 €</span></div>
+        <div class="svc"><div><h3>Couleur + brushing</h3><small>1 h 30</small></div><span class="dots"></span><span class="price">75 €</span></div>
+        <div class="svc"><div><h3>Balayage + brushing</h3><small>2 h</small></div><span class="dots"></span><span class="price">110 €</span></div>
+        <div class="svc"><div><h3>Coupe enfant (-12 ans)</h3><small>30 min</small></div><span class="dots"></span><span class="price">18 €</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="info" id="infos">
+    <div class="wrap">
+      <div class="card">
+        <h2>Horaires</h2>
+        <ul class="hours">
+          <li class="closed"><span>Lundi</span><span>Fermé</span></li>
+          <li><span>Mardi</span><span>9h – 19h</span></li>
+          <li><span>Mercredi</span><span>9h – 19h</span></li>
+          <li><span>Jeudi</span><span>9h – 19h</span></li>
+          <li><span>Vendredi</span><span>9h – 20h</span></li>
+          <li><span>Samedi</span><span>9h – 18h</span></li>
+          <li class="closed"><span>Dimanche</span><span>Fermé</span></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Nous trouver</h2>
+        <p class="lead">12 rue des Lilas, 69003 Lyon<br>Métro Saxe-Gambetta (lignes B et D)<br>04 78 00 00 00</p>
+        <button class="btn btn--rose" type="button" onclick="WHATGO.book()">Réserver en ligne</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© Salon Élégance — établissement fictif de démonstration</span>
+    <span>Assistant et réservation par WHATGO AI</span>
+  </div>
+</footer>
+
+<script
+  src="/widget.js"
+  data-server="/api/chat"
+  data-business="salon-demo"
+  data-name="Salon Élégance"
+  data-subtitle="Réservation en ligne"
+  data-color="#B97A63"
+  data-welcome="Bonjour et bienvenue chez Salon Élégance ! Je peux vous renseigner ou réserver votre rendez-vous."
+  data-nudge="false"
+></script>
+</body>
+</html>
