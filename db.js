@@ -188,6 +188,60 @@ async function initDb() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS bookings_business_start_idx ON bookings (business_id, start_at)`);
 
+  // ------------------------------------------------------------
+  // E-commerce : catalogue produits, commandes (suivi) et événements du
+  // chat (produits recommandés, ajouts au panier, suivis de commande).
+  // ------------------------------------------------------------
+  await query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id           SERIAL PRIMARY KEY,
+      business_id  INTEGER NOT NULL REFERENCES businesses(id),
+      name         TEXT NOT NULL,
+      description  TEXT DEFAULT '',
+      category     TEXT DEFAULT '',
+      price_cents  INTEGER NOT NULL DEFAULT 0,
+      variants     TEXT DEFAULT '',
+      stock        INTEGER,
+      image_url    TEXT DEFAULT '',
+      product_url  TEXT DEFAULT '',
+      active       BOOLEAN NOT NULL DEFAULT true,
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS products_business_idx ON products (business_id)`);
+
+  // Commandes : pour la démo elles sont créées automatiquement ; pour un
+  // vrai client elles viendront de sa boutique (Shopify, WooCommerce…).
+  await query(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id            SERIAL PRIMARY KEY,
+      business_id   INTEGER NOT NULL REFERENCES businesses(id),
+      order_number  TEXT NOT NULL,
+      email         TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'en_preparation',
+      carrier       TEXT DEFAULT '',
+      tracking_url  TEXT DEFAULT '',
+      eta           TEXT DEFAULT '',
+      items         TEXT DEFAULT '',
+      total_cents   INTEGER DEFAULT 0,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS orders_business_number_idx ON orders (business_id, order_number)`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_events (
+      id              SERIAL PRIMARY KEY,
+      business_id     INTEGER NOT NULL REFERENCES businesses(id),
+      conversation_id INTEGER,
+      type            TEXT NOT NULL,
+      product_id      INTEGER,
+      detail          TEXT DEFAULT '',
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS chat_events_business_idx ON chat_events (business_id, created_at)`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 

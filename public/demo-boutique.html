@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maison Verte — Plantes & déco</title>
+<meta name="robots" content="noindex, nofollow" />
+<!-- Page de DÉMONSTRATION WHATGO : boutique fictive, sert à montrer le
+     chatbot e-commerce (conseil produit, ajout au panier, suivi de commande).
+     Le catalogue est chargé depuis le tableau de bord (page Catalogue). -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{ --ink:#1D2A22; --soft:#5E6B62; --cream:#F7F4EE; --paper:#FFFFFF; --green:#2F6B4A; --green-2:#3F8A60; --sage:#E4ECE2; --line:#E4DED3; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--cream);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;cursor:pointer}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 20px}
+  .demo-banner{background:var(--ink);color:#E9EFE7;font-size:.78rem;text-align:center;padding:8px 16px;line-height:1.45}
+  .demo-banner b{color:#B9E0C4}
+  header{position:sticky;top:0;z-index:20;background:rgba(247,244,238,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;height:66px;gap:16px}
+  .logo{font-family:'Fraunces',Georgia,serif;font-size:1.5rem;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+  .logo i{width:26px;height:26px;border-radius:50% 50% 50% 4px;background:var(--green);display:inline-block;transform:rotate(-45deg)}
+  nav{display:flex;gap:24px;font-size:.9rem;color:var(--soft)}
+  nav a:hover{color:var(--ink)}
+  .cartbtn{position:relative;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:9px 16px;font-weight:600;font-size:.88rem}
+  .cartbtn svg{width:18px;height:18px}
+  .cartbtn .n{min-width:20px;height:20px;border-radius:999px;background:var(--green);color:#fff;font-size:.72rem;display:grid;place-items:center;padding:0 6px}
+  .cartbtn.bump{animation:bump .4s}
+  @keyframes bump{50%{transform:scale(1.08)}}
+  .hero{padding:56px 0 40px}
+  .hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+  .eyebrow{font-size:.76rem;letter-spacing:.16em;text-transform:uppercase;color:var(--green);font-weight:700;margin-bottom:12px}
+  h1{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:clamp(2.3rem,5.4vw,3.7rem);line-height:1.04;letter-spacing:-.02em;margin-bottom:16px}
+  h1 em{font-style:italic;color:var(--green)}
+  .hero p{color:var(--soft);font-size:1.04rem;max-width:46ch;margin-bottom:24px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:999px;padding:12px 22px;font-weight:600;font-size:.92rem}
+  .btn--green{background:var(--green);color:#fff}
+  .btn--green:hover{background:var(--green-2)}
+  .btn--ghost{border:1.5px solid var(--ink);background:transparent;color:var(--ink)}
+  .hero__cta{display:flex;gap:10px;flex-wrap:wrap}
+  .hero__img{border-radius:28px;overflow:hidden;box-shadow:0 30px 60px rgba(29,42,34,.14);aspect-ratio:4/3;background:var(--sage)}
+  .hero__img img{width:100%;height:100%;object-fit:cover;display:block}
+  .perks{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--paper)}
+  .perks .wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding-top:18px;padding-bottom:18px}
+  .perk{display:flex;gap:10px;align-items:center;font-size:.86rem;color:var(--soft)}
+  .perk b{display:block;color:var(--ink);font-size:.9rem}
+  .perk span.ic{width:38px;height:38px;border-radius:12px;background:var(--sage);display:grid;place-items:center;font-size:1.1rem;flex-shrink:0}
+  section.shop{padding:48px 0 64px}
+  .shop__head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+  h2{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:clamp(1.8rem,3.4vw,2.3rem);letter-spacing:-.01em}
+  .filters{display:flex;gap:8px;flex-wrap:wrap}
+  .filter{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:7px 14px;font-size:.82rem;font-weight:600;color:var(--soft)}
+  .filter.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:20px;overflow:hidden;display:flex;flex-direction:column}
+  .card img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:var(--sage)}
+  .card__b{padding:14px 15px 16px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .card__cat{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--green);font-weight:700}
+  .card__n{font-weight:600;font-size:.96rem;line-height:1.3}
+  .card__d{font-size:.8rem;color:var(--soft);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .card__row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:auto;padding-top:8px}
+  .card__p{font-weight:700}
+  .card select{border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:.82rem;background:#fff;color:var(--ink)}
+  .card .btn{padding:9px 14px;font-size:.82rem}
+  .out{font-size:.78rem;font-weight:700;color:#A33A2B}
+  .loading{color:var(--soft);padding:30px 0}
+  footer{border-top:1px solid var(--line);padding:30px 0;color:var(--soft);font-size:.82rem}
+  footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  /* panier */
+  .scrim{position:fixed;inset:0;background:rgba(29,42,34,.35);opacity:0;pointer-events:none;transition:opacity .2s;z-index:1000000}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:400px;max-width:100vw;background:var(--paper);z-index:1000001;transform:translateX(100%);transition:transform .25s ease;display:flex;flex-direction:column;box-shadow:-20px 0 50px rgba(0,0,0,.12)}
+  .drawer.on{transform:none}
+  .drawer__h{display:flex;justify-content:space-between;align-items:center;padding:20px 22px;border-bottom:1px solid var(--line)}
+  .drawer__h h3{font-family:'Fraunces',Georgia,serif;font-size:1.35rem;font-weight:600}
+  .x{border:none;background:none;font-size:1.5rem;line-height:1;color:var(--soft)}
+  .drawer__items{flex:1;overflow-y:auto;padding:10px 22px}
+  .ci{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+  .ci img{width:64px;height:48px;object-fit:cover;border-radius:10px;background:var(--sage)}
+  .ci b{font-size:.88rem;display:block}
+  .ci small{color:var(--soft);font-size:.76rem}
+  .qty{display:flex;align-items:center;gap:8px;margin-top:4px}
+  .qty button{width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:#fff;font-weight:700}
+  .ci .pr{font-weight:700;font-size:.9rem;text-align:right}
+  .empty{color:var(--soft);text-align:center;padding:40px 0}
+  .drawer__f{border-top:1px solid var(--line);padding:18px 22px 22px}
+  .line{display:flex;justify-content:space-between;font-size:.88rem;color:var(--soft);margin-bottom:6px}
+  .line.tot{color:var(--ink);font-weight:700;font-size:1.02rem;margin:10px 0 14px}
+  .hint{font-size:.76rem;color:var(--green);margin-bottom:10px}
+  .notice{font-size:.8rem;color:#8A5A12;background:#FFF4DE;border-radius:12px;padding:10px 12px;margin-top:10px;display:none}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:.86rem;font-weight:600;opacity:0;transition:all .25s;z-index:1000002}
+  .toast.on{opacity:1;transform:translateX(-50%)}
+  @media (max-width:980px){ .grid{grid-template-columns:repeat(3,1fr)} }
+  @media (max-width:760px){
+    nav{display:none}
+    .hero{padding:32px 0}
+    .hero .wrap{grid-template-columns:1fr}
+    .perks .wrap{grid-template-columns:1fr}
+    .grid{grid-template-columns:repeat(2,1fr);gap:12px}
+    .card__row{flex-direction:column;align-items:stretch}
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-banner">Boutique de <b>démonstration</b> (fictive). Demandez conseil à l'assistant en bas à droite — ex : « je débute, quelle plante choisir ? » — ou suivez la commande <b>1042</b> avec l'email <b>client@exemple.fr</b>.</div>
+
+<header>
+  <div class="wrap">
+    <a href="#" class="logo"><i></i>Maison Verte</a>
+    <nav>
+      <a href="#boutique">Boutique</a>
+      <a href="#boutique" data-cat="Plantes">Plantes</a>
+      <a href="#boutique" data-cat="Coffrets cadeaux">Idées cadeaux</a>
+    </nav>
+    <button class="cartbtn" id="cartBtn" type="button" aria-label="Ouvrir le panier">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 7h12l-1 13H7L6 7z" stroke-linejoin="round"/><path d="M9 7a3 3 0 016 0" stroke-linecap="round"/></svg>
+      Panier <span class="n" id="cartCount">0</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">Plantes d'intérieur · Pots · Déco</p>
+        <h1>Faites entrer<br>la <em>nature</em> chez vous.</h1>
+        <p>Des plantes choisies une à une dans notre atelier lyonnais, livrées chez vous en 48 h avec un emballage renforcé. Garantie « plante heureuse » 30 jours.</p>
+        <div class="hero__cta">
+          <a class="btn btn--green" href="#boutique">Découvrir la boutique</a>
+          <button class="btn btn--ghost" type="button" onclick="window.WHATGO && WHATGO.open()">Demander conseil</button>
+        </div>
+      </div>
+      <div class="hero__img"><img src="/demo-boutique/monstera.svg" alt="" /></div>
+    </div>
+  </section>
+
+  <div class="perks">
+    <div class="wrap">
+      <div class="perk"><span class="ic">🚚</span><div><b>Livraison offerte dès 50 €</b>Colissimo 48–72 h</div></div>
+      <div class="perk"><span class="ic">🌿</span><div><b>Garantie plante heureuse</b>Remplacée si elle dépérit sous 30 jours</div></div>
+      <div class="perk"><span class="ic">📍</span><div><b>Click &amp; collect gratuit</b>À l'atelier, rempotage offert</div></div>
+    </div>
+  </div>
+
+  <section class="shop" id="boutique">
+    <div class="wrap">
+      <div class="shop__head">
+        <h2>La boutique</h2>
+        <div class="filters" id="filters"></div>
+      </div>
+      <div class="grid" id="grid"><p class="loading">Chargement du catalogue…</p></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© Maison Verte — boutique fictive de démonstration</span>
+    <span>Assistant, conseil produit et suivi de commande par WHATGO AI</span>
+  </div>
+</footer>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Panier">
+  <div class="drawer__h"><h3>Votre panier</h3><button class="x" id="closeCart" type="button" aria-label="Fermer">×</button></div>
+  <div class="drawer__items" id="cartItems"></div>
+  <div class="drawer__f">
+    <div class="line"><span>Sous-total</span><span id="subTotal">0,00 €</span></div>
+    <div class="line"><span>Livraison</span><span id="shipping">—</span></div>
+    <p class="hint" id="freeHint"></p>
+    <div class="line tot"><span>Total</span><span id="total">0,00 €</span></div>
+    <button class="btn btn--green" style="width:100%" id="checkout" type="button">Passer commande</button>
+    <p class="notice" id="notice">Boutique de démonstration : le paiement n'est pas activé. Sur le site d'un vrai client, ce bouton mène à sa page de paiement habituelle.</p>
+  </div>
+</aside>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var SLUG = 'boutique-demo';
+  var products = [];
+  var cart = [];
+  var activeCat = '';
+  try { cart = JSON.parse(sessionStorage.getItem('mv-cart') || '[]') || []; } catch (e) { cart = []; }
+
+  function $(s) { return document.querySelector(s); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function eur(cents) { return (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }); }
+  function save() { try { sessionStorage.setItem('mv-cart', JSON.stringify(cart)); } catch (e) {} }
+
+  function toast(msg) {
+    var t = $('#toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('on'); }, 2200);
+  }
+
+  function addToCart(item) {
+    var key = item.id + '|' + (item.variant || '');
+    var found = cart.find(function (c) { return c.key === key; });
+    if (found) found.qty += 1;
+    else cart.push({ key: key, id: item.id, name: item.name, variant: item.variant || '', priceCents: item.priceCents, image: item.image, qty: 1 });
+    save(); renderCart();
+    var b = $('#cartBtn'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump');
+    toast('Ajouté au panier : ' + item.name + (item.variant ? ' (' + item.variant + ')' : ''));
+  }
+
+  // Branchement avec le chatbot WHATGO : le bouton « Ajouter au panier » des
+  // fiches produits du chat remplit ce panier.
+  window.WHATGO_onAddToCart = function (item) { addToCart(item); return true; };
+
+  function renderCart() {
+    var count = cart.reduce(function (n, c) { return n + c.qty; }, 0);
+    $('#cartCount').textContent = count;
+    var sub = cart.reduce(function (n, c) { return n + c.qty * c.priceCents; }, 0);
+    var ship = sub === 0 ? 0 : (sub >= 5000 ? 0 : 490);
+    $('#subTotal').textContent = eur(sub);
+    $('#shipping').textContent = sub === 0 ? '—' : (ship ? eur(ship) : 'Offerte');
+    $('#total').textContent = eur(sub + ship);
+    $('#freeHint').textContent = sub > 0 && sub < 5000 ? 'Plus que ' + eur(5000 - sub) + ' pour la livraison offerte 🌿' : '';
+    var box = $('#cartItems');
+    if (!cart.length) { box.innerHTML = '<p class="empty">Votre panier est vide.</p>'; return; }
+    box.innerHTML = cart.map(function (c, i) {
+      return '<div class="ci"><img src="' + esc(c.image) + '" alt=""><div><b>' + esc(c.name) + '</b>' +
+        (c.variant ? '<small>' + esc(c.variant) + '</small>' : '') +
+        '<div class="qty"><button type="button" data-i="' + i + '" data-d="-1" aria-label="Retirer un">−</button>' + c.qty +
+        '<button type="button" data-i="' + i + '" data-d="1" aria-label="Ajouter un">+</button></div></div>' +
+        '<div class="pr">' + eur(c.qty * c.priceCents) + '</div></div>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.qty button'), function (b) {
+      b.addEventListener('click', function () {
+        var c = cart[+b.dataset.i]; c.qty += +b.dataset.d;
+        if (c.qty <= 0) cart.splice(+b.dataset.i, 1);
+        save(); renderCart();
+      });
+    });
+  }
+
+  function openCart() { $('#drawer').classList.add('on'); $('#scrim').classList.add('on'); }
+  function closeCart() { $('#drawer').classList.remove('on'); $('#scrim').classList.remove('on'); $('#notice').style.display = 'none'; }
+  $('#cartBtn').addEventListener('click', openCart);
+  $('#closeCart').addEventListener('click', closeCart);
+  $('#scrim').addEventListener('click', closeCart);
+  $('#checkout').addEventListener('click', function () { $('#notice').style.display = 'block'; });
+
+  function renderFilters() {
+    var cats = [];
+    products.forEach(function (p) { if (p.category && cats.indexOf(p.category) < 0) cats.push(p.category); });
+    $('#filters').innerHTML = ['Tout'].concat(cats).map(function (c) {
+      var v = c === 'Tout' ? '' : c;
+      return '<button type="button" class="filter' + (v === activeCat ? ' on' : '') + '" data-cat="' + esc(v) + '">' + esc(c) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('.filter'), function (b) {
+      b.addEventListener('click', function () { activeCat = b.dataset.cat; renderFilters(); renderGrid(); });
+    });
+  }
+
+  function renderGrid() {
+    var list = products.filter(function (p) { return !activeCat || p.category === activeCat; });
+    $('#grid').innerHTML = list.map(function (p) {
+      var sel = p.variants.length ? '<select aria-label="Option">' + p.variants.map(function (v) { return '<option>' + esc(v) + '</option>'; }).join('') + '</select>' : '';
+      var action = p.inStock ? '<button class="btn btn--green" type="button" data-id="' + p.id + '">Ajouter</button>' : '<span class="out">Bientôt de retour</span>';
+      return '<article class="card"><img src="' + esc(p.image) + '" alt="' + esc(p.name) + '" loading="lazy">' +
+        '<div class="card__b"><span class="card__cat">' + esc(p.category) + '</span><span class="card__n">' + esc(p.name) + '</span>' +
+        '<span class="card__d">' + esc(p.description) + '</span>' + sel +
+        '<div class="card__row"><span class="card__p">' + esc(p.price) + '</span>' + action + '</div></div></article>';
+    }).join('') || '<p class="loading">Aucun produit dans cette catégorie.</p>';
+    Array.prototype.forEach.call(document.querySelectorAll('.card .btn'), function (b) {
+      b.addEventListener('click', function () {
+        var p = products.find(function (x) { return x.id === +b.dataset.id; });
+        var s = b.closest('.card').querySelector('select');
+        addToCart({ id: p.id, name: p.name, priceCents: p.priceCents, variant: s ? s.value : '', image: p.image });
+      });
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('nav a[data-cat]'), function (a) {
+    a.addEventListener('click', function () { activeCat = a.dataset.cat; renderFilters(); renderGrid(); });
+  });
+
+  fetch('/api/shop/' + SLUG + '/catalog').then(function (r) { return r.json(); }).then(function (data) {
+    products = data.products || [];
+    renderFilters(); renderGrid();
+  }).catch(function () { $('#grid').innerHTML = '<p class="loading">Catalogue indisponible pour le moment.</p>'; });
+
+  renderCart();
+})();
+</script>
+
+<script
+  src="/widget.js"
+  data-server="/api/chat"
+  data-business="boutique-demo"
+  data-name="Maison Verte"
+  data-subtitle="Conseils & suivi de commande"
+  data-color="#2F6B4A"
+  data-welcome="Bonjour ! Je suis l'assistant de Maison Verte 🌿 Je peux vous conseiller une plante, répondre sur la livraison ou suivre votre commande."
+  data-nudge="false"
+></script>
+</body>
+</html>

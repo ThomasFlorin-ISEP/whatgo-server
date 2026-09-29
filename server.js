@@ -272,6 +272,86 @@ function buildBookingInstruction(config) {
 }
 
 // ------------------------------------------------------------
+// E-commerce : catalogue produits dans les consignes de l'IA.
+// Comme pour la réservation, l'IA ne décrit jamais elle-même un prix ou un
+// stock dans les fiches : elle cite seulement les numéros des produits
+// (marqueur), et le serveur envoie au widget les vraies fiches depuis la base.
+// ------------------------------------------------------------
+const PRODUCTS_MARKER_REGEX = /\[PRODUITS?\s*:\s*([^\]]*)\]/gi;
+const ORDER_MARKER = '[SUIVI_COMMANDE]';
+const ORDER_INTENT_REGEX = /\b(suivi|suivre|colis|livr[ée]e?\s+quand|o[uù]\s+(en\s+)?est\s+ma\s+commande|num[ée]ro\s+de\s+commande|ma\s+commande)\b/i;
+
+function formatPrice(cents) {
+  return (Number(cents || 0) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+}
+
+function splitVariants(text) {
+  return String(text || '').split(',').map((v) => v.trim()).filter(Boolean).slice(0, 20);
+}
+
+// Fiche produit telle qu'envoyée au widget et à la page boutique (données
+// publiques uniquement).
+function publicProduct(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description || '',
+    category: p.category || '',
+    price: formatPrice(p.price_cents),
+    priceCents: p.price_cents,
+    variants: splitVariants(p.variants),
+    inStock: p.stock === null || p.stock === undefined ? true : p.stock > 0,
+    image: p.image_url || '',
+    url: p.product_url || '',
+  };
+}
+
+async function loadShop(businessId) {
+  const { rows: products } = await query(
+    'SELECT * FROM products WHERE business_id = $1 AND active = true ORDER BY category, name LIMIT 200',
+    [businessId]
+  );
+  const { rows: orderCount } = await query('SELECT COUNT(*)::int AS n FROM orders WHERE business_id = $1', [businessId]);
+  return { products, hasOrders: (orderCount[0] && orderCount[0].n) > 0 };
+}
+
+function buildShopInstruction(shop) {
+  let text = '';
+  if (shop.products.length) {
+    const lines = shop.products.map((p) => {
+      const variants = splitVariants(p.variants);
+      const stock = p.stock === null || p.stock === undefined ? '' : (p.stock > 0 ? ' — en stock' : ' — RUPTURE DE STOCK');
+      const desc = String(p.description || '').replace(/\s+/g, ' ').slice(0, 180);
+      return `- [ID ${p.id}] ${p.name}${p.category ? ` (${p.category})` : ''} : ${formatPrice(p.price_cents)}` +
+        `${variants.length ? ` — options : ${variants.join(', ')}` : ''}${stock}${desc ? ` — ${desc}` : ''}`;
+    });
+    text += `\n\nINFORMATIONS OFFICIELLES COMPLÉMENTAIRES (tu peux t'en servir pour répondre).\n\nCATALOGUE PRODUITS :\n${lines.join('\n')}` +
+      `\n\nRECOMMANDATION DE PRODUITS :\n` +
+      `Quand le visiteur cherche un produit, demande un conseil, veut voir ou acheter un article, réponds en 1 ou 2 phrases ` +
+      `puis termine ta réponse par ce marqueur, seul sur sa ligne, avec les numéros (ID) de 1 à 3 produits pertinents du ` +
+      `catalogue : [PRODUITS: 12, 15]. Des fiches cliquables avec photo, prix et bouton "Ajouter au panier" s'afficheront ` +
+      `automatiquement sous ta réponse : ne répète donc pas tous les détails. Ne recommande JAMAIS un produit absent du ` +
+      `catalogue, n'invente jamais de prix, et ne propose pas un produit en rupture de stock sans le signaler. ` +
+      `Si le visiteur hésite, pose UNE question pour préciser son besoin (usage, budget, taille…).`;
+  }
+  if (shop.hasOrders) {
+    text += `\n\nSUIVI DE COMMANDE :\nSi le visiteur veut savoir où en est sa commande ou sa livraison, réponds en une phrase ` +
+      `puis termine ta réponse par ce marqueur, seul sur sa ligne : ${ORDER_MARKER}\n` +
+      `Un formulaire sécurisé (numéro de commande + email) s'affichera. N'invente JAMAIS le statut d'une commande.`;
+  }
+  return text;
+}
+
+// Enregistre un événement du chat (produit recommandé, ajout au panier…).
+// Jamais bloquant : une erreur ici ne doit pas gêner le visiteur.
+function logChatEvent(businessId, conversationId, type, productId, detail) {
+  query(
+    'INSERT INTO chat_events (business_id, conversation_id, type, product_id, detail) VALUES ($1, $2, $3, $4, $5)',
+    [businessId, conversationId || null, type, productId || null, String(detail || '').slice(0, 300)]
+  ).catch((e) => console.error('Erreur chat_events:', e.message));
+}
+
+// ------------------------------------------------------------
 // Fiche lead : nom détecté + résumé du besoin généré par l'IA.
 // ------------------------------------------------------------
 // Détecte un prénom (et éventuellement un nom) quand le visiteur se présente
@@ -712,6 +792,7 @@ app.post('/api/chat', async (req, res) => {
     const qualification = parseQualification(business);
     const bookingConfig = booking.parseBooking(business);
     const bookingOn = isBookingOn(bookingConfig);
+    const shop = await loadShop(business.id);
 
     // Retrouver ou créer la conversation, pour pouvoir tout enregistrer.
     // Pour une conversation déjà existante, on regarde aussi si un
@@ -876,6 +957,7 @@ app.post('/api/chat', async (req, res) => {
       business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo
     );
     if (bookingOn) systemPromptForCall += buildBookingInstruction(bookingConfig);
+    systemPromptForCall += buildShopInstruction(shop);
     const data = await callGemini(systemPromptForCall, contents);
 
     let reply;
@@ -926,7 +1008,35 @@ app.post('/api/chat', async (req, res) => {
     if (bookingOn && (hadBookingMarker || BOOKING_INTENT_REGEX.test(lastUserMessage.content))) {
       ui = { type: 'booking' };
     }
-    if (!reply) reply = 'Avec plaisir, choisissez votre prestation et votre créneau ci-dessous.';
+
+    // Fiches produits : on ne garde que des produits réels et actifs de CE
+    // client, dans l'ordre cité par l'IA (3 maximum).
+    const citedIds = [];
+    reply = reply.replace(PRODUCTS_MARKER_REGEX, (m, list) => {
+      String(list).split(/[,;\s]+/).forEach((x) => {
+        const id = Number(String(x).replace(/\D/g, ''));
+        if (id && !citedIds.includes(id)) citedIds.push(id);
+      });
+      return '';
+    }).trim();
+    const productItems = citedIds
+      .map((id) => shop.products.find((p) => p.id === id))
+      .filter(Boolean)
+      .slice(0, 3);
+    if (productItems.length) ui = { type: 'products', items: productItems.map(publicProduct) };
+
+    // Suivi de commande : marqueur de l'IA, ou demande explicite du visiteur.
+    const hadOrderMarker = reply.includes(ORDER_MARKER);
+    reply = reply.split(ORDER_MARKER).join('').trim();
+    if (!ui && shop.hasOrders && (hadOrderMarker || ORDER_INTENT_REGEX.test(lastUserMessage.content))) {
+      ui = { type: 'order' };
+    }
+
+    if (!reply) {
+      reply = ui && ui.type === 'products' ? 'Voici ce que je vous recommande :'
+        : ui && ui.type === 'order' ? 'Indiquez votre numéro de commande et votre email ci-dessous.'
+        : 'Avec plaisir, choisissez votre prestation et votre créneau ci-dessous.';
+    }
 
     // Enregistrer la réponse de l'IA aussi (avec le marqueur used_fallback,
     // visible seulement côté équipe WHATGO, pour suivre à quel point ce
@@ -1005,6 +1115,8 @@ app.post('/api/chat', async (req, res) => {
     }
 
     res.json({ reply, conversationId: convoId, ui });
+
+    productItems.forEach((p) => logChatEvent(business.id, convoId, 'recommend', p.id, p.name));
 
     // Fiche lead (nom + résumé du besoin) : en arrière-plan, APRÈS avoir
     // répondu au visiteur — jamais bloquant, jamais visible dans le chat.
@@ -1274,6 +1386,136 @@ async function sendBookingConfirmationEmail(business, toEmail, name, service, la
   });
   if (!response.ok) console.error(`Erreur email RDV (HTTP ${response.status}):`, await response.text());
 }
+
+// ============================================================
+// 1 ter) E-COMMERCE — routes publiques utilisées par le widget et la boutique
+// ============================================================
+async function getShopBusiness(slug) {
+  const { rows } = await query('SELECT * FROM businesses WHERE slug = $1', [slug]);
+  const business = rows[0];
+  if (!business || business.status !== 'published') return null;
+  return business;
+}
+
+// Ce que le widget doit proposer (boutons rapides) pour cette entreprise.
+app.get('/api/shop/:slug/config', async (req, res) => {
+  try {
+    const business = await getShopBusiness(req.params.slug);
+    if (!business) return res.json({ enabled: false });
+    const shop = await loadShop(business.id);
+    res.json({ enabled: shop.products.length > 0, tracking: shop.hasOrders });
+  } catch (err) {
+    console.error('Erreur /api/shop/config:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Catalogue public (utilisé par la page boutique de démo).
+app.get('/api/shop/:slug/catalog', async (req, res) => {
+  try {
+    const business = await getShopBusiness(req.params.slug);
+    if (!business) return res.status(404).json({ error: 'Boutique introuvable.' });
+    const shop = await loadShop(business.id);
+    res.json({ products: shop.products.map(publicProduct) });
+  } catch (err) {
+    console.error('Erreur /api/shop/catalog:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Ajout au panier / clic sur une fiche depuis le chat : sert aux statistiques
+// du client ("ce que le chat vous a rapporté").
+app.post('/api/shop/:slug/event', async (req, res) => {
+  try {
+    if (isRateLimited(`shop-event:${clientIp(req)}`, 60, 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes.' });
+    const business = await getShopBusiness(req.params.slug);
+    if (!business) return res.status(404).json({ error: 'Boutique introuvable.' });
+    const body = req.body || {};
+    const type = ['add_to_cart', 'view_product'].includes(body.type) ? body.type : null;
+    const productId = Number(body.productId) || null;
+    if (!type || !productId) return res.status(400).json({ error: 'Événement invalide.' });
+    const { rows } = await query('SELECT id, name FROM products WHERE id = $1 AND business_id = $2', [productId, business.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Produit introuvable.' });
+
+    let convoId = Number(body.conversationId) || null;
+    if (convoId) {
+      const { rows: c } = await query('SELECT id FROM conversations WHERE id = $1 AND business_id = $2', [convoId, business.id]);
+      if (!c[0]) convoId = null;
+    }
+    const variant = String(body.variant || '').slice(0, 40);
+    logChatEvent(business.id, convoId, type, productId, rows[0].name + (variant ? ` (${variant})` : ''));
+    if (type === 'add_to_cart' && convoId) {
+      await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+        [convoId, 'user', `🛒 Ajouté au panier : ${rows[0].name}${variant ? ` (${variant})` : ''}`]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur /api/shop/event:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+const ORDER_STATUS_LABELS = {
+  en_preparation: 'En préparation',
+  expediee: 'Expédiée',
+  livree: 'Livrée',
+  annulee: 'Annulée',
+};
+
+// Suivi de commande : numéro ET email obligatoires (jamais de statut
+// révélé à quelqu'un qui ne connaît que le numéro).
+app.post('/api/shop/:slug/order-status', async (req, res) => {
+  try {
+    if (isRateLimited(`order-status:${clientIp(req)}`, 10, 10 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de tentatives, réessayez dans quelques minutes.' });
+    }
+    const business = await getShopBusiness(req.params.slug);
+    if (!business) return res.status(404).json({ error: 'Boutique introuvable.' });
+    const number = String((req.body && req.body.number) || '').replace(/[#\s]/g, '').replace(/^n°?/i, '').slice(0, 40);
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase().slice(0, 200);
+    if (!number || !extractEmail(email)) return res.status(400).json({ error: 'Numéro de commande et email obligatoires.' });
+
+    const { rows } = await query(
+      `SELECT * FROM orders WHERE business_id = $1 AND UPPER(order_number) = UPPER($2) AND LOWER(email) = $3`,
+      [business.id, number, email]
+    );
+    const order = rows[0];
+
+    let convoId = Number(req.body.conversationId) || null;
+    if (convoId) {
+      const { rows: c } = await query('SELECT id FROM conversations WHERE id = $1 AND business_id = $2', [convoId, business.id]);
+      if (!c[0]) convoId = null;
+    }
+    logChatEvent(business.id, convoId, 'order_lookup', null, order ? `${number} trouvée` : `${number} introuvable`);
+
+    if (!order) {
+      return res.status(404).json({ error: 'Aucune commande trouvée avec ce numéro et cet email. Vérifiez-les, ou contactez-nous.' });
+    }
+    const result = {
+      number: order.order_number,
+      status: order.status,
+      statusLabel: ORDER_STATUS_LABELS[order.status] || order.status,
+      carrier: order.carrier || '',
+      trackingUrl: order.tracking_url || '',
+      eta: String(order.eta || '').replace(/\{J([+-]\d+)\}/g, (m, n) => {
+        const day = booking.addDays(booking.dateToParis(new Date()).dateStr, Number(n));
+        return new Date(day + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+      }),
+      items: order.items || '',
+      total: order.total_cents ? formatPrice(order.total_cents) : '',
+    };
+    if (convoId) {
+      await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+        [convoId, 'user', `Suivi de la commande n°${order.order_number}`]);
+      await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+        [convoId, 'assistant', `Commande n°${order.order_number} : ${result.statusLabel}${result.carrier ? ` (${result.carrier})` : ''}${result.eta ? ` — ${result.eta}` : ''}`]);
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('Erreur /api/shop/order-status:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
 
 // ============================================================
 // 2) CONNEXION — un employé d'une entreprise, OU un super-admin WHATGO
@@ -1802,6 +2044,119 @@ app.put('/api/dashboard/bookings/:id/status', requireAuth, requireRole('admin'),
     res.json({ ok: true });
   } catch (err) {
     console.error('Erreur PUT /api/dashboard/bookings/:id/status:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// ============================================================
+// Page "Catalogue" : produits + ce que le chat a rapporté
+// ============================================================
+function productFromBody(body) {
+  const b = body || {};
+  const price = Number(String(b.price ?? '').replace(',', '.').replace(/[^\d.]/g, ''));
+  const stockRaw = String(b.stock ?? '').trim();
+  return {
+    name: String(b.name || '').trim().slice(0, 120),
+    description: String(b.description || '').trim().slice(0, 1000),
+    category: String(b.category || '').trim().slice(0, 60),
+    price_cents: Number.isFinite(price) ? Math.round(price * 100) : 0,
+    variants: splitVariants(b.variants).join(', '),
+    stock: stockRaw === '' ? null : Math.max(0, Math.round(Number(stockRaw)) || 0),
+    image_url: String(b.image || '').trim().slice(0, 500),
+    product_url: String(b.url || '').trim().slice(0, 500),
+  };
+}
+
+function dashboardProduct(p) {
+  return { ...publicProduct(p), stock: p.stock, variantsText: p.variants || '', priceNumber: (p.price_cents / 100).toFixed(2) };
+}
+
+app.get('/api/dashboard/products', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query(
+      'SELECT * FROM products WHERE business_id = $1 AND active = true ORDER BY category, name', [req.user.businessId]
+    );
+    res.json(rows.map(dashboardProduct));
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/products:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.post('/api/dashboard/products', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const p = productFromBody(req.body);
+    if (!p.name) return res.status(400).json({ error: 'Le nom du produit est obligatoire.' });
+    const { rows: count } = await query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1 AND active = true', [req.user.businessId]);
+    if (count[0].n >= 200) return res.status(400).json({ error: 'Limite de 200 produits atteinte.' });
+    const { rows } = await query(
+      `INSERT INTO products (business_id, name, description, category, price_cents, variants, stock, image_url, product_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [req.user.businessId, p.name, p.description, p.category, p.price_cents, p.variants, p.stock, p.image_url, p.product_url]
+    );
+    res.json({ ok: true, id: rows[0].id });
+  } catch (err) {
+    console.error('Erreur POST /api/dashboard/products:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.put('/api/dashboard/products/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { rows: found } = await query('SELECT business_id FROM products WHERE id = $1', [req.params.id]);
+    if (!found[0] || found[0].business_id !== req.user.businessId) return res.status(404).json({ error: 'Produit introuvable.' });
+    const p = productFromBody(req.body);
+    if (!p.name) return res.status(400).json({ error: 'Le nom du produit est obligatoire.' });
+    await query(
+      `UPDATE products SET name = $1, description = $2, category = $3, price_cents = $4, variants = $5, stock = $6,
+         image_url = $7, product_url = $8 WHERE id = $9`,
+      [p.name, p.description, p.category, p.price_cents, p.variants, p.stock, p.image_url, p.product_url, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/products/:id:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Suppression "douce" : le produit disparaît du catalogue et du chat, mais
+// les statistiques passées qui le mentionnent restent cohérentes.
+app.delete('/api/dashboard/products/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { rows: found } = await query('SELECT business_id FROM products WHERE id = $1', [req.params.id]);
+    if (!found[0] || found[0].business_id !== req.user.businessId) return res.status(404).json({ error: 'Produit introuvable.' });
+    await query('UPDATE products SET active = false WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur DELETE /api/dashboard/products/:id:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.get('/api/dashboard/shop-stats', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const businessId = req.user.businessId;
+    const { rows: counts } = await query(
+      `SELECT type, COUNT(*)::int AS n FROM chat_events
+       WHERE business_id = $1 AND created_at > NOW() - INTERVAL '30 days' GROUP BY type`, [businessId]
+    );
+    const byType = {};
+    counts.forEach((r) => { byType[r.type] = r.n; });
+    const { rows: top } = await query(
+      `SELECT p.name, COUNT(*)::int AS n,
+              SUM(CASE WHEN e.type = 'add_to_cart' THEN 1 ELSE 0 END)::int AS carts
+       FROM chat_events e JOIN products p ON p.id = e.product_id
+       WHERE e.business_id = $1 AND e.created_at > NOW() - INTERVAL '30 days' AND e.type IN ('recommend', 'add_to_cart')
+       GROUP BY p.name ORDER BY carts DESC, n DESC LIMIT 5`, [businessId]
+    );
+    res.json({
+      recommended: byType.recommend || 0,
+      addToCart: byType.add_to_cart || 0,
+      orderLookups: byType.order_lookup || 0,
+      top: top.map((t) => ({ name: t.name, recommended: t.n - t.carts, addToCart: t.carts })),
+    });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/shop-stats:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
@@ -2335,6 +2690,99 @@ async function ensureDemoSalon() {
 }
 
 // ============================================================
+// AUTO-CRÉATION : boutique e-commerce de démonstration "Maison Verte"
+// ============================================================
+// Plantes & déco en ligne : catalogue, recommandations produits dans le
+// chat, ajout au panier, suivi de commande. Page vitrine /demo-boutique.html,
+// compte dashboard demo-boutique@whatgo.ai (même mot de passe DEMO_PASSWORD).
+const DEMO_SHOP_SLUG = 'boutique-demo';
+
+async function ensureDemoShop() {
+  const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [DEMO_SHOP_SLUG]);
+  if (rows[0]) {
+    console.log('ℹ️  Boutique de démo "Maison Verte" déjà présente.');
+    return;
+  }
+
+  const instructions = [
+    "Maison Verte est une boutique en ligne de plantes d'intérieur, pots et objets déco, avec un atelier à Lyon.",
+    "Livraison : Colissimo en 48 à 72 h ouvrées en France métropolitaine, 4,90 € — offerte dès 50 € d'achat. Les plantes voyagent dans un emballage renforcé.",
+    "Click & collect gratuit à l'atelier (Lyon 1er), prêt sous 24 h, avec rempotage offert.",
+    "Retours : 30 jours pour les pots et accessoires non utilisés, remboursement sous 5 jours ouvrés.",
+    "Garantie « plante heureuse » 30 jours : si une plante arrive abîmée ou dépérit, elle est remplacée gratuitement sur simple photo.",
+    "Paiement sécurisé par carte bancaire ou PayPal, paiement en 3 fois sans frais dès 100 €.",
+    "Services : conseils d'entretien gratuits par email, emballage cadeau à 3 €.",
+    "Service client : contact@maison-verte.example, du lundi au vendredi de 9h à 18h.",
+    "Toujours vouvoyer le client, ton chaleureux et passionné de plantes.",
+  ].join('\n');
+
+  const business = { name: 'Maison Verte', sector: 'E-commerce — plantes & déco', instructions, faq: '[]', intro: '', pricing: '', hours: '', qualification: '{}' };
+  const { rows: inserted } = await query(
+    `INSERT INTO businesses (slug, name, system_prompt, status, sector, instructions)
+     VALUES ($1, $2, $3, 'published', $4, $5) RETURNING id`,
+    [DEMO_SHOP_SLUG, business.name, buildSystemPrompt(business), business.sector, instructions]
+  );
+  const businessId = inserted[0].id;
+
+  const email = process.env.DEMO_SHOP_EMAIL || 'demo-boutique@whatgo.ai';
+  const hash = await hashPassword(process.env.DEMO_PASSWORD || 'demo-salon-2026');
+  await query(
+    `INSERT INTO users (business_id, email, password_hash, role) VALUES ($1, $2, $3, 'admin') ON CONFLICT (email) DO NOTHING`,
+    [businessId, email, hash]
+  );
+
+  const img = (f) => `/demo-boutique/${f}.svg`;
+  const products = [
+    ['Monstera Deliciosa', 'Plantes', 3990, 'Pot de 17 cm, Pot de 21 cm', 12, 'monstera',
+      "Plante tropicale emblématique aux grandes feuilles découpées. Facile d'entretien, aime la lumière indirecte. Arrosage tous les 7 à 10 jours."],
+    ['Pothos doré', 'Plantes', 1990, '', 25, 'pothos',
+      'Plante retombante ultra-résistante, parfaite pour débuter. Supporte la faible luminosité, idéale en suspension ou sur une étagère.'],
+    ['Ficus Lyrata', 'Plantes', 5900, 'Pot de 21 cm, Pot de 27 cm', 4, 'ficus',
+      'Le « figuier lyre » aux grandes feuilles vernies. Aime la lumière vive sans soleil direct. Pièce maîtresse d\'un salon.'],
+    ['Sansevieria', 'Plantes', 2490, '', 18, 'sansevieria',
+      "Presque indestructible : un arrosage toutes les 3 semaines, tolère l'ombre. Idéale pour une chambre ou un bureau."],
+    ['Cache-pot en terracotta', 'Pots', 1800, 'Ø 14 cm, Ø 18 cm, Ø 22 cm', 30, 'terracotta',
+      'Terre cuite naturelle, fabriquée en Italie. Laisse respirer les racines.'],
+    ['Pot en céramique Sable', 'Pots', 2900, 'Ø 17 cm, Ø 21 cm', 0, 'ceramique',
+      'Céramique émaillée mate, coloris sable, avec trou de drainage et soucoupe.'],
+    ['Arrosoir en laiton 1 L', 'Accessoires', 3490, '', 9, 'arrosoir',
+      "Long bec fin pour un arrosage précis sans mouiller les feuilles. Laiton brossé qui se patine avec le temps."],
+    ['Terreau premium plantes vertes 6 L', 'Accessoires', 1290, '', 40, 'terreau',
+      "Mélange drainant enrichi en fibre de coco, spécial plantes d'intérieur."],
+    ['Bougie parfumée Figuier', 'Déco', 2200, '', 40, 'bougie',
+      'Cire végétale coulée à Lyon, 40 h de combustion, notes de figue et de bois vert.'],
+    ['Coffret « Ma première plante »', 'Coffrets cadeaux', 4900, '', 15, 'coffret',
+      "Un Pothos doré, son cache-pot en terracotta et un guide d'entretien illustré. Emballage cadeau inclus."],
+  ];
+  for (const [name, category, price, variants, stock, image, description] of products) {
+    await query(
+      `INSERT INTO products (business_id, name, description, category, price_cents, variants, stock, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [businessId, name, description, category, price, variants, stock, img(image)]
+    );
+  }
+
+  // Commandes fictives pour tester le suivi (email : client@exemple.fr).
+  // {J+2} = « dans 2 jours », recalculé à chaque consultation pour que la
+  // démo reste crédible dans le temps.
+  const orders = [
+    ['1042', 'expediee', 'Colissimo', 'https://www.laposte.fr/outils/suivre-vos-envois', 'Livraison prévue {J+2}',
+      'Monstera Deliciosa (Pot de 21 cm), Cache-pot en terracotta (Ø 22 cm)', 5790],
+    ['1043', 'en_preparation', '', '', 'Expédition sous 24 h', 'Coffret « Ma première plante »', 5390],
+    ['1038', 'livree', 'Colissimo', '', 'Livrée {J-6}', 'Sansevieria, Terreau premium plantes vertes 6 L', 4270],
+  ];
+  for (const [number, status, carrier, tracking, eta, items, total] of orders) {
+    await query(
+      `INSERT INTO orders (business_id, order_number, email, status, carrier, tracking_url, eta, items, total_cents)
+       VALUES ($1, $2, 'client@exemple.fr', $3, $4, $5, $6, $7, $8)`,
+      [businessId, number, status, carrier, tracking, eta, items, total]
+    );
+  }
+
+  console.log(`✅ Boutique de démo "Maison Verte" créée (${email}) — page vitrine : /demo-boutique.html`);
+}
+
+// ============================================================
 // AUTO-CRÉATION : compte super-admin par défaut pour l'équipe WHATGO
 // (identifiants personnalisables via variables d'environnement Render)
 // ============================================================
@@ -2365,6 +2813,7 @@ async function start() {
     await ensureWhatgoBusiness();
     await ensureSuperAdmin();
     await ensureDemoSalon();
+    await ensureDemoShop();
     app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT} (Gemini + tableau de bord)`));
   } catch (err) {
     console.error('❌ Impossible de démarrer le serveur (problème de connexion à la base ?) :', err);

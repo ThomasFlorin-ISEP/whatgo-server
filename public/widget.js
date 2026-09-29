@@ -25,6 +25,12 @@
  * dans son tableau de bord (page Rendez-vous), le widget propose tout seul
  * un bouton « Prendre rendez-vous » et affiche les vrais créneaux libres.
  * Rien à changer dans la ligne d'installation.
+ *
+ * E-commerce : si l'entreprise a un catalogue (page Catalogue du tableau de
+ * bord), l'assistant affiche des fiches produits avec « Ajouter au panier ».
+ * Pour que ce bouton remplisse le VRAI panier du site, le site peut définir :
+ *   window.WHATGO_onAddToCart = function (item) { ... }   // item = { id, name, price, priceCents, variant, url, image }
+ * Sans cette fonction, le bouton ouvre la page du produit (champ « Lien »).
  * ============================================================
  */
 (function () {
@@ -53,6 +59,8 @@
   var API_BASE = SERVER_URL.replace(/\/api\/chat\/?$/, '');
   var BOOKING_URL = API_BASE + '/api/booking/' + encodeURIComponent(BUSINESS || '');
   var bookingServices = null; // null = réservation non activée pour cette entreprise
+  var SHOP_URL = API_BASE + '/api/shop/' + encodeURIComponent(BUSINESS || '');
+  var shopConfig = null; // { enabled, tracking } si l'entreprise a un catalogue
 
   var style = document.createElement('style');
   style.textContent = `
@@ -156,7 +164,24 @@
     .wgt-cta:disabled { opacity: .5; cursor: default; }
     .wgt-bk-err { color: #B42318; font-size: .8rem; margin: 6px 0 0; }
     .wgt-bk-muted { color: #6B7580; font-size: .8rem; }
-    .wgt-bk-legal { color: #8A939C; font-size: .7rem; margin-top: 8px; line-height: 1.35; }
+.wgt-bk-legal { color: #8A939C; font-size: .7rem; margin-top: 8px; line-height: 1.35; }
+
+    /* ---------- Fiches produits ---------- */
+    .wgt-prods { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px 40px; scroll-snap-type: x mandatory; scrollbar-width: thin; flex-shrink: 0; }
+    .wgt-prod { flex: 0 0 188px; scroll-snap-align: start; border: 1px solid #E3E7EC; border-radius: 16px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
+    .wgt-prod img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #F3F5F7; }
+    .wgt-prod-b { padding: 10px 11px 11px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .wgt-prod-n { font-size: .84rem; font-weight: 700; color: #1B2321; line-height: 1.25; }
+    .wgt-prod-p { font-size: .86rem; font-weight: 700; color: var(--wgt-color); }
+    .wgt-prod-out { font-size: .72rem; font-weight: 700; color: #B42318; }
+    .wgt-prod select { width: 100%; border: 1px solid #DDE2E7; border-radius: 9px; padding: 6px 8px; font-size: 14px; background: #fff; color: #1B2321; }
+    .wgt-prod .wgt-cta { font-size: .8rem; padding: 9px; margin-top: auto; }
+    .wgt-prod .wgt-link { align-self: center; font-size: .76rem; }
+    .wgt-added { font-size: .76rem; font-weight: 700; color: #1E7A46; text-align: center; }
+    .wgt-order dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: .8rem; }
+    .wgt-order dt { color: #6B7580; }
+    .wgt-order dd { margin: 0; color: #1B2321; font-weight: 600; }
+    .wgt-status { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .74rem; font-weight: 700; background: #E7F5EC; color: #1E7A46; margin-bottom: 8px; }
 
     @media (max-width: 480px) {
       .wgt-root .wgt-panel { left: 16px; right: 16px; width: auto; }
@@ -218,6 +243,7 @@
   }
   head.insertBefore(makeAvatar(), head.firstChild);
   loadBookingConfig();
+  loadShopConfig();
 
   var history = [];
   var welcomed = false;
@@ -307,22 +333,52 @@
     }).catch(function () {});
   }
 
+  function loadShopConfig() {
+    if (!BUSINESS) return;
+    fetch(SHOP_URL + '/config').then(function (r) { return r.json(); }).then(function (data) {
+      if (data && data.enabled) {
+        shopConfig = data;
+        if (welcomeShown) { removeQuickReplies(); showQuickReplies(); }
+      }
+    }).catch(function () {});
+  }
+
+  // Boutons rapides sous le message d'accueil, selon ce que l'entreprise
+  // propose (réservation, boutique, suivi de commande).
   var quickRow = null;
   function showQuickReplies() {
-    if (!bookingServices || quickRow || hasInteracted) return;
+    if (quickRow || hasInteracted) return;
+    var chips = [];
+    if (bookingServices) {
+      chips.push(['📅 Prendre rendez-vous', function () {
+        addMessage('user', 'Je souhaite prendre rendez-vous');
+        history.push({ role: 'user', content: 'Je souhaite prendre rendez-vous' });
+        addMessage('bot', 'Avec plaisir ! Choisissez votre prestation :');
+        history.push({ role: 'assistant', content: 'Avec plaisir ! Choisissez votre prestation :' });
+        startBooking();
+      }]);
+    }
+    if (shopConfig) {
+      chips.push(['🛍️ Trouver un produit', function () { sendText('Je cherche un produit, pouvez-vous me conseiller ?'); }]);
+      if (shopConfig.tracking) {
+        chips.push(['📦 Suivre ma commande', function () {
+          addMessage('user', 'Je veux suivre ma commande');
+          history.push({ role: 'user', content: 'Je veux suivre ma commande' });
+          addMessage('bot', 'Bien sûr ! Indiquez votre numéro de commande et votre email :');
+          history.push({ role: 'assistant', content: 'Bien sûr ! Indiquez votre numéro de commande et votre email :' });
+          showOrderForm();
+        }]);
+      }
+      chips.push(['🚚 Livraison & retours', function () { sendText('Quels sont vos délais de livraison et vos conditions de retour ?'); }]);
+    }
+    if (!chips.length) return;
     quickRow = el('div', 'wgt-quick');
-    var b = el('button', 'wgt-chip', '📅 Prendre rendez-vous');
-    b.type = 'button';
-    b.addEventListener('click', function () {
-      removeQuickReplies();
-      hasInteracted = true;
-      addMessage('user', 'Je souhaite prendre rendez-vous');
-      history.push({ role: 'user', content: 'Je souhaite prendre rendez-vous' });
-      addMessage('bot', 'Avec plaisir ! Choisissez votre prestation :');
-      history.push({ role: 'assistant', content: 'Avec plaisir ! Choisissez votre prestation :' });
-      startBooking();
+    chips.forEach(function (c) {
+      var b = el('button', 'wgt-chip', c[0]);
+      b.type = 'button';
+      b.addEventListener('click', function () { removeQuickReplies(); hasInteracted = true; c[1](); });
+      quickRow.appendChild(b);
     });
-    quickRow.appendChild(b);
     log.appendChild(quickRow);
     log.scrollTop = log.scrollHeight;
   }
@@ -474,6 +530,114 @@
     });
   }
 
+  // ------------------------------------------------------------
+  // E-COMMERCE : fiches produits + suivi de commande
+  // ------------------------------------------------------------
+  function absUrl(u) { return u && u.charAt(0) === '/' ? API_BASE + u : u; }
+
+  function trackShop(type, productId, variant) {
+    fetch(SHOP_URL + '/event', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: type, productId: productId, variant: variant || '', conversationId: conversationId }),
+    }).catch(function () {});
+  }
+
+  function showProducts(items) {
+    var row = el('div', 'wgt-prods');
+    items.forEach(function (p) {
+      var card = el('div', 'wgt-prod');
+      if (p.image) { var img = el('img'); img.src = absUrl(p.image); img.alt = p.name; img.loading = 'lazy'; card.appendChild(img); }
+      var body = el('div', 'wgt-prod-b');
+      body.appendChild(el('div', 'wgt-prod-n', p.name));
+      body.appendChild(el('div', 'wgt-prod-p', p.price));
+      var select = null;
+      if (p.variants && p.variants.length) {
+        select = el('select');
+        select.setAttribute('aria-label', 'Option');
+        p.variants.forEach(function (v) { var o = el('option', null, v); o.value = v; select.appendChild(o); });
+        body.appendChild(select);
+      }
+      if (!p.inStock) {
+        body.appendChild(el('div', 'wgt-prod-out', 'Bientôt de retour'));
+      } else {
+        var add = el('button', 'wgt-cta', 'Ajouter au panier');
+        add.type = 'button';
+        add.addEventListener('click', function () {
+          var variant = select ? select.value : '';
+          var item = { id: p.id, name: p.name, price: p.price, priceCents: p.priceCents, variant: variant, url: absUrl(p.url), image: absUrl(p.image) };
+          trackShop('add_to_cart', p.id, variant);
+          var handled = false;
+          if (typeof window.WHATGO_onAddToCart === 'function') {
+            try { handled = window.WHATGO_onAddToCart(item) !== false; } catch (e) { handled = false; }
+          }
+          if (!handled && item.url) window.open(item.url, '_blank');
+          add.replaceWith(el('div', 'wgt-added', handled ? '✓ Ajouté au panier' : '✓ Ouvert dans un nouvel onglet'));
+          var line = '🛒 Ajouté au panier : ' + p.name + (variant ? ' (' + variant + ')' : '');
+          history.push({ role: 'user', content: line });
+        });
+        body.appendChild(add);
+      }
+      if (p.url) {
+        var view = el('a', 'wgt-link', 'Voir le produit');
+        view.href = absUrl(p.url); view.target = '_blank'; view.rel = 'noopener';
+        view.addEventListener('click', function () { trackShop('view_product', p.id); });
+        body.appendChild(view);
+      }
+      card.appendChild(body);
+      row.appendChild(card);
+    });
+    log.appendChild(row);
+    scrollDown();
+  }
+
+  function showOrderForm() {
+    var card = el('div', 'wgt-bk wgt-order');
+    card.appendChild(el('h4', null, 'Suivi de commande'));
+    var num = el('input'); num.placeholder = 'Numéro de commande (ex : 1042)'; num.inputMode = 'numeric';
+    var mail = el('input'); mail.placeholder = 'Email utilisé pour la commande'; mail.type = 'email'; mail.autocomplete = 'email';
+    var btn = el('button', 'wgt-cta', 'Voir ma commande'); btn.type = 'button';
+    var err = el('p', 'wgt-bk-err'); err.style.display = 'none';
+    [num, mail, btn, err].forEach(function (n) { card.appendChild(n); });
+    log.appendChild(card);
+    scrollDown();
+    setTimeout(function () { num.focus(); }, 50);
+
+    btn.addEventListener('click', async function () {
+      err.style.display = 'none';
+      if (!num.value.trim() || mail.value.indexOf('@') < 1) { err.textContent = 'Indiquez le numéro de commande et votre email.'; err.style.display = 'block'; return; }
+      btn.disabled = true; btn.textContent = 'Recherche…';
+      try {
+        var res = await fetch(SHOP_URL + '/order-status', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: num.value.trim(), email: mail.value.trim(), conversationId: conversationId }),
+        });
+        var data = await res.json();
+        if (!res.ok) { err.textContent = data.error || 'Commande introuvable.'; err.style.display = 'block'; btn.disabled = false; btn.textContent = 'Voir ma commande'; return; }
+        card.innerHTML = '';
+        card.appendChild(el('h4', null, 'Commande n°' + data.number));
+        card.appendChild(el('span', 'wgt-status', data.statusLabel));
+        var dl = el('dl');
+        [['Livraison', data.eta], ['Transporteur', data.carrier], ['Articles', data.items], ['Total', data.total]].forEach(function (r) {
+          if (!r[1]) return;
+          dl.appendChild(el('dt', null, r[0])); dl.appendChild(el('dd', null, r[1]));
+        });
+        card.appendChild(dl);
+        if (data.trackingUrl) {
+          var a = el('a', 'wgt-cta', 'Suivre le colis');
+          a.href = data.trackingUrl; a.target = '_blank'; a.rel = 'noopener';
+          a.style.display = 'block'; a.style.textAlign = 'center'; a.style.textDecoration = 'none'; a.style.marginTop = '10px';
+          card.appendChild(a);
+        }
+        var summary = 'Commande n°' + data.number + ' : ' + data.statusLabel + (data.eta ? ' — ' + data.eta : '');
+        history.push({ role: 'assistant', content: summary });
+        scrollDown();
+      } catch (e) {
+        err.textContent = 'Impossible de contacter le serveur.'; err.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Voir ma commande';
+      }
+    });
+  }
+
   function showTyping() {
     var t = document.createElement('div');
     t.className = 'wgt-typing';
@@ -581,11 +745,15 @@
     }, NUDGE_DELAY);
   }
 
-  form.addEventListener('submit', async function (e) {
+  form.addEventListener('submit', function (e) {
     e.preventDefault();
     var text = input.value.trim();
     if (!text) return;
     input.value = '';
+    sendText(text);
+  });
+
+  async function sendText(text) {
     sendBtn.disabled = true;
     hasInteracted = true;
     removeQuickReplies();
@@ -610,8 +778,11 @@
         addMessage('bot', data.reply);
         history.push({ role: 'assistant', content: data.reply });
         conversationId = data.conversationId;
-        // Le serveur demande d'afficher le parcours de réservation.
+        // Le serveur demande d'afficher un module : réservation, fiches
+        // produits ou suivi de commande.
         if (data.ui && data.ui.type === 'booking' && bookingServices) startBooking();
+        if (data.ui && data.ui.type === 'products' && data.ui.items && data.ui.items.length) showProducts(data.ui.items);
+        if (data.ui && data.ui.type === 'order') showOrderForm();
       }
     } catch (err) {
       typing.remove();
@@ -619,5 +790,5 @@
     }
     sendBtn.disabled = false;
     input.focus();
-  });
+  }
 })();
