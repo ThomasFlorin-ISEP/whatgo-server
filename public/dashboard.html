@@ -172,6 +172,7 @@ button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit
 .field label,.lbl{display:block;font-size:.78rem;font-weight:600;color:var(--ink-soft);margin-bottom:6px}
 .field .help{font-size:.76rem;color:var(--ink-faint);margin-top:6px;line-height:1.45}
 input[type=text],input[type=email],input[type=password],input[type=url],input[type=tel],
+input[type=number],input[type=date],input[type=time],
 textarea,select{
   width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-s);background:#fff;
   font-size:.88rem;transition:border-color .14s,box-shadow .14s}
@@ -327,6 +328,34 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 /* rangée dynamique "Informations à collecter" */
 .qrow{display:grid;grid-template-columns:1.1fr 1.5fr 84px auto auto;gap:9px;margin-bottom:9px;align-items:center}
 .qrow input[type=number]{text-align:center}
+
+/* ---------- Agenda / réservation en ligne ---------- */
+.bk-day{padding:12px 22px 6px;font-size:.74rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);
+  background:rgba(237,241,239,.55);border-top:1px solid var(--line-soft)}
+.bk-day:first-child{border-top:none}
+.bk-item{display:grid;grid-template-columns:96px 1.3fr 1.2fr 270px;gap:14px;align-items:center;padding:12px 22px;border-top:1px solid var(--line-soft)}
+.bk-item.clickable{cursor:pointer}
+.bk-item.clickable:hover{background:rgba(31,170,89,.04)}
+.bk-item.is-cancel>:not(.bk-act){opacity:.5}
+.bk-item.is-cancel .bk-time,.bk-item.is-cancel .bk-svc{text-decoration:line-through}
+.bk-time{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1rem;font-variant-numeric:tabular-nums}
+.bk-time small{display:block;font-family:'Inter',sans-serif;font-weight:500;font-size:.72rem;color:var(--ink-faint)}
+.bk-svc{font-weight:600;font-size:.88rem}
+.bk-who{font-size:.86rem}
+.bk-who small,.bk-svc small{display:block;color:var(--ink-soft);font-size:.76rem;font-weight:500}
+.bk-act{display:flex;gap:8px;align-items:center;justify-content:flex-end}
+.srow{display:grid;grid-template-columns:1.6fr 110px 110px auto;gap:9px;margin-bottom:9px;align-items:center}
+.hrow{display:grid;grid-template-columns:110px 1fr;gap:12px;align-items:center;margin-bottom:8px}
+.hrow span{font-size:.86rem;font-weight:600;text-transform:capitalize}
+.bk-form{display:none}
+.bk-form.is-on{display:block}
+@media (max-width:760px){
+  .bk-item{grid-template-columns:70px 1fr;padding:12px 16px}
+  .bk-item .bk-who{grid-column:2}
+  .bk-act{grid-column:1 / -1;justify-content:flex-start}
+  .srow{grid-template-columns:1fr 1fr}
+  .srow input:first-child{grid-column:1 / -1}
+}
 
 .code{background:var(--night);color:#CFE8D9;border-radius:var(--r-m);padding:14px 16px;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;line-height:1.6;
@@ -567,10 +596,77 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       </div>
     </section>
 
-    <!-- ============================== RENDEZ-VOUS (réel, version simple) -->
+    <!-- ============================== RENDEZ-VOUS : agenda + réservation en ligne -->
     <section class="tab-page" id="page-appointments">
-      <div class="topbar"><div><h2>Rendez-vous</h2><p>Les leads marqués « RDV pris ». Pas encore de connexion à un vrai calendrier — passez un lead en statut « RDV pris » depuis l'onglet Leads pour qu'il apparaisse ici.</p></div></div>
+      <div class="topbar">
+        <div><h2>Rendez-vous</h2><p>Votre agenda : les rendez-vous réservés par vos visiteurs directement dans le chat, et ceux que vous ajoutez vous-même (pris par téléphone, au comptoir…).</p></div>
+        <div class="topbar__act"><button class="btn btn--primary" type="button" id="bkAddToggle" hidden>+ Ajouter un rendez-vous</button></div>
+      </div>
+
+      <div class="card bk-form" id="bkAddCard">
+        <div class="card__head"><div><h3>Nouveau rendez-vous</h3>
+          <p class="card__sub">Ajoutez ici les rendez-vous pris en dehors du chat : l'assistant ne proposera jamais ce créneau à quelqu'un d'autre.</p></div></div>
+        <form id="bkAddForm" novalidate>
+          <div class="row3">
+            <div class="field"><label for="bk-a-service">Prestation</label><select id="bk-a-service"></select></div>
+            <div class="field"><label for="bk-a-date">Date</label><input type="date" id="bk-a-date" /></div>
+            <div class="field"><label for="bk-a-time">Heure</label><input type="time" id="bk-a-time" step="300" /></div>
+          </div>
+          <div class="row3">
+            <div class="field"><label for="bk-a-name">Nom du client</label><input type="text" id="bk-a-name" /></div>
+            <div class="field"><label for="bk-a-phone">Téléphone</label><input type="tel" id="bk-a-phone" /></div>
+            <div class="field"><label for="bk-a-notes">Note</label><input type="text" id="bk-a-notes" placeholder="Facultatif" /></div>
+          </div>
+          <button type="submit" class="btn btn--primary">Enregistrer le rendez-vous</button>
+          <button type="button" class="btn btn--ghost" id="bkAddCancel">Annuler</button>
+          <p class="msg msg--err" id="bkAddError"></p>
+        </form>
+      </div>
+
       <div class="card card--flush">
+        <div class="card__head card__head--pad"><div><h3>Agenda</h3>
+          <p class="card__sub">Rendez-vous d'aujourd'hui et à venir. Cliquez sur un rendez-vous pris dans le chat pour relire la conversation.</p></div></div>
+        <div id="bkList" style="margin-top:6px"></div>
+      </div>
+
+      <form class="card" id="bkSettingsForm" novalidate>
+        <div class="card__head"><div><h3>Réservation en ligne</h3>
+          <p class="card__sub">Vos prestations et vos horaires : l'assistant ne propose que des créneaux réellement libres, calculés à partir de ces réglages et de votre agenda.</p></div></div>
+        <div class="switchrow">
+          <span class="switchrow__lbl">Permettre à vos visiteurs de réserver directement dans le chat</span>
+          <label class="switch"><input type="checkbox" id="bk-enabled" /><span class="switch__track"></span></label>
+        </div>
+
+        <h3 style="margin:18px 0 10px;font-size:.92rem">Prestations</h3>
+        <div class="srow" style="margin-bottom:4px"><span class="lbl">Nom</span><span class="lbl">Durée (min)</span><span class="lbl">Prix</span><span></span></div>
+        <div id="bkServiceRows"></div>
+        <button type="button" class="btn btn--ghost btn--sm" id="bkAddService">+ Ajouter une prestation</button>
+
+        <h3 style="margin:22px 0 4px;font-size:.92rem">Horaires d'ouverture</h3>
+        <p class="help" style="margin-bottom:10px;font-size:.76rem;color:var(--ink-faint)">Format : 09:00-19:00. Plusieurs plages possibles, séparées par une virgule (ex : 12:00-14:30, 19:00-22:30). Laissez vide les jours de fermeture.</p>
+        <div id="bkHoursRows"></div>
+
+        <div class="row3" style="margin-top:14px">
+          <div class="field"><label for="bk-capacity">Rendez-vous en même temps</label>
+            <input type="number" id="bk-capacity" min="1" max="50" />
+            <p class="help">Nombre de coiffeurs, de tables… disponibles en même temps.</p></div>
+          <div class="field"><label for="bk-notice">Délai minimum (heures)</label>
+            <input type="number" id="bk-notice" min="0" max="168" />
+            <p class="help">Pas de réservation moins de X heures à l'avance.</p></div>
+          <div class="field"><label for="bk-ahead">Réservable jusqu'à (jours)</label>
+            <input type="number" id="bk-ahead" min="1" max="180" /></div>
+        </div>
+        <div class="field" style="max-width:240px"><label for="bk-step">Un créneau proposé toutes les</label>
+          <select id="bk-step"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 heure</option></select></div>
+
+        <button type="submit" class="btn btn--primary">Enregistrer</button>
+        <p class="msg msg--ok" id="bkSettingsOk">Réglages de réservation enregistrés.</p>
+        <p class="msg msg--err" id="bkSettingsError"></p>
+      </form>
+
+      <div class="card card--flush" id="legacyRdvCard" hidden>
+        <div class="card__head card__head--pad"><div><h3>Rendez-vous proposés dans la conversation</h3>
+          <p class="card__sub">Leads passés en statut « RDV pris » (par le bot ou depuis l'onglet Leads), hors réservation en ligne.</p></div></div>
         <div class="tablewrap"><table class="tbl" id="appointmentsTable"></table></div>
       </div>
     </section>
@@ -979,6 +1075,8 @@ function enterApp() {
     loadConversations();
     loadLeads();
     loadInstructions();
+    loadBookingSettings();
+    loadBookings();
     loadWebhook();
     loadQualification();
   }
@@ -1204,7 +1302,10 @@ function renderAppointments(leads) {
   var body = $('#appointmentsTable');
   if (!body) return;
   var isAdmin = ME.role === 'admin';
-  var rdv = leads.filter(function (l) { return l.status === 'rdv_pris'; });
+  // Les RDV réservés en ligne sont déjà dans l'agenda : on ne les répète pas ici.
+  var rdv = leads.filter(function (l) { return l.status === 'rdv_pris' && !l.hasBooking; });
+  var legacyCard = $('#legacyRdvCard');
+  if (legacyCard) legacyCard.hidden = !rdv.length;
   body.innerHTML =
     '<thead><tr><th>Contact</th><th>Date du RDV</th><th>Message</th><th class="right">Enregistré</th></tr></thead><tbody>' +
     (rdv.length ? rdv.map(function (l) {
@@ -1574,6 +1675,200 @@ function renderLeads(leads) {
     sel.dataset.prev = sel.value;
   });
 }
+
+/* ============================================================
+   RENDEZ-VOUS — agenda WHATGO + réglages de réservation en ligne
+   ============================================================ */
+var BK_DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+var BK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // affichage du lundi au dimanche
+var bkSettings = null;
+
+function bkDayLabel(dateStr) {
+  var d = new Date(dateStr + 'T12:00:00');
+  var today = new Date(); var tomorrow = new Date(); tomorrow.setDate(today.getDate() + 1);
+  var same = function (a, b) { return a.toDateString() === b.toDateString(); };
+  var txt = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  if (same(d, today)) return "Aujourd'hui · " + txt;
+  if (same(d, tomorrow)) return 'Demain · ' + txt;
+  return txt;
+}
+
+function addServiceRow(svc) {
+  svc = svc || {};
+  var row = document.createElement('div');
+  row.className = 'srow';
+  row.dataset.id = svc.id || '';
+  row.innerHTML =
+    '<input type="text" class="sv-name" placeholder="Ex : Coupe femme + brushing" />' +
+    '<input type="number" class="sv-dur" min="5" max="600" step="5" placeholder="30" />' +
+    '<input type="text" class="sv-price" placeholder="Ex : 45 €" />' +
+    '<button type="button" class="iconbtn" title="Supprimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg></button>';
+  $('.sv-name', row).value = svc.name || '';
+  $('.sv-dur', row).value = svc.duration || 30;
+  $('.sv-price', row).value = svc.price || '';
+  $('.iconbtn', row).addEventListener('click', function () { row.remove(); });
+  $('#bkServiceRows').appendChild(row);
+}
+$('#bkAddService').addEventListener('click', function () { addServiceRow(); });
+
+function renderBookingSettings(cfg) {
+  bkSettings = cfg;
+  $('#bk-enabled').checked = !!cfg.enabled;
+  $('#bkServiceRows').innerHTML = '';
+  (cfg.services || []).forEach(addServiceRow);
+  if (!cfg.services || !cfg.services.length) addServiceRow();
+  $('#bkHoursRows').innerHTML = BK_ORDER.map(function (i) {
+    return '<div class="hrow"><span>' + BK_DAYS[i] + '</span>' +
+      '<input type="text" data-day="' + i + '" placeholder="Fermé" value="' + esc(cfg.hours[i] || '') + '" /></div>';
+  }).join('');
+  $('#bk-capacity').value = cfg.capacity;
+  $('#bk-notice').value = cfg.minNoticeHours;
+  $('#bk-ahead').value = cfg.maxDaysAhead;
+  $('#bk-step').value = String(cfg.slotStep);
+  if (!$('#bk-step').value) $('#bk-step').value = '30';
+
+  // Liste des prestations dans le formulaire d'ajout manuel.
+  $('#bk-a-service').innerHTML = (cfg.services || []).map(function (s) {
+    return '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + s.duration + ' min)</option>';
+  }).join('') + '<option value="__other">Autre (30 min)</option>';
+
+  var isAdmin = ME.role === 'admin';
+  $$('#bkSettingsForm input, #bkSettingsForm select, #bkSettingsForm button').forEach(function (n) {
+    if (!isAdmin) n.disabled = true;
+  });
+  $('#bkAddToggle').hidden = !isAdmin;
+}
+
+async function loadBookingSettings() {
+  try {
+    var res = await fetch(API + '/api/dashboard/booking-settings', { credentials: 'include' });
+    if (!res.ok) throw new Error();
+    renderBookingSettings(await res.json());
+  } catch (e) { toast('Impossible de charger les réglages de réservation.', true); }
+}
+
+$('#bkSettingsForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideMsg('#bkSettingsOk'); hideMsg('#bkSettingsError');
+  var hours = {};
+  $$('#bkHoursRows input').forEach(function (inp) { hours[inp.dataset.day] = inp.value.trim(); });
+  var payload = {
+    enabled: $('#bk-enabled').checked,
+    services: $$('.srow', $('#bkServiceRows')).map(function (row) {
+      return { id: row.dataset.id || undefined, name: $('.sv-name', row).value.trim(),
+        duration: Number($('.sv-dur', row).value) || 30, price: $('.sv-price', row).value.trim() };
+    }).filter(function (s) { return s.name; }),
+    hours: hours,
+    capacity: Number($('#bk-capacity').value) || 1,
+    minNoticeHours: Number($('#bk-notice').value) || 0,
+    maxDaysAhead: Number($('#bk-ahead').value) || 30,
+    slotStep: Number($('#bk-step').value) || 30,
+  };
+  try {
+    var res = await fetch(API + '/api/dashboard/booking-settings', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+    var data = await res.json();
+    if (!res.ok) { showMsg('#bkSettingsError', data.error || "Erreur lors de l'enregistrement.", true); return; }
+    renderBookingSettings(data.settings);
+    showMsg('#bkSettingsOk');
+    toast('Réglages de réservation enregistrés');
+  } catch (err) { showMsg('#bkSettingsError', 'Impossible de contacter le serveur.', true); }
+});
+
+async function loadBookings() {
+  try {
+    var res = await fetch(API + '/api/dashboard/bookings', { credentials: 'include' });
+    if (!res.ok) throw new Error();
+    renderBookings(await res.json());
+  } catch (e) { $('#bkList').innerHTML = '<div class="empty"><b>Agenda indisponible</b><p>Réessayez dans un instant.</p></div>'; }
+}
+
+function renderBookings(list) {
+  var wrap = $('#bkList');
+  var isAdmin = ME.role === 'admin';
+  if (!list.length) {
+    wrap.innerHTML = '<div class="empty" style="padding:30px 16px">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4" stroke-linecap="round"/></svg>' +
+      '<b>Aucun rendez-vous à venir</b><p>Activez la réservation en ligne ci-dessous : vos visiteurs pourront réserver directement dans le chat.</p></div>';
+    return;
+  }
+  var html = ''; var lastDay = null;
+  list.forEach(function (b) {
+    if (b.day !== lastDay) { html += '<div class="bk-day">' + esc(bkDayLabel(b.day)) + '</div>'; lastDay = b.day; }
+    var cancelled = b.status === 'annule';
+    var endDate = new Date(b.end);
+    var endTxt = endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+    html += '<div class="bk-item' + (cancelled ? ' is-cancel' : '') + (b.conversationId ? ' clickable' : '') + '" data-convo="' + esc(b.conversationId || '') + '">' +
+      '<div class="bk-time">' + esc(b.time.replace(':', 'h')) + '<small>→ ' + esc(endTxt.replace(':', 'h')) + '</small></div>' +
+      '<div class="bk-svc">' + esc(b.service) + '<small>' + esc(b.duration + ' min' + (b.price ? ' · ' + b.price : '')) + '</small></div>' +
+      '<div class="bk-who">' + esc(b.name || 'Client sans nom') + '<small>' + esc([b.phone, b.email].filter(Boolean).join(' · ') || b.notes || '') + '</small></div>' +
+      '<div class="bk-act">' +
+        (b.source === 'chat' ? '<span class="tag tag--green">Chat</span>' : '<span class="tag tag--grey">Ajouté à la main</span>') +
+        (cancelled ? '<span class="tag tag--red">Annulé</span>' : '') +
+        (isAdmin ? '<button type="button" class="btn btn--ghost btn--sm bk-status" data-id="' + esc(b.id) + '" data-status="' + (cancelled ? 'confirme' : 'annule') + '">' + (cancelled ? 'Rétablir' : 'Annuler') + '</button>' : '') +
+      '</div></div>';
+  });
+  wrap.innerHTML = html;
+
+  $$('.bk-item.clickable', wrap).forEach(function (row) {
+    row.addEventListener('click', function () { openTranscript(row.dataset.convo); });
+  });
+  $$('.bk-status', wrap).forEach(function (btn) {
+    btn.addEventListener('click', async function (e) {
+      e.stopPropagation();
+      if (btn.dataset.status === 'annule' && !confirm('Annuler ce rendez-vous ? Le créneau redeviendra disponible pour les visiteurs.')) return;
+      try {
+        var res = await fetch(API + '/api/dashboard/bookings/' + btn.dataset.id + '/status', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+          body: JSON.stringify({ status: btn.dataset.status }),
+        });
+        if (!res.ok) throw new Error();
+        toast(btn.dataset.status === 'annule' ? 'Rendez-vous annulé' : 'Rendez-vous rétabli');
+        loadBookings();
+      } catch (err) { toast('Action impossible pour le moment.', true); }
+    });
+  });
+}
+
+$('#bkAddToggle').addEventListener('click', function () {
+  $('#bkAddCard').classList.toggle('is-on');
+  if ($('#bkAddCard').classList.contains('is-on') && !$('#bk-a-date').value) {
+    var d = new Date();
+    $('#bk-a-date').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+});
+$('#bkAddCancel').addEventListener('click', function () { $('#bkAddCard').classList.remove('is-on'); });
+
+$('#bkAddForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideMsg('#bkAddError');
+  var svc = $('#bk-a-service').value;
+  var payload = {
+    serviceId: svc === '__other' ? '' : svc,
+    serviceName: svc === '__other' ? 'Rendez-vous' : '',
+    duration: 30,
+    date: $('#bk-a-date').value,
+    time: $('#bk-a-time').value,
+    name: $('#bk-a-name').value.trim(),
+    phone: $('#bk-a-phone').value.trim(),
+    notes: $('#bk-a-notes').value.trim(),
+  };
+  if (!payload.date || !payload.time) { showMsg('#bkAddError', 'Indiquez la date et l\'heure.', true); return; }
+  try {
+    var res = await fetch(API + '/api/dashboard/bookings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+    var data = await res.json();
+    if (!res.ok) { showMsg('#bkAddError', data.error || "Erreur lors de l'enregistrement.", true); return; }
+    toast('Rendez-vous ajouté');
+    ['#bk-a-time', '#bk-a-name', '#bk-a-phone', '#bk-a-notes'].forEach(function (sel) { $(sel).value = ''; });
+    $('#bkAddCard').classList.remove('is-on');
+    loadBookings();
+  } catch (err) { showMsg('#bkAddError', 'Impossible de contacter le serveur.', true); }
+});
 
 /* ============================================================
    BASE DE CONNAISSANCES — instructions spécifiques

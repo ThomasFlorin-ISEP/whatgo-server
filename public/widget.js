@@ -20,6 +20,11 @@
  *   data-nudge="true"             relance automatique si le visiteur n'a jamais écrit ("false" pour désactiver)
  *   data-nudge-delay="180000"     délai avant la relance, en millisecondes (3 min par défaut)
  *   data-nudge-message="Vous avez besoin d'un renseignement ?"   message affiché lors de la relance
+ *
+ * Prise de rendez-vous : si l'entreprise a activé la réservation en ligne
+ * dans son tableau de bord (page Rendez-vous), le widget propose tout seul
+ * un bouton « Prendre rendez-vous » et affiche les vrais créneaux libres.
+ * Rien à changer dans la ligne d'installation.
  * ============================================================
  */
 (function () {
@@ -44,6 +49,10 @@
   var NUDGE_MESSAGE = attr('nudge-message', "Vous avez besoin d'un renseignement ?");
   var BUSINESS = scriptTag ? scriptTag.getAttribute('data-business') : null;
   var conversationId = null;
+  // Adresse du serveur déduite de data-server (".../api/chat" → "...").
+  var API_BASE = SERVER_URL.replace(/\/api\/chat\/?$/, '');
+  var BOOKING_URL = API_BASE + '/api/booking/' + encodeURIComponent(BUSINESS || '');
+  var bookingServices = null; // null = réservation non activée pour cette entreprise
 
   var style = document.createElement('style');
   style.textContent = `
@@ -115,6 +124,40 @@
     }
     .wgt-send:disabled { opacity: .4; cursor: default; }
 
+    /* ---------- Réservation ---------- */
+    .wgt-quick { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 40px; }
+    .wgt-chip {
+      border: 1.5px solid var(--wgt-color); color: var(--wgt-color); background: #fff; border-radius: 999px;
+      padding: 8px 14px; font-size: .85rem; font-weight: 600; cursor: pointer; line-height: 1.2;
+    }
+    .wgt-chip:hover { background: var(--wgt-color); color: #fff; }
+    .wgt-bk { align-self: stretch; margin-left: 40px; border: 1px solid #E3E7EC; border-radius: 16px; padding: 14px; background: #FAFBFC; }
+    .wgt-bk h4 { margin: 0 0 10px; font-size: .88rem; font-weight: 700; color: #1B2321; }
+    .wgt-bk-sel { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .8rem; color: #5B6570; margin-bottom: 10px; }
+    .wgt-bk-sel b { color: #1B2321; }
+    .wgt-link { background: none; border: none; color: var(--wgt-color); font-weight: 600; font-size: .8rem; cursor: pointer; padding: 0; text-decoration: underline; }
+    .wgt-svc { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; text-align: left;
+      border: 1px solid #E3E7EC; background: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 7px; cursor: pointer; }
+    .wgt-svc:hover { border-color: var(--wgt-color); }
+    .wgt-svc b { font-size: .86rem; color: #1B2321; font-weight: 600; }
+    .wgt-svc span { font-size: .76rem; color: #6B7580; white-space: nowrap; }
+    .wgt-days { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; scrollbar-width: thin; }
+    .wgt-day { flex-shrink: 0; border: 1px solid #E3E7EC; background: #fff; border-radius: 12px; padding: 7px 10px; cursor: pointer;
+      font-size: .76rem; color: #1B2321; text-align: center; line-height: 1.25; min-width: 64px; }
+    .wgt-day small { display: block; color: #6B7580; font-size: .7rem; }
+    .wgt-day.is-on { background: var(--wgt-color); border-color: var(--wgt-color); color: #fff; }
+    .wgt-day.is-on small { color: rgba(255,255,255,.85); }
+    .wgt-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .wgt-slot { border: 1px solid #E3E7EC; background: #fff; border-radius: 10px; padding: 8px 0; font-size: .8rem; font-weight: 600; cursor: pointer; color: #1B2321; }
+    .wgt-slot:hover { border-color: var(--wgt-color); color: var(--wgt-color); }
+    .wgt-bk input { width: 100%; border: 1px solid #DDE2E7; border-radius: 10px; padding: 10px 12px; font-size: 16px; margin-bottom: 8px; background: #fff; color: #1B2321; }
+    .wgt-bk input:focus { outline: 2px solid var(--wgt-color); outline-offset: -1px; }
+    .wgt-cta { width: 100%; border: none; background: var(--wgt-color); color: #fff; border-radius: 12px; padding: 11px; font-size: .9rem; font-weight: 700; cursor: pointer; margin-top: 2px; }
+    .wgt-cta:disabled { opacity: .5; cursor: default; }
+    .wgt-bk-err { color: #B42318; font-size: .8rem; margin: 6px 0 0; }
+    .wgt-bk-muted { color: #6B7580; font-size: .8rem; }
+    .wgt-bk-legal { color: #8A939C; font-size: .7rem; margin-top: 8px; line-height: 1.35; }
+
     @media (max-width: 480px) {
       .wgt-root .wgt-panel { left: 16px; right: 16px; width: auto; }
     }
@@ -174,9 +217,11 @@
     return av;
   }
   head.insertBefore(makeAvatar(), head.firstChild);
+  loadBookingConfig();
 
   var history = [];
   var welcomed = false;
+  var welcomeShown = false; // message d'accueil réellement affiché
   var hasInteracted = false; // true dès que le visiteur envoie un premier message
 
   function nowStr() {
@@ -213,6 +258,222 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  // ------------------------------------------------------------
+  // RÉSERVATION : services → jour → créneau → coordonnées → confirmé.
+  // Les créneaux viennent toujours du serveur (agenda réel), jamais de l'IA.
+  // ------------------------------------------------------------
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function todayStr(offset) {
+    var d = new Date();
+    d.setDate(d.getDate() + (offset || 0));
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+  function dayDate(dateStr) { return new Date(dateStr + 'T12:00:00'); }
+  function shortDay(dateStr) {
+    if (dateStr === todayStr(0)) return "Aujourd'hui";
+    if (dateStr === todayStr(1)) return 'Demain';
+    var s = dayDate(dateStr).toLocaleDateString('fr-FR', { weekday: 'short' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function shortDate(dateStr) { return dayDate(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }); }
+  function longLabel(dateStr, time) {
+    var d = dayDate(dateStr).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return d + ' à ' + time.replace(':', 'h');
+  }
+  function svcMeta(s) { return s.duration + ' min' + (s.price ? ' · ' + s.price : ''); }
+
+  async function getJson(url) {
+    var res = await fetch(url);
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur');
+    return data;
+  }
+
+  function loadBookingConfig() {
+    if (!BUSINESS) return;
+    fetch(BOOKING_URL + '/config').then(function (r) { return r.json(); }).then(function (data) {
+      if (data && data.enabled && data.services && data.services.length) {
+        bookingServices = data.services;
+        // Si le message d'accueil est déjà affiché, on ajoute le bouton.
+        if (welcomeShown) showQuickReplies();
+      }
+    }).catch(function () {});
+  }
+
+  var quickRow = null;
+  function showQuickReplies() {
+    if (!bookingServices || quickRow || hasInteracted) return;
+    quickRow = el('div', 'wgt-quick');
+    var b = el('button', 'wgt-chip', '📅 Prendre rendez-vous');
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      removeQuickReplies();
+      hasInteracted = true;
+      addMessage('user', 'Je souhaite prendre rendez-vous');
+      history.push({ role: 'user', content: 'Je souhaite prendre rendez-vous' });
+      addMessage('bot', 'Avec plaisir ! Choisissez votre prestation :');
+      history.push({ role: 'assistant', content: 'Avec plaisir ! Choisissez votre prestation :' });
+      startBooking();
+    });
+    quickRow.appendChild(b);
+    log.appendChild(quickRow);
+    log.scrollTop = log.scrollHeight;
+  }
+  function removeQuickReplies() { if (quickRow) { quickRow.remove(); quickRow = null; } }
+
+  var activeCard = null;
+  function startBooking() {
+    if (!bookingServices) return;
+    if (activeCard) activeCard.remove();
+    activeCard = el('div', 'wgt-bk');
+    log.appendChild(activeCard);
+    renderServices(activeCard);
+  }
+
+  function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+  function renderServices(card) {
+    card.innerHTML = '';
+    card.appendChild(el('h4', null, 'Quelle prestation ?'));
+    bookingServices.forEach(function (s) {
+      var b = el('button', 'wgt-svc');
+      b.type = 'button';
+      b.appendChild(el('b', null, s.name));
+      b.appendChild(el('span', null, svcMeta(s)));
+      b.addEventListener('click', function () { renderDays(card, s); });
+      card.appendChild(b);
+    });
+    scrollDown();
+  }
+
+  function selectionHeader(card, text, onChange) {
+    var sel = el('div', 'wgt-bk-sel');
+    var t = el('span');
+    t.appendChild(el('b', null, text));
+    sel.appendChild(t);
+    var change = el('button', 'wgt-link', 'Modifier');
+    change.type = 'button';
+    change.addEventListener('click', onChange);
+    sel.appendChild(change);
+    card.appendChild(sel);
+  }
+
+  async function renderDays(card, service) {
+    card.innerHTML = '';
+    selectionHeader(card, service.name + ' · ' + svcMeta(service), function () { renderServices(card); });
+    card.appendChild(el('h4', null, 'Quel jour ?'));
+    var daysWrap = el('div', 'wgt-days');
+    var slotsWrap = el('div');
+    card.appendChild(daysWrap);
+    card.appendChild(slotsWrap);
+    daysWrap.appendChild(el('span', 'wgt-bk-muted', 'Chargement des disponibilités…'));
+    scrollDown();
+    try {
+      var data = await getJson(BOOKING_URL + '/days?service=' + encodeURIComponent(service.id));
+      daysWrap.innerHTML = '';
+      if (!data.days.length) {
+        daysWrap.appendChild(el('span', 'wgt-bk-muted', 'Aucun créneau disponible pour le moment. Laissez-nous votre numéro dans la discussion, nous vous rappelons.'));
+        return;
+      }
+      data.days.forEach(function (d, idx) {
+        var b = el('button', 'wgt-day');
+        b.type = 'button';
+        b.appendChild(document.createTextNode(shortDay(d.date)));
+        b.appendChild(el('small', null, shortDate(d.date)));
+        b.addEventListener('click', function () {
+          Array.prototype.forEach.call(daysWrap.children, function (c) { c.classList.remove('is-on'); });
+          b.classList.add('is-on');
+          renderSlots(card, slotsWrap, service, d.date);
+        });
+        daysWrap.appendChild(b);
+        if (idx === 0) b.click();
+      });
+    } catch (e) {
+      daysWrap.innerHTML = '';
+      daysWrap.appendChild(el('span', 'wgt-bk-err', 'Impossible de charger les disponibilités. Réessayez dans un instant.'));
+    }
+  }
+
+  async function renderSlots(card, wrap, service, dateStr) {
+    wrap.innerHTML = '';
+    wrap.appendChild(el('span', 'wgt-bk-muted', 'Chargement…'));
+    try {
+      var data = await getJson(BOOKING_URL + '/slots?service=' + encodeURIComponent(service.id) + '&date=' + dateStr);
+      wrap.innerHTML = '';
+      if (!data.slots.length) { wrap.appendChild(el('span', 'wgt-bk-muted', 'Plus de créneau ce jour-là.')); return; }
+      var grid = el('div', 'wgt-slots');
+      data.slots.forEach(function (time) {
+        var b = el('button', 'wgt-slot', time.replace(':', 'h'));
+        b.type = 'button';
+        b.addEventListener('click', function () { renderContact(card, service, dateStr, time); });
+        grid.appendChild(b);
+      });
+      wrap.appendChild(grid);
+      scrollDown();
+    } catch (e) {
+      wrap.innerHTML = '';
+      wrap.appendChild(el('span', 'wgt-bk-err', 'Impossible de charger les créneaux.'));
+    }
+  }
+
+  function renderContact(card, service, dateStr, time) {
+    card.innerHTML = '';
+    selectionHeader(card, service.name + ' — ' + longLabel(dateStr, time), function () { renderDays(card, service); });
+    card.appendChild(el('h4', null, 'Vos coordonnées'));
+    var name = el('input'); name.placeholder = 'Prénom et nom'; name.autocomplete = 'name';
+    var phone = el('input'); phone.placeholder = 'Téléphone'; phone.type = 'tel'; phone.autocomplete = 'tel';
+    var email = el('input'); email.placeholder = 'Email (facultatif, pour la confirmation)'; email.type = 'email'; email.autocomplete = 'email';
+    var btn = el('button', 'wgt-cta', 'Confirmer le rendez-vous'); btn.type = 'button';
+    var err = el('p', 'wgt-bk-err'); err.style.display = 'none';
+    [name, phone, email, btn, err].forEach(function (n) { card.appendChild(n); });
+    card.appendChild(el('p', 'wgt-bk-legal', 'Vos coordonnées servent uniquement à la gestion de ce rendez-vous par l\'établissement.'));
+    scrollDown();
+    setTimeout(function () { name.focus(); }, 50);
+
+    btn.addEventListener('click', async function () {
+      err.style.display = 'none';
+      if (!name.value.trim()) { err.textContent = 'Merci d\'indiquer votre nom.'; err.style.display = 'block'; return; }
+      if (phone.value.replace(/\D/g, '').length < 9) { err.textContent = 'Merci d\'indiquer un numéro de téléphone valide.'; err.style.display = 'block'; return; }
+      btn.disabled = true; btn.textContent = 'Réservation…';
+      try {
+        var res = await fetch(BOOKING_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            serviceId: service.id, date: dateStr, time: time,
+            name: name.value.trim(), phone: phone.value.trim(), email: email.value.trim(),
+            conversationId: conversationId,
+          }),
+        });
+        var data = await res.json();
+        if (!res.ok) {
+          err.textContent = data.error || 'La réservation a échoué.'; err.style.display = 'block';
+          btn.disabled = false; btn.textContent = 'Confirmer le rendez-vous';
+          if (res.status === 409) setTimeout(function () { renderDays(card, service); }, 1800);
+          return;
+        }
+        conversationId = data.conversationId;
+        card.remove();
+        activeCard = null;
+        var userLine = 'Réservation : ' + service.name + ', ' + data.label;
+        addMessage('user', userLine);
+        history.push({ role: 'user', content: userLine });
+        addMessage('bot', data.confirmation + (email.value.trim() ? '\nUn email de confirmation vous a été envoyé.' : ''));
+        history.push({ role: 'assistant', content: data.confirmation });
+      } catch (e) {
+        err.textContent = 'Impossible de contacter le serveur.'; err.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Confirmer le rendez-vous';
+      }
+    });
+  }
+
   function showTyping() {
     var t = document.createElement('div');
     t.className = 'wgt-typing';
@@ -245,6 +506,8 @@
     setTimeout(function () {
       t.remove();
       addMessage('bot', WELCOME);
+      welcomeShown = true;
+      showQuickReplies();
     }, 900);
   }
 
@@ -272,6 +535,26 @@
       addMessage('bot', NUDGE_MESSAGE);
     }, 900);
   }
+
+  // Petite API pour le site du client : un bouton « Réserver » de sa page
+  // peut ouvrir directement le parcours de réservation du widget.
+  //   <button onclick="WHATGO.book()">Réserver</button>
+  window.WHATGO = {
+    open: function () { openPanel(true); },
+    book: function () {
+      openPanel(false);
+      if (!bookingServices) return;
+      removeQuickReplies();
+      hasInteracted = true;
+      setTimeout(function () {
+        if (!activeCard) {
+          addMessage('bot', 'Avec plaisir ! Choisissez votre prestation :');
+          history.push({ role: 'assistant', content: 'Avec plaisir ! Choisissez votre prestation :' });
+        }
+        startBooking();
+      }, welcomeShown ? 0 : 1000);
+    },
+  };
 
   bubble.addEventListener('click', function () {
     if (panel.classList.contains('wgt-open')) closePanel();
@@ -305,6 +588,7 @@
     input.value = '';
     sendBtn.disabled = true;
     hasInteracted = true;
+    removeQuickReplies();
 
     addMessage('user', text);
     history.push({ role: 'user', content: text });
@@ -326,6 +610,8 @@
         addMessage('bot', data.reply);
         history.push({ role: 'assistant', content: data.reply });
         conversationId = data.conversationId;
+        // Le serveur demande d'afficher le parcours de réservation.
+        if (data.ui && data.ui.type === 'booking' && bookingServices) startBooking();
       }
     } catch (err) {
       typing.remove();
