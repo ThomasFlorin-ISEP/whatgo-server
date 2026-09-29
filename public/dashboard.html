@@ -352,6 +352,9 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .hrow{display:grid;grid-template-columns:110px 1fr;gap:12px;align-items:center;margin-bottom:8px}
 .hrow span{font-size:.86rem;font-weight:600;text-transform:capitalize}
 .bk-form{display:none}
+.bk-mode{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;cursor:pointer;font-size:.85rem;color:var(--ink-soft);background:#fff}
+.bk-mode b{color:var(--ink)}
+.bk-mode input{margin-top:3px;accent-color:var(--green)}
 .bk-form.is-on{display:block}
 @media (max-width:760px){
   .bk-item{grid-template-columns:70px 1fr;padding:12px 16px}
@@ -638,17 +641,29 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 
       <form class="card" id="bkSettingsForm" novalidate>
         <div class="card__head"><div><h3>Réservation en ligne</h3>
-          <p class="card__sub">Vos prestations et vos horaires : l'assistant ne propose que des créneaux réellement libres, calculés à partir de ces réglages et de votre agenda.</p></div></div>
+          <p class="card__sub">Comment vos visiteurs prennent rendez-vous depuis le chat : un simple lien vers votre page de réservation habituelle, ou l'agenda WHATGO intégré.</p></div></div>
         <div class="switchrow">
           <span class="switchrow__lbl">Permettre à vos visiteurs de réserver directement dans le chat</span>
           <label class="switch"><input type="checkbox" id="bk-enabled" /><span class="switch__track"></span></label>
         </div>
 
-        <h3 style="margin:18px 0 10px;font-size:.92rem">Prestations</h3>
+        <h3 style="margin:18px 0 10px;font-size:.92rem">Comment vos clients réservent</h3>
+        <label class="bk-mode"><input type="radio" name="bk-mode" value="link" />
+          <span><b>Lien vers votre page de réservation</b> (Calendly, Planity, TheFork…) — le plus simple : l'assistant affiche un bouton vers votre page habituelle.</span></label>
+        <label class="bk-mode"><input type="radio" name="bk-mode" value="agenda" />
+          <span><b>Agenda WHATGO</b> — vos créneaux libres s'affichent et se réservent directement dans le chat.</span></label>
+        <div class="field" id="bkLinkField" style="margin-top:10px">
+          <label for="bk-link">Lien de votre page de réservation</label>
+          <input type="url" id="bk-link" placeholder="https://calendly.com/votre-salon" />
+          <p class="help" id="bkLinkStats"></p>
+        </div>
+
+        <h3 style="margin:18px 0 10px;font-size:.92rem" id="bkServicesTitle">Prestations</h3>
         <div class="srow" style="margin-bottom:4px"><span class="lbl">Nom</span><span class="lbl">Durée (min)</span><span class="lbl">Prix</span><span></span></div>
         <div id="bkServiceRows"></div>
         <button type="button" class="btn btn--ghost btn--sm" id="bkAddService">+ Ajouter une prestation</button>
 
+        <div id="bkAgendaOnly">
         <h3 style="margin:22px 0 4px;font-size:.92rem">Horaires d'ouverture</h3>
         <p class="help" style="margin-bottom:10px;font-size:.76rem;color:var(--ink-faint)">Format : 09:00-19:00. Plusieurs plages possibles, séparées par une virgule (ex : 12:00-14:30, 19:00-22:30). Laissez vide les jours de fermeture.</p>
         <div id="bkHoursRows"></div>
@@ -665,6 +680,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         </div>
         <div class="field" style="max-width:240px"><label for="bk-step">Un créneau proposé toutes les</label>
           <select id="bk-step"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 heure</option></select></div>
+        </div>
 
         <button type="submit" class="btn btn--primary">Enregistrer</button>
         <p class="msg msg--ok" id="bkSettingsOk">Réglages de réservation enregistrés.</p>
@@ -1171,6 +1187,7 @@ function applyBusinessType(type) {
   // proposés dans la conversation.
   var isRdv = type === 'rdv';
   ['#bkAgendaCard', '#bkSettingsForm'].forEach(function (sel) { var n = $(sel); if (n) n.hidden = !isRdv; });
+  if (isRdv && $('#bkAgendaCard') && currentBookingMode() === 'link' && bkSettings) $('#bkAgendaCard').hidden = true;
   var addBtn = $('#bkAddToggle'); if (addBtn && !isRdv) addBtn.hidden = true;
   var legacy = $('#legacyRdvCard'); if (legacy && !isRdv) legacy.hidden = false;
   var intro = $('#rdvIntro');
@@ -1825,9 +1842,32 @@ function addServiceRow(svc) {
 }
 $('#bkAddService').addEventListener('click', function () { addServiceRow(); });
 
+function currentBookingMode() {
+  var r = $('input[name="bk-mode"]:checked');
+  return r ? r.value : 'link';
+}
+// Mode lien : seuls le lien et les prestations (facultatives) comptent ; l'agenda
+// intégré et ses réglages sont masqués.
+function applyBookingMode() {
+  var link = currentBookingMode() === 'link';
+  var isRdv = ME.businessType === 'rdv';
+  $('#bkLinkField').hidden = !link;
+  $('#bkAgendaOnly').hidden = link;
+  $('#bkServicesTitle').textContent = link ? 'Prestations (facultatif : l\'assistant pourra citer vos prix)' : 'Prestations';
+  $('#bkAgendaCard').hidden = !isRdv || link;
+  $('#bkAddToggle').hidden = !isRdv || link || ME.role !== 'admin';
+  if (link) $('#bkAddCard').classList.remove('is-on');
+}
+$$('input[name="bk-mode"]').forEach(function (r) { r.addEventListener('change', applyBookingMode); });
+
 function renderBookingSettings(cfg) {
   bkSettings = cfg;
   $('#bk-enabled').checked = !!cfg.enabled;
+  $$('input[name="bk-mode"]').forEach(function (r) { r.checked = r.value === (cfg.mode || 'link'); });
+  $('#bk-link').value = cfg.linkUrl || '';
+  $('#bkLinkStats').textContent = (cfg.linkClicks30d !== undefined)
+    ? cfg.linkClicks30d + ' visiteur' + (cfg.linkClicks30d > 1 ? 's' : '') + ' envoyé' + (cfg.linkClicks30d > 1 ? 's' : '') + ' vers votre page de réservation ces 30 derniers jours.' : '';
+  applyBookingMode();
   $('#bkServiceRows').innerHTML = '';
   (cfg.services || []).forEach(addServiceRow);
   if (!cfg.services || !cfg.services.length) addServiceRow();
@@ -1846,11 +1886,12 @@ function renderBookingSettings(cfg) {
     return '<option value="' + esc(s.id) + '">' + esc(s.name) + ' (' + s.duration + ' min)</option>';
   }).join('') + '<option value="__other">Autre (30 min)</option>';
 
+  applyBookingMode();
   var isAdmin = ME.role === 'admin';
   $$('#bkSettingsForm input, #bkSettingsForm select, #bkSettingsForm button').forEach(function (n) {
     if (!isAdmin) n.disabled = true;
   });
-  $('#bkAddToggle').hidden = !isAdmin || ME.businessType !== 'rdv';
+  $('#bkAddToggle').hidden = !isAdmin || ME.businessType !== 'rdv' || currentBookingMode() === 'link';
 }
 
 async function loadBookingSettings() {
@@ -1868,6 +1909,8 @@ $('#bkSettingsForm').addEventListener('submit', async function (e) {
   $$('#bkHoursRows input').forEach(function (inp) { hours[inp.dataset.day] = inp.value.trim(); });
   var payload = {
     enabled: $('#bk-enabled').checked,
+    mode: currentBookingMode(),
+    linkUrl: $('#bk-link').value.trim(),
     services: $$('.srow', $('#bkServiceRows')).map(function (row) {
       return { id: row.dataset.id || undefined, name: $('.sv-name', row).value.trim(),
         duration: Number($('.sv-dur', row).value) || 30, price: $('.sv-price', row).value.trim() };

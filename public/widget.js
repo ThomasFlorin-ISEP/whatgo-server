@@ -59,6 +59,7 @@
   var API_BASE = SERVER_URL.replace(/\/api\/chat\/?$/, '');
   var BOOKING_URL = API_BASE + '/api/booking/' + encodeURIComponent(BUSINESS || '');
   var bookingServices = null; // null = réservation non activée pour cette entreprise
+  var bookingLink = '';       // mode "lien" : page de réservation externe (Calendly…)
   var SHOP_URL = API_BASE + '/api/shop/' + encodeURIComponent(BUSINESS || '');
   var shopConfig = null; // { enabled, tracking } si l'entreprise a un catalogue
 
@@ -325,7 +326,11 @@
   function loadBookingConfig() {
     if (!BUSINESS) return;
     fetch(BOOKING_URL + '/config').then(function (r) { return r.json(); }).then(function (data) {
-      if (data && data.enabled && data.services && data.services.length) {
+      if (data && data.enabled && data.mode === 'link' && data.linkUrl) {
+        bookingLink = data.linkUrl;
+        bookingServices = data.services || [];
+        if (welcomeShown) showQuickReplies();
+      } else if (data && data.enabled && data.services && data.services.length) {
         bookingServices = data.services;
         // Si le message d'accueil est déjà affiché, on ajoute le bouton.
         if (welcomeShown) showQuickReplies();
@@ -353,8 +358,8 @@
       chips.push(['📅 Prendre rendez-vous', function () {
         addMessage('user', 'Je souhaite prendre rendez-vous');
         history.push({ role: 'user', content: 'Je souhaite prendre rendez-vous' });
-        addMessage('bot', 'Avec plaisir ! Choisissez votre prestation :');
-        history.push({ role: 'assistant', content: 'Avec plaisir ! Choisissez votre prestation :' });
+        addMessage('bot', bookingIntro());
+        history.push({ role: 'assistant', content: bookingIntro() });
         startBooking();
       }]);
     }
@@ -385,8 +390,33 @@
   function removeQuickReplies() { if (quickRow) { quickRow.remove(); quickRow = null; } }
 
   var activeCard = null;
+  function bookingIntro() {
+    return bookingLink ? 'Avec plaisir ! Voici notre page de réservation :' : 'Avec plaisir ! Choisissez votre prestation :';
+  }
+
+  // Mode "lien" : une carte avec un bouton vers la page de réservation du client.
+  function showBookingLink() {
+    var card = el('div', 'wgt-bk');
+    card.appendChild(el('h4', null, 'Réservez votre rendez-vous'));
+    card.appendChild(el('p', 'wgt-bk-muted', 'Choisissez votre créneau en quelques clics sur notre page de réservation.'));
+    var a = el('a', 'wgt-cta', '📅 Voir les disponibilités');
+    a.href = bookingLink; a.target = '_blank'; a.rel = 'noopener';
+    a.style.display = 'block'; a.style.textAlign = 'center'; a.style.textDecoration = 'none'; a.style.marginTop = '10px';
+    a.addEventListener('click', function () {
+      fetch(BOOKING_URL + '/click', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: conversationId }),
+      }).catch(function () {});
+      history.push({ role: 'user', content: '📅 A ouvert la page de réservation' });
+    });
+    card.appendChild(a);
+    log.appendChild(card);
+    scrollDown();
+  }
+
   function startBooking() {
     if (!bookingServices) return;
+    if (bookingLink) { showBookingLink(); return; }
     if (activeCard) activeCard.remove();
     activeCard = el('div', 'wgt-bk');
     log.appendChild(activeCard);
@@ -712,8 +742,8 @@
       hasInteracted = true;
       setTimeout(function () {
         if (!activeCard) {
-          addMessage('bot', 'Avec plaisir ! Choisissez votre prestation :');
-          history.push({ role: 'assistant', content: 'Avec plaisir ! Choisissez votre prestation :' });
+          addMessage('bot', bookingIntro());
+          history.push({ role: 'assistant', content: bookingIntro() });
         }
         startBooking();
       }, welcomeShown ? 0 : 1000);

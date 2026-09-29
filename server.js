@@ -249,10 +249,21 @@ const BOOKING_MARKER = '[OUVRIR_RESERVATION]';
 const BOOKING_INTENT_REGEX = /\b(rdv|rendez[- ]?vous|r[ée]serv\w*|cr[ée]neau\w*|disponibilit\w*|book\w*|appointment)\b/i;
 
 function isBookingOn(config) {
-  return !!(config && config.enabled && config.services.length);
+  if (!config || !config.enabled) return false;
+  return config.mode === 'link' ? !!config.linkUrl : config.services.length > 0;
 }
 
 function buildBookingInstruction(config) {
+  if (config.mode === 'link') {
+    const list = config.services.length
+      ? `\n\nPRESTATIONS PROPOSÉES :\n${config.services.map((s) => `- ${s.name}${s.price ? ` (${s.price})` : ''}`).join('\n')}`
+      : '';
+    return `${list}\n\nPRISE DE RENDEZ-VOUS :\n` +
+      `Le visiteur réserve sur la page de réservation en ligne de l'entreprise. Quand il souhaite prendre rendez-vous, ` +
+      `réserver ou connaître les disponibilités, réponds en une phrase courte puis termine ta réponse par ce marqueur ` +
+      `exact, seul sur sa ligne, sans jamais l'expliquer : ${BOOKING_MARKER} (un bouton vers la page de réservation ` +
+      `s'affichera). Ne propose JAMAIS toi-même de date ni d'heure, et ne confirme jamais un rendez-vous toi-même.`;
+  }
   const services = config.services
     .map((s) => `- ${s.name} (${s.duration} min${s.price ? `, ${s.price}` : ''})`)
     .join('\n');
@@ -1145,6 +1156,30 @@ async function getBookableBusiness(slug) {
   return { business, config };
 }
 
+// Mode "lien" : clic du visiteur vers la page de réservation externe
+// (compté dans le dashboard, pour montrer ce que le chat apporte).
+app.post('/api/booking/:slug/click', async (req, res) => {
+  try {
+    if (isRateLimited(`booking-click:${clientIp(req)}`, 30, 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes.' });
+    const found = await getBookableBusiness(req.params.slug);
+    if (!found) return res.status(404).json({ error: 'Réservation indisponible.' });
+    let convoId = Number(req.body && req.body.conversationId) || null;
+    if (convoId) {
+      const { rows: c } = await query('SELECT id FROM conversations WHERE id = $1 AND business_id = $2', [convoId, found.business.id]);
+      if (!c[0]) convoId = null;
+    }
+    logChatEvent(found.business.id, convoId, 'booking_link', null, found.config.linkUrl);
+    if (convoId) {
+      await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+        [convoId, 'user', '📅 A ouvert la page de réservation']);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur /api/booking/click:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
 // Rendez-vous déjà pris qui touchent une journée (heure de Paris).
 async function loadDayBookings(businessId, dateStr, db = { query }) {
   const dayStart = booking.parisToDate(dateStr, 0);
@@ -1167,6 +1202,8 @@ app.get('/api/booking/:slug/config', async (req, res) => {
     if (!found) return res.json({ enabled: false });
     res.json({
       enabled: true,
+      mode: found.config.mode,
+      linkUrl: found.config.mode === 'link' ? found.config.linkUrl : '',
       services: found.config.services.map((s) => ({ id: s.id, name: s.name, duration: s.duration, price: s.price })),
     });
   } catch (err) {
@@ -1957,7 +1994,11 @@ app.get('/api/dashboard/booking-settings', requireAuth, requireRole(['admin', 'l
   try {
     const { rows } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
     if (!rows[0]) return res.status(404).json({ error: 'Entreprise introuvable.' });
-    res.json(booking.parseBooking(rows[0]));
+    const { rows: clicks } = await query(
+      `SELECT COUNT(*)::int AS n FROM chat_events WHERE business_id = $1 AND type = 'booking_link' AND created_at > NOW() - INTERVAL '30 days'`,
+      [req.user.businessId]
+    );
+    res.json({ ...booking.parseBooking(rows[0]), linkClicks30d: clicks[0].n });
   } catch (err) {
     console.error('Erreur GET /api/dashboard/booking-settings:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
@@ -1976,8 +2017,14 @@ app.put('/api/dashboard/booking-settings', requireAuth, requireRole('admin'), as
         }
       }
     }
+    if (body.mode === 'link' && String(body.linkUrl || '').trim() && !/^https:\/\//i.test(String(body.linkUrl).trim())) {
+      return res.status(400).json({ error: 'Le lien de réservation doit commencer par https://' });
+    }
     const config = booking.sanitizeBooking(body);
-    if (config.enabled && !config.services.length) {
+    if (config.enabled && config.mode === 'link' && !config.linkUrl) {
+      return res.status(400).json({ error: 'Collez votre lien de réservation (Calendly, Planity…) avant d\'activer.' });
+    }
+    if (config.enabled && config.mode === 'agenda' && !config.services.length) {
       return res.status(400).json({ error: 'Ajoutez au moins une prestation avant d\'activer la réservation en ligne.' });
     }
     await query('UPDATE businesses SET booking = $1 WHERE id = $2', [JSON.stringify(config), req.user.businessId]);
@@ -2649,6 +2696,7 @@ async function ensureDemoSalon() {
 
   const config = booking.sanitizeBooking({
     enabled: true,
+    mode: 'agenda',
     services: [
       { id: 'coupe-f', name: 'Coupe femme + brushing', duration: 60, price: '45 €' },
       { id: 'coupe-h', name: 'Coupe homme', duration: 30, price: '25 €' },

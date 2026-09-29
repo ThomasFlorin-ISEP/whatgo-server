@@ -17,6 +17,10 @@ const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi',
 function defaultBooking() {
   return {
     enabled: false,
+    // 'link' = simple renvoi vers la page de réservation du client (Calendly,
+    // Planity, TheFork…) ; 'agenda' = créneaux calculés et réservés dans le chat.
+    mode: 'link',
+    linkUrl: '',
     services: [], // [{ id, name, duration (minutes), price (texte libre, ex "35 €") }]
     // Horaires par jour (clé 0..6, 0 = dimanche). Texte libre du type
     // "09:00-12:00, 14:00-19:00" — plusieurs plages possibles (pause
@@ -63,8 +67,16 @@ function sanitizeBooking(raw, d = defaultBooking()) {
     hours[i] = String(v || '').trim().slice(0, 60);
   }
 
+  // Réglages enregistrés avant l'ajout du mode "lien" : c'était forcément l'agenda.
+  let mode = raw.mode === 'agenda' || raw.mode === 'link' ? raw.mode
+    : (raw.enabled && Array.isArray(raw.services) && raw.services.length ? 'agenda' : d.mode);
+  let linkUrl = String(raw.linkUrl || '').trim().slice(0, 500);
+  if (linkUrl && !/^https:\/\/[^\s]+\.[^\s]+/i.test(linkUrl)) linkUrl = '';
+
   return {
     enabled: raw.enabled === undefined ? d.enabled : !!raw.enabled,
+    mode,
+    linkUrl,
     services,
     hours,
     capacity: clampInt(raw.capacity, 1, 50, d.capacity),
