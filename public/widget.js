@@ -62,6 +62,8 @@
   var bookingLink = '';       // mode "lien" : page de réservation externe (Calendly…)
   var SHOP_URL = API_BASE + '/api/shop/' + encodeURIComponent(BUSINESS || '');
   var shopConfig = null; // { enabled, tracking } si l'entreprise a un catalogue
+  var hotelEnabled = false; // hôtel : recherche de séjour + chambres
+  var HOTEL_URL = API_BASE + '/api/hotel/' + encodeURIComponent(BUSINESS || '');
 
   var style = document.createElement('style');
   style.textContent = `
@@ -182,6 +184,11 @@
     .wgt-order dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: .8rem; }
     .wgt-order dt { color: #6B7580; }
     .wgt-order dd { margin: 0; color: #1B2321; font-weight: 600; }
+.wgt-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .wgt-lbl { display: block; font-size: .72rem; font-weight: 600; color: #6B7580; margin: 0 0 3px 2px; }
+    .wgt-bk select.wgt-sel { width: 100%; border: 1px solid #DDE2E7; border-radius: 10px; padding: 10px 12px; font-size: 16px; margin-bottom: 8px; background: #fff; color: #1B2321; }
+    .wgt-prod-cap { font-size: .74rem; color: #6B7580; }
+    .wgt-prod-tot { font-size: .74rem; color: #1B2321; font-weight: 600; }
     .wgt-status { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .74rem; font-weight: 700; background: #E7F5EC; color: #1E7A46; margin-bottom: 8px; }
 
     @media (max-width: 480px) {
@@ -344,6 +351,9 @@
       if (data && data.enabled) {
         shopConfig = data;
         if (welcomeShown) { removeQuickReplies(); showQuickReplies(); }
+      } else if (data && data.hotel) {
+        hotelEnabled = true;
+        if (welcomeShown) { removeQuickReplies(); showQuickReplies(); }
       }
     }).catch(function () {});
   }
@@ -375,6 +385,17 @@
         }]);
       }
       chips.push(['🚚 Livraison & retours', function () { sendText('Quels sont vos délais de livraison et vos conditions de retour ?'); }]);
+    }
+    if (hotelEnabled) {
+      chips.push(['🛏️ Voir les disponibilités', function () {
+        addMessage('user', 'Je voudrais réserver une chambre');
+        history.push({ role: 'user', content: 'Je voudrais réserver une chambre' });
+        addMessage('bot', 'Avec plaisir ! Indiquez vos dates et le nombre de personnes :');
+        history.push({ role: 'assistant', content: 'Avec plaisir ! Indiquez vos dates et le nombre de personnes :' });
+        showStayForm();
+      }]);
+      chips.push(["🍳 Services de l'hôtel", function () { sendText("Quels services propose l'hôtel (petit-déjeuner, parking, spa…) ?"); }]);
+      chips.push(['📍 Accès & horaires', function () { sendText("Comment venir à l'hôtel, et à quelle heure puis-je arriver ?"); }]);
     }
     if (!chips.length) return;
     quickRow = el('div', 'wgt-quick');
@@ -620,6 +641,87 @@
     scrollDown();
   }
 
+  // ------------------------------------------------------------
+  // HÔTEL : dates + personnes → chambres adaptées → moteur de réservation
+  // ------------------------------------------------------------
+  function isoDay(offset) { return todayStr(offset); }
+
+  function showStayForm() {
+    var card = el('div', 'wgt-bk');
+    card.appendChild(el('h4', null, 'Votre séjour'));
+    var grid = el('div', 'wgt-2col');
+    var c1 = el('div'); c1.appendChild(el('label', 'wgt-lbl', 'Arrivée'));
+    var inDate = el('input'); inDate.type = 'date'; inDate.min = isoDay(0); inDate.value = isoDay(7); c1.appendChild(inDate);
+    var c2 = el('div'); c2.appendChild(el('label', 'wgt-lbl', 'Départ'));
+    var outDate = el('input'); outDate.type = 'date'; outDate.min = isoDay(1); outDate.value = isoDay(9); c2.appendChild(outDate);
+    grid.appendChild(c1); grid.appendChild(c2);
+    card.appendChild(grid);
+    card.appendChild(el('label', 'wgt-lbl', 'Personnes'));
+    var guests = el('select', 'wgt-sel');
+    for (var i = 1; i <= 6; i++) { var o = el('option', null, i + (i > 1 ? ' personnes' : ' personne')); o.value = String(i); if (i === 2) o.selected = true; guests.appendChild(o); }
+    card.appendChild(guests);
+    var btn = el('button', 'wgt-cta', 'Voir les chambres'); btn.type = 'button';
+    var err = el('p', 'wgt-bk-err'); err.style.display = 'none';
+    card.appendChild(btn); card.appendChild(err);
+    log.appendChild(card);
+    scrollDown();
+    inDate.addEventListener('change', function () {
+      if (outDate.value <= inDate.value) {
+        var d = new Date(inDate.value + 'T12:00:00'); d.setDate(d.getDate() + 1);
+        outDate.value = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+      }
+    });
+
+    btn.addEventListener('click', async function () {
+      err.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Recherche…';
+      try {
+        var url = HOTEL_URL + '/rooms?arrivee=' + inDate.value + '&depart=' + outDate.value + '&personnes=' + guests.value +
+          (conversationId ? '&conversationId=' + conversationId : '');
+        var data = await getJson(url);
+        btn.disabled = false; btn.textContent = 'Modifier la recherche';
+        var label = 'du ' + shortDate(inDate.value) + ' au ' + shortDate(outDate.value) + ', ' + guests.value + ' pers.';
+        history.push({ role: 'user', content: 'Recherche de séjour ' + label });
+        if (!data.rooms.length) {
+          addMessage('bot', "Aucune de nos chambres ne peut accueillir " + guests.value + " personnes. Écrivez-nous, nous trouverons une solution !");
+          return;
+        }
+        addMessage('bot', 'Voici nos chambres pour ' + data.nights + ' nuit' + (data.nights > 1 ? 's' : '') + ' (' + label + ') :');
+        showRooms(data.rooms, label);
+      } catch (e) {
+        err.textContent = e.message || 'Recherche impossible.'; err.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Voir les chambres';
+      }
+    });
+  }
+
+  function showRooms(rooms, label) {
+    var row = el('div', 'wgt-prods');
+    rooms.forEach(function (r) {
+      var card = el('div', 'wgt-prod');
+      if (r.image) { var img = el('img'); img.src = absUrl(r.image); img.alt = r.name; img.loading = 'lazy'; card.appendChild(img); }
+      var body = el('div', 'wgt-prod-b');
+      body.appendChild(el('div', 'wgt-prod-n', r.name));
+      if (r.capacity) body.appendChild(el('div', 'wgt-prod-cap', "Jusqu'à " + r.capacity + ' personne' + (r.capacity > 1 ? 's' : '')));
+      body.appendChild(el('div', 'wgt-prod-p', r.price + ' / nuit'));
+      body.appendChild(el('div', 'wgt-prod-tot', 'Total ' + r.total + ' · ' + r.nights + ' nuit' + (r.nights > 1 ? 's' : '')));
+      if (r.bookingUrl) {
+        var a = el('a', 'wgt-cta', 'Réserver');
+        a.href = absUrl(r.bookingUrl); a.target = '_blank'; a.rel = 'noopener';
+        a.style.display = 'block'; a.style.textAlign = 'center'; a.style.textDecoration = 'none';
+        a.addEventListener('click', function () {
+          trackShop('book_room', r.id, label);
+          history.push({ role: 'user', content: '🛏️ A cliqué sur « Réserver » : ' + r.name + ' (' + label + ')' });
+        });
+        body.appendChild(a);
+      }
+      card.appendChild(body);
+      row.appendChild(card);
+    });
+    log.appendChild(row);
+    scrollDown();
+  }
+
   function showOrderForm() {
     var card = el('div', 'wgt-bk wgt-order');
     card.appendChild(el('h4', null, 'Suivi de commande'));
@@ -735,6 +837,18 @@
   //   <button onclick="WHATGO.book()">Réserver</button>
   window.WHATGO = {
     open: function () { openPanel(true); },
+    // Hôtel : ouvre directement la recherche de séjour.
+    stay: function () {
+      openPanel(false);
+      if (!hotelEnabled) return;
+      removeQuickReplies();
+      hasInteracted = true;
+      setTimeout(function () {
+        addMessage('bot', 'Avec plaisir ! Indiquez vos dates et le nombre de personnes :');
+        history.push({ role: 'assistant', content: 'Avec plaisir ! Indiquez vos dates et le nombre de personnes :' });
+        showStayForm();
+      }, welcomeShown ? 0 : 1000);
+    },
     book: function () {
       openPanel(false);
       if (!bookingServices) return;
@@ -813,6 +927,7 @@
         if (data.ui && data.ui.type === 'booking' && bookingServices) startBooking();
         if (data.ui && data.ui.type === 'products' && data.ui.items && data.ui.items.length) showProducts(data.ui.items);
         if (data.ui && data.ui.type === 'order') showOrderForm();
+        if (data.ui && data.ui.type === 'stay' && hotelEnabled) showStayForm();
       }
     } catch (err) {
       typing.remove();

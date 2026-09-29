@@ -314,6 +314,7 @@ function publicProduct(p) {
     inStock: p.stock === null || p.stock === undefined ? true : p.stock > 0,
     image: p.image_url || '',
     url: p.product_url || '',
+    capacity: p.capacity === null || p.capacity === undefined ? null : p.capacity,
   };
 }
 
@@ -351,6 +352,37 @@ function buildShopInstruction(shop) {
       `Un formulaire sécurisé (numéro de commande + email) s'affichera. N'invente JAMAIS le statut d'une commande.`;
   }
   return text;
+}
+
+// ------------------------------------------------------------
+// Hôtellerie : chambres + recherche de séjour. L'IA ne donne jamais elle-même
+// une disponibilité : elle ouvre le formulaire de recherche (dates, personnes)
+// et le widget affiche les chambres adaptées avec le prix du séjour, puis
+// renvoie vers le moteur de réservation de l'hôtel, dates pré-remplies.
+// ------------------------------------------------------------
+const STAY_MARKER = '[RECHERCHE_SEJOUR]';
+const STAY_INTENT_REGEX = /\b(chambres?|nuits?|s[ée]jour|disponibilit\w*|dispo|r[ée]serv\w*|book\w*|tarifs?\s+des\s+chambres)\b/i;
+
+function buildHotelInstruction(shop) {
+  const lines = shop.products.map((p) => {
+    const cap = p.capacity ? ` — jusqu'à ${p.capacity} personne${p.capacity > 1 ? 's' : ''}` : '';
+    const desc = String(p.description || '').replace(/\s+/g, ' ').slice(0, 180);
+    return `- ${p.name} : à partir de ${formatPrice(p.price_cents)} la nuit${cap}${desc ? ` — ${desc}` : ''}`;
+  });
+  return `\n\nINFORMATIONS OFFICIELLES COMPLÉMENTAIRES (tu peux t'en servir pour répondre).\n\nCHAMBRES :\n${lines.join('\n')}` +
+    `\n\nRECHERCHE DE SÉJOUR ET RÉSERVATION :\n` +
+    `Quand le visiteur veut réserver, connaître les disponibilités ou le prix d'un séjour pour des dates, réponds en une ` +
+    `phrase courte puis termine ta réponse par ce marqueur exact, seul sur sa ligne, sans jamais l'expliquer : ${STAY_MARKER}\n` +
+    `Un formulaire (dates d'arrivée et de départ, nombre de personnes) s'affichera, puis les chambres adaptées avec le ` +
+    `prix du séjour et un bouton vers le moteur de réservation de l'hôtel. N'affirme JAMAIS qu'une chambre est libre ` +
+    `ou complète à une date : la disponibilité finale se confirme sur le moteur de réservation.`;
+}
+
+// Lien du moteur de réservation, avec les dates si l'hôtel utilise les
+// balises {arrivee} {depart} {personnes} {chambre} dans son lien.
+function buildHotelBookingUrl(template, params) {
+  if (!template) return '';
+  return template.replace(/\{(arrivee|depart|personnes|chambre)\}/g, (m, k) => encodeURIComponent(params[k] || ''));
 }
 
 // Enregistre un événement du chat (produit recommandé, ajout au panier…).
@@ -968,7 +1000,8 @@ app.post('/api/chat', async (req, res) => {
       business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo
     );
     if (bookingOn) systemPromptForCall += buildBookingInstruction(bookingConfig);
-    systemPromptForCall += buildShopInstruction(shop);
+    const isHotel = business.business_type === 'hotel';
+    systemPromptForCall += isHotel ? (shop.products.length ? buildHotelInstruction(shop) : '') : buildShopInstruction(shop);
     const data = await callGemini(systemPromptForCall, contents);
 
     let reply;
@@ -1041,6 +1074,13 @@ app.post('/api/chat', async (req, res) => {
     reply = reply.split(ORDER_MARKER).join('').trim();
     if (!ui && shop.hasOrders && (hadOrderMarker || ORDER_INTENT_REGEX.test(lastUserMessage.content))) {
       ui = { type: 'order' };
+    }
+
+    // Hôtel : formulaire de recherche de séjour.
+    const hadStayMarker = reply.includes(STAY_MARKER);
+    reply = reply.split(STAY_MARKER).join('').trim();
+    if (isHotel && shop.products.length && (hadStayMarker || STAY_INTENT_REGEX.test(lastUserMessage.content))) {
+      ui = { type: 'stay' };
     }
 
     if (!reply) {
@@ -1440,6 +1480,9 @@ app.get('/api/shop/:slug/config', async (req, res) => {
     const business = await getShopBusiness(req.params.slug);
     if (!business) return res.json({ enabled: false });
     const shop = await loadShop(business.id);
+    if (business.business_type === 'hotel') {
+      return res.json({ enabled: false, hotel: shop.products.length > 0 });
+    }
     res.json({ enabled: shop.products.length > 0, tracking: shop.hasOrders });
   } catch (err) {
     console.error('Erreur /api/shop/config:', err);
@@ -1468,7 +1511,7 @@ app.post('/api/shop/:slug/event', async (req, res) => {
     const business = await getShopBusiness(req.params.slug);
     if (!business) return res.status(404).json({ error: 'Boutique introuvable.' });
     const body = req.body || {};
-    const type = ['add_to_cart', 'view_product'].includes(body.type) ? body.type : null;
+    const type = ['add_to_cart', 'view_product', 'book_room'].includes(body.type) ? body.type : null;
     const productId = Number(body.productId) || null;
     if (!type || !productId) return res.status(400).json({ error: 'Événement invalide.' });
     const { rows } = await query('SELECT id, name FROM products WHERE id = $1 AND business_id = $2', [productId, business.id]);
@@ -1485,9 +1528,59 @@ app.post('/api/shop/:slug/event', async (req, res) => {
       await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
         [convoId, 'user', `🛒 Ajouté au panier : ${rows[0].name}${variant ? ` (${variant})` : ''}`]);
     }
+    if (type === 'book_room' && convoId) {
+      await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+        [convoId, 'user', `🛏️ A cliqué sur « Réserver » : ${rows[0].name}${variant ? ` (${variant})` : ''}`]);
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('Erreur /api/shop/event:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// Hôtel : chambres adaptées à un séjour (dates + personnes), avec le prix
+// total et le lien vers le moteur de réservation, dates pré-remplies.
+app.get('/api/hotel/:slug/rooms', async (req, res) => {
+  try {
+    if (isRateLimited(`hotel-rooms:${clientIp(req)}`, 30, 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes.' });
+    const business = await getShopBusiness(req.params.slug);
+    if (!business || business.business_type !== 'hotel') return res.status(404).json({ error: 'Hôtel introuvable.' });
+    const arrivee = String(req.query.arrivee || '');
+    const depart = String(req.query.depart || '');
+    const personnes = Math.max(1, Math.min(12, Math.round(Number(req.query.personnes)) || 2));
+    if (!isValidDateStr(arrivee) || !isValidDateStr(depart)) return res.status(400).json({ error: 'Dates invalides.' });
+    const today = booking.dateToParis(new Date()).dateStr;
+    if (arrivee < today) return res.status(400).json({ error: 'La date d\'arrivée est déjà passée.' });
+    const nights = Math.round((Date.parse(depart + 'T12:00:00Z') - Date.parse(arrivee + 'T12:00:00Z')) / 86400000);
+    if (nights < 1) return res.status(400).json({ error: 'La date de départ doit être après la date d\'arrivée.' });
+    if (nights > 30) return res.status(400).json({ error: 'Pour un séjour de plus de 30 nuits, contactez directement l\'hôtel.' });
+
+    const shop = await loadShop(business.id);
+    const rooms = shop.products
+      .filter((p) => !p.capacity || p.capacity >= personnes)
+      .sort((a, b) => a.price_cents - b.price_cents)
+      .slice(0, 6)
+      .map((p) => ({
+        ...publicProduct(p),
+        nights,
+        total: formatPrice(p.price_cents * nights),
+        bookingUrl: buildHotelBookingUrl(business.hotel_booking_url, { arrivee, depart, personnes: String(personnes), chambre: p.name }),
+      }));
+
+    let convoId = Number(req.query.conversationId) || null;
+    if (convoId) {
+      const { rows: c } = await query('SELECT id FROM conversations WHERE id = $1 AND business_id = $2', [convoId, business.id]);
+      if (!c[0]) convoId = null;
+    }
+    logChatEvent(business.id, convoId, 'stay_search', null, `${arrivee} → ${depart}, ${personnes} pers.`);
+    if (convoId) {
+      await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+        [convoId, 'user', `Recherche de séjour : du ${arrivee} au ${depart}, ${personnes} personne${personnes > 1 ? 's' : ''}`]);
+    }
+    res.json({ nights, personnes, rooms });
+  } catch (err) {
+    console.error('Erreur /api/hotel/rooms:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
@@ -1974,7 +2067,7 @@ app.get('/api/dashboard/stats', requireAuth, requireRole(['admin', 'lecture']), 
 });
 
 // Type d'activité du client (page Paramètres) : adapte les pages du dashboard.
-const BUSINESS_TYPES = ['rdv', 'ecommerce', 'autre'];
+const BUSINESS_TYPES = ['rdv', 'ecommerce', 'hotel', 'autre'];
 app.put('/api/dashboard/business-type', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const type = req.body && req.body.businessType;
@@ -2128,12 +2221,38 @@ function productFromBody(body) {
     stock: stockRaw === '' ? null : Math.max(0, Math.round(Number(stockRaw)) || 0),
     image_url: String(b.image || '').trim().slice(0, 500),
     product_url: String(b.url || '').trim().slice(0, 500),
+    capacity: String(b.capacity ?? '').trim() === '' ? null : Math.max(1, Math.min(20, Math.round(Number(b.capacity)) || 1)),
   };
 }
 
 function dashboardProduct(p) {
   return { ...publicProduct(p), stock: p.stock, variantsText: p.variants || '', priceNumber: (p.price_cents / 100).toFixed(2) };
 }
+
+// Hôtel : lien du moteur de réservation (page Chambres).
+app.get('/api/dashboard/hotel-settings', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT hotel_booking_url FROM businesses WHERE id = $1', [req.user.businessId]);
+    res.json({ bookingUrl: (rows[0] && rows[0].hotel_booking_url) || '' });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/hotel-settings:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.put('/api/dashboard/hotel-settings', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const url = String((req.body && req.body.bookingUrl) || '').trim().slice(0, 600);
+    // Lien complet (https://…) ; un chemin commençant par "/" est aussi
+    // accepté pour les pages hébergées sur ce serveur (démo).
+    if (url && !/^(https:\/\/\S+\.\S+|\/\S*)$/i.test(url)) return res.status(400).json({ error: 'Le lien doit commencer par https://' });
+    await query('UPDATE businesses SET hotel_booking_url = $1 WHERE id = $2', [url, req.user.businessId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/hotel-settings:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
 
 app.get('/api/dashboard/products', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
@@ -2154,9 +2273,9 @@ app.post('/api/dashboard/products', requireAuth, requireRole('admin'), async (re
     const { rows: count } = await query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1 AND active = true', [req.user.businessId]);
     if (count[0].n >= 200) return res.status(400).json({ error: 'Limite de 200 produits atteinte.' });
     const { rows } = await query(
-      `INSERT INTO products (business_id, name, description, category, price_cents, variants, stock, image_url, product_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [req.user.businessId, p.name, p.description, p.category, p.price_cents, p.variants, p.stock, p.image_url, p.product_url]
+      `INSERT INTO products (business_id, name, description, category, price_cents, variants, stock, image_url, product_url, capacity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [req.user.businessId, p.name, p.description, p.category, p.price_cents, p.variants, p.stock, p.image_url, p.product_url, p.capacity]
     );
     res.json({ ok: true, id: rows[0].id });
   } catch (err) {
@@ -2173,8 +2292,8 @@ app.put('/api/dashboard/products/:id', requireAuth, requireRole('admin'), async 
     if (!p.name) return res.status(400).json({ error: 'Le nom du produit est obligatoire.' });
     await query(
       `UPDATE products SET name = $1, description = $2, category = $3, price_cents = $4, variants = $5, stock = $6,
-         image_url = $7, product_url = $8 WHERE id = $9`,
-      [p.name, p.description, p.category, p.price_cents, p.variants, p.stock, p.image_url, p.product_url, req.params.id]
+         image_url = $7, product_url = $8, capacity = $9 WHERE id = $10`,
+      [p.name, p.description, p.category, p.price_cents, p.variants, p.stock, p.image_url, p.product_url, p.capacity, req.params.id]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -2208,15 +2327,17 @@ app.get('/api/dashboard/shop-stats', requireAuth, requireRole(['admin', 'lecture
     counts.forEach((r) => { byType[r.type] = r.n; });
     const { rows: top } = await query(
       `SELECT p.name, COUNT(*)::int AS n,
-              SUM(CASE WHEN e.type = 'add_to_cart' THEN 1 ELSE 0 END)::int AS carts
+              SUM(CASE WHEN e.type IN ('add_to_cart', 'book_room') THEN 1 ELSE 0 END)::int AS carts
        FROM chat_events e JOIN products p ON p.id = e.product_id
-       WHERE e.business_id = $1 AND e.created_at > NOW() - INTERVAL '30 days' AND e.type IN ('recommend', 'add_to_cart')
+       WHERE e.business_id = $1 AND e.created_at > NOW() - INTERVAL '30 days' AND e.type IN ('recommend', 'add_to_cart', 'book_room')
        GROUP BY p.name ORDER BY carts DESC, n DESC LIMIT 5`, [businessId]
     );
     res.json({
       recommended: byType.recommend || 0,
       addToCart: byType.add_to_cart || 0,
       orderLookups: byType.order_lookup || 0,
+      staySearches: byType.stay_search || 0,
+      roomClicks: byType.book_room || 0,
       top: top.map((t) => ({ name: t.name, recommended: t.n - t.carts, addToCart: t.carts })),
     });
   } catch (err) {
@@ -2852,6 +2973,63 @@ async function ensureDemoShop() {
 }
 
 // ============================================================
+// AUTO-CRÉATION : hôtel de démonstration "Hôtel Les Tilleuls" (Annecy)
+// ============================================================
+// Page vitrine /demo-hotel.html, compte demo-hotel@whatgo.ai (DEMO_PASSWORD).
+// Le "moteur de réservation" est simulé sur la page vitrine (#reservation).
+const DEMO_HOTEL_SLUG = 'hotel-demo';
+
+async function ensureDemoHotel() {
+  const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [DEMO_HOTEL_SLUG]);
+  if (rows[0]) {
+    console.log('ℹ️  Hôtel de démo "Les Tilleuls" déjà présent.');
+    return;
+  }
+  const instructions = [
+    "L'Hôtel Les Tilleuls est un hôtel 4 étoiles de 24 chambres, au bord du lac d'Annecy, à 10 minutes à pied de la vieille ville.",
+    "Arrivée à partir de 15h, départ avant 11h. Arrivée tardive possible sur demande (réception ouverte 7h-23h, boîte à clés ensuite).",
+    "Petit-déjeuner buffet de 7h à 10h30 : 18 € par personne, gratuit pour les enfants de moins de 6 ans.",
+    "Parking privé sécurisé : 15 € par nuit, sur réservation. Borne de recharge électrique disponible.",
+    "Wi-Fi gratuit dans tout l'hôtel. Spa avec sauna et hammam en accès libre de 9h à 20h. Location de vélos : 20 € la journée.",
+    "Animaux acceptés (petits chiens uniquement) : 20 € par nuit.",
+    "Annulation gratuite jusqu'à 48 h avant l'arrivée. Taxe de séjour : 2,50 € par adulte et par nuit, non incluse.",
+    "Accès : gare d'Annecy à 10 minutes en taxi, aéroport de Genève à 45 minutes en voiture.",
+    "Toujours vouvoyer le client, ton chaleureux et haut de gamme.",
+  ].join('\n');
+  const business = { name: 'Hôtel Les Tilleuls', sector: 'Hôtellerie', instructions, faq: '[]', intro: '', pricing: '', hours: '', qualification: '{}' };
+  const bookingUrl = '/demo-hotel.html?arrivee={arrivee}&depart={depart}&personnes={personnes}&chambre={chambre}#reservation';
+  const { rows: inserted } = await query(
+    `INSERT INTO businesses (slug, name, system_prompt, status, sector, instructions, business_type, hotel_booking_url)
+     VALUES ($1, $2, $3, 'published', $4, $5, 'hotel', $6) RETURNING id`,
+    [DEMO_HOTEL_SLUG, business.name, buildSystemPrompt(business), business.sector, instructions, bookingUrl]
+  );
+  const businessId = inserted[0].id;
+
+  const email = process.env.DEMO_HOTEL_EMAIL || 'demo-hotel@whatgo.ai';
+  const hash = await hashPassword(process.env.DEMO_PASSWORD || 'demo-salon-2026');
+  await query(
+    `INSERT INTO users (business_id, email, password_hash, role) VALUES ($1, $2, $3, 'admin') ON CONFLICT (email) DO NOTHING`,
+    [businessId, email, hash]
+  );
+
+  const rooms = [
+    ['Chambre Single', 1, 8900, 'single', 'Chambre cosy de 14 m² avec lit simple, bureau et douche à l\'italienne. Idéale pour un voyage d\'affaires.'],
+    ['Chambre Classique', 2, 12900, 'classique', 'Chambre de 20 m² côté jardin, lit double 160 cm, salle de bain avec baignoire.'],
+    ['Chambre Supérieure vue lac', 2, 17900, 'superieure', 'Chambre de 26 m² avec balcon et vue directe sur le lac, lit king size 180 cm, machine à café.'],
+    ['Chambre Familiale', 4, 21900, 'familiale', 'Chambre de 32 m² avec un lit double et deux lits simples, parfaite pour les familles. Lit bébé sur demande.'],
+    ['Suite Les Tilleuls', 3, 29900, 'suite', 'Suite de 45 m² avec salon séparé, terrasse panoramique sur le lac, baignoire îlot et accès spa privatif 1 h par jour.'],
+  ];
+  for (const [name, capacity, price, image, description] of rooms) {
+    await query(
+      `INSERT INTO products (business_id, name, description, category, price_cents, capacity, image_url)
+       VALUES ($1, $2, $3, 'Chambres', $4, $5, $6)`,
+      [businessId, name, description, price, capacity, `/demo-hotel/${image}.svg`]
+    );
+  }
+  console.log(`✅ Hôtel de démo "Les Tilleuls" créé (${email}) — page vitrine : /demo-hotel.html`);
+}
+
+// ============================================================
 // AUTO-CRÉATION : compte super-admin par défaut pour l'équipe WHATGO
 // (identifiants personnalisables via variables d'environnement Render)
 // ============================================================
@@ -2883,6 +3061,7 @@ async function start() {
     await ensureSuperAdmin();
     await ensureDemoSalon();
     await ensureDemoShop();
+    await ensureDemoHotel();
     app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT} (Gemini + tableau de bord)`));
   } catch (err) {
     console.error('❌ Impossible de démarrer le serveur (problème de connexion à la base ?) :', err);

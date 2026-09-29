@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hôtel Les Tilleuls — Annecy</title>
+<meta name="robots" content="noindex, nofollow" />
+<!-- Page de DÉMONSTRATION WHATGO : hôtel fictif, sert à montrer le chatbot
+     hôtellerie (questions, recherche de séjour, renvoi vers le moteur de
+     réservation avec les dates). La section #reservation simule ce moteur. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{ --ink:#1C2A33; --soft:#5F6D76; --cream:#F6F3EE; --paper:#fff; --navy:#24485E; --navy-2:#2F5B75; --gold:#B8925A; --line:#E3DDD3; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--cream);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;cursor:pointer}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 20px}
+  .demo-banner{background:var(--ink);color:#E7EEF2;font-size:.78rem;text-align:center;padding:8px 16px;line-height:1.45}
+  .demo-banner b{color:#E6C98F}
+  header{position:sticky;top:0;z-index:20;background:rgba(246,243,238,.93);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;height:68px;gap:16px}
+  .logo{font-family:'Playfair Display',Georgia,serif;font-size:1.45rem;font-weight:600;letter-spacing:.01em}
+  .logo small{display:block;font-family:'Inter',sans-serif;font-size:.62rem;letter-spacing:.3em;color:var(--gold);font-weight:700;margin-top:-2px}
+  nav{display:flex;gap:26px;font-size:.9rem;color:var(--soft)}
+  nav a:hover{color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:999px;padding:12px 22px;font-weight:600;font-size:.92rem}
+  .btn--navy{background:var(--navy);color:#fff}
+  .btn--navy:hover{background:var(--navy-2)}
+  .btn--ghost{border:1.5px solid #fff;color:#fff;background:rgba(255,255,255,.08)}
+  .hero{position:relative;min-height:520px;display:flex;align-items:flex-end;color:#fff;overflow:hidden}
+  .hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(28,42,51,.05) 30%,rgba(28,42,51,.72))}
+  .hero .wrap{position:relative;z-index:1;padding-bottom:54px;width:100%}
+  .stars{color:#E6C98F;letter-spacing:.2em;font-size:.9rem;margin-bottom:10px}
+  h1{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:clamp(2.4rem,5.6vw,4rem);line-height:1.05;margin-bottom:14px;max-width:16ch}
+  .hero p{font-size:1.05rem;max-width:48ch;margin-bottom:24px;color:#EEF3F6}
+  .hero__cta{display:flex;gap:10px;flex-wrap:wrap}
+  section{padding:60px 0}
+  h2{font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:clamp(1.8rem,3.6vw,2.4rem);margin-bottom:8px}
+  .lead{color:var(--soft);margin-bottom:28px;max-width:62ch}
+  .rooms{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .room{background:var(--paper);border:1px solid var(--line);border-radius:20px;overflow:hidden;display:flex;flex-direction:column}
+  .room img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+  .room__b{padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .room__n{font-family:'Playfair Display',Georgia,serif;font-size:1.2rem;font-weight:600}
+  .room__cap{font-size:.8rem;color:var(--gold);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+  .room__d{font-size:.85rem;color:var(--soft)}
+  .room__f{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px}
+  .room__p b{font-size:1.1rem}
+  .room__p span{font-size:.8rem;color:var(--soft)}
+  .room .btn{padding:9px 16px;font-size:.84rem}
+  .services{background:var(--paper);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .s{padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--cream)}
+  .s .ic{font-size:1.4rem}
+  .s b{display:block;margin:8px 0 4px}
+  .s p{font-size:.84rem;color:var(--soft)}
+  .booking{display:none;background:var(--paper);border:1px solid var(--line);border-radius:24px;padding:28px;max-width:720px;margin:0 auto;box-shadow:0 20px 50px rgba(28,42,51,.08)}
+  .booking.on{display:block}
+  .booking__tag{display:inline-block;background:#FFF4DE;color:#8A5A12;font-size:.74rem;font-weight:700;padding:4px 10px;border-radius:999px;margin-bottom:12px}
+  .booking dl{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;margin:14px 0 18px;font-size:.92rem}
+  .booking dt{color:var(--soft)}
+  .booking dd{font-weight:600}
+  .booking .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .booking input{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:.92rem}
+  .notice{display:none;margin-top:12px;background:#EAF2F6;color:var(--navy);border-radius:12px;padding:12px 14px;font-size:.86rem}
+  footer{padding:30px 0;color:var(--soft);font-size:.82rem;border-top:1px solid var(--line)}
+  footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  @media (max-width:900px){ .rooms{grid-template-columns:repeat(2,1fr)} .sgrid{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:640px){ nav{display:none} .rooms,.sgrid{grid-template-columns:1fr} .hero{min-height:440px} .booking .row{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div class="demo-banner">Hôtel de <b>démonstration</b> (fictif). Demandez à l'assistant en bas à droite : « avez-vous une chambre pour 2 le week-end prochain ? », « le parking est-il payant ? »…</div>
+
+<header>
+  <div class="wrap">
+    <a href="#" class="logo">Les Tilleuls<small>HÔTEL · ANNECY</small></a>
+    <nav><a href="#chambres">Chambres</a><a href="#services">Services</a><a href="#acces">Accès</a></nav>
+    <button class="btn btn--navy" type="button" onclick="window.WHATGO && WHATGO.stay()">Réserver</button>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <img src="/demo-hotel/hero.svg" alt="" />
+    <div class="wrap">
+      <p class="stars">★★★★</p>
+      <h1>Au bord du lac, à deux pas de la vieille ville.</h1>
+      <p>24 chambres lumineuses, un spa, un petit-déjeuner de producteurs locaux. Le calme d'Annecy, le confort d'un hôtel de caractère.</p>
+      <div class="hero__cta">
+        <button class="btn btn--navy" type="button" onclick="window.WHATGO && WHATGO.stay()">Voir les disponibilités</button>
+        <a class="btn btn--ghost" href="#chambres">Nos chambres</a>
+      </div>
+    </div>
+  </div>
+
+  <section id="reservation" style="padding-bottom:0">
+    <div class="wrap">
+      <div class="booking" id="booking">
+        <span class="booking__tag">Moteur de réservation — démonstration</span>
+        <h2 style="font-size:1.8rem">Finaliser votre réservation</h2>
+        <p class="lead" style="margin-bottom:0">Le chatbot vous a envoyé ici avec vos dates déjà remplies. Sur le site d'un vrai hôtel, c'est son moteur de réservation habituel qui s'ouvre.</p>
+        <dl id="bookingSummary"></dl>
+        <div class="row"><input placeholder="Prénom et nom" /><input placeholder="Email" type="email" /></div>
+        <button class="btn btn--navy" type="button" id="confirmBtn" style="width:100%">Confirmer la réservation</button>
+        <p class="notice" id="notice">Démonstration : aucune réservation n'est enregistrée. Ce qui compte ici, c'est que le visiteur arrive sur la page de réservation avec ses dates et sa chambre déjà choisies.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="chambres">
+    <div class="wrap">
+      <h2>Nos chambres</h2>
+      <p class="lead">Prix indicatifs par nuit, hors taxe de séjour. Demandez à notre assistant le prix exact pour vos dates.</p>
+      <div class="rooms" id="rooms"><p class="lead">Chargement…</p></div>
+    </div>
+  </section>
+
+  <section class="services" id="services">
+    <div class="wrap">
+      <h2>Services</h2>
+      <p class="lead">Tout pour un séjour sans souci.</p>
+      <div class="sgrid">
+        <div class="s"><span class="ic">🍳</span><b>Petit-déjeuner</b><p>Buffet de producteurs locaux, 7h–10h30.</p></div>
+        <div class="s"><span class="ic">🧖</span><b>Spa</b><p>Sauna et hammam en accès libre.</p></div>
+        <div class="s"><span class="ic">🚗</span><b>Parking privé</b><p>Sécurisé, avec borne de recharge.</p></div>
+        <div class="s"><span class="ic">🚲</span><b>Vélos</b><p>Location pour faire le tour du lac.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="acces">
+    <div class="wrap">
+      <h2>Accès</h2>
+      <p class="lead">Bord du lac d'Annecy, à 10 minutes à pied de la vieille ville. Gare d'Annecy à 10 minutes en taxi, aéroport de Genève à 45 minutes. Arrivée dès 15h, départ avant 11h.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© Hôtel Les Tilleuls — établissement fictif de démonstration</span>
+    <span>Assistant et recherche de séjour par WHATGO AI</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var rooms = [];
+  function $(s) { return document.querySelector(s); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function fr(d) { return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); }
+
+  // Faux "moteur de réservation" : lit les dates transmises par le chatbot.
+  function showBooking() {
+    var q = new URLSearchParams(location.search);
+    var arrivee = q.get('arrivee'), depart = q.get('depart');
+    if (!arrivee || !depart) return;
+    var nights = Math.round((Date.parse(depart) - Date.parse(arrivee)) / 86400000);
+    var room = rooms.find(function (r) { return r.name === q.get('chambre'); });
+    var rows = [
+      ['Chambre', q.get('chambre') || '—'],
+      ['Arrivée', fr(arrivee)],
+      ['Départ', fr(depart)],
+      ['Voyageurs', (q.get('personnes') || '2') + ' personne(s)'],
+    ];
+    if (room && nights > 0) rows.push(['Total', ((room.priceCents * nights) / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) + ' · ' + nights + ' nuit(s)']);
+    $('#bookingSummary').innerHTML = rows.map(function (r) { return '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>'; }).join('');
+    $('#booking').classList.add('on');
+    setTimeout(function () { $('#reservation').scrollIntoView({ behavior: 'smooth' }); }, 200);
+  }
+  $('#confirmBtn').addEventListener('click', function () { $('#notice').style.display = 'block'; });
+
+  fetch('/api/shop/hotel-demo/catalog').then(function (r) { return r.json(); }).then(function (data) {
+    rooms = data.products || [];
+    rooms.sort(function (a, b) { return a.priceCents - b.priceCents; });
+    $('#rooms').innerHTML = rooms.map(function (r) {
+      return '<article class="room"><img src="' + esc(r.image) + '" alt="' + esc(r.name) + '" loading="lazy"><div class="room__b">' +
+        (r.capacity ? '<span class="room__cap">Jusqu\'à ' + r.capacity + ' personne' + (r.capacity > 1 ? 's' : '') + '</span>' : '') +
+        '<span class="room__n">' + esc(r.name) + '</span><span class="room__d">' + esc(r.description) + '</span>' +
+        '<div class="room__f"><span class="room__p"><span>dès </span><b>' + esc(r.price) + '</b><span> / nuit</span></span>' +
+        '<button class="btn btn--navy" type="button" onclick="window.WHATGO && WHATGO.stay()">Disponibilités</button></div></div></article>';
+    }).join('');
+    showBooking();
+  }).catch(function () { $('#rooms').innerHTML = '<p class="lead">Chambres indisponibles pour le moment.</p>'; });
+})();
+</script>
+
+<script
+  src="/widget.js"
+  data-server="/api/chat"
+  data-business="hotel-demo"
+  data-name="Hôtel Les Tilleuls"
+  data-subtitle="Réception en ligne 24h/24"
+  data-color="#24485E"
+  data-welcome="Bonjour et bienvenue à l'Hôtel Les Tilleuls ! Je peux vous renseigner sur l'hôtel ou vérifier nos disponibilités pour vos dates."
+  data-nudge="false"
+></script>
+</body>
+</html>

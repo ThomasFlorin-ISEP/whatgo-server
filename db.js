@@ -214,6 +214,10 @@ async function initDb() {
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS products_business_idx ON products (business_id)`);
+  // Hôtellerie : les chambres sont des "produits" avec une capacité (personnes)
+  // et un prix par nuit ; le lien du moteur de réservation est propre à l'hôtel.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS capacity INTEGER`);
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS hotel_booking_url TEXT DEFAULT ''`);
 
   // Commandes : pour la démo elles sont créées automatiquement ; pour un
   // vrai client elles viendront de sa boutique (Shopify, WooCommerce…).
