@@ -651,6 +651,99 @@ function slugify(name) {
 // ============================================================
 // 1) ROUTE PUBLIQUE — le widget parle ici (une entreprise à la fois)
 // ============================================================
+// ------------------------------------------------------------
+// « Parler à un humain » (menu … du chat) : le visiteur laisse son nom et
+// un moyen de le recontacter. On l'enregistre comme un lead prioritaire
+// (visible dans le tableau de bord) et on l'envoie vers Make → CRM, avec
+// les mêmes champs qu'un lead classique (type "handoff").
+// ------------------------------------------------------------
+app.post('/api/handoff', async (req, res) => {
+  try {
+    if (isRateLimited(`handoff:${clientIp(req)}`, 5, 10 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de demandes. Merci de patienter quelques minutes.' });
+    }
+    const body = req.body || {};
+    const slug = String(body.business || '');
+    const name = String(body.name || '').trim().slice(0, 120);
+    const contact = String(body.contact || '').trim().slice(0, 200);
+    const note = String(body.message || '').trim().slice(0, 1000);
+    const email = extractEmail(contact);
+    const phone = email ? null : extractPhone(contact);
+    if (!name) return res.status(400).json({ error: 'Indiquez votre nom.' });
+    if (!email && !phone) return res.status(400).json({ error: 'Indiquez un email ou un numéro de téléphone valide.' });
+
+    const { rows: bRows } = await query('SELECT * FROM businesses WHERE slug = $1', [slug]);
+    const business = bRows[0];
+    if (!business) return res.status(404).json({ error: 'Entreprise inconnue.' });
+
+    let convoId = Number(body.conversationId) || null;
+    if (convoId) {
+      const { rows: c } = await query('SELECT id FROM conversations WHERE id = $1 AND business_id = $2', [convoId, business.id]);
+      if (!c[0]) convoId = null;
+    }
+    if (!convoId) {
+      const { rows: c } = await query(
+        'INSERT INTO conversations (business_id, visitor_label) VALUES ($1, $2) RETURNING id',
+        [business.id, name]
+      );
+      convoId = c[0].id;
+    } else {
+      await query('UPDATE conversations SET visitor_label = $1 WHERE id = $2', [name, convoId]);
+    }
+
+    const summary = 'Demande à parler à un humain' + (note ? ' : ' + note : '');
+    const { rows: leadRows } = await query(
+      'SELECT id FROM leads WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1', [convoId]
+    );
+    let leadId;
+    if (leadRows[0]) {
+      leadId = leadRows[0].id;
+      await query(
+        `UPDATE leads SET name = COALESCE(name, $1), email = COALESCE(email, $2), phone = COALESCE(phone, $3),
+           summary = $4, score = GREATEST(score, 85), updated_at = NOW()
+         WHERE id = $5`,
+        [name, email || null, phone || null, summary, leadId]
+      );
+    } else {
+      const { rows: ins } = await query(
+        `INSERT INTO leads (business_id, conversation_id, email, phone, name, message, summary, score, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 85, 'nouveau') RETURNING id`,
+        [business.id, convoId, email || null, phone || null, name, note || summary, summary]
+      );
+      leadId = ins[0].id;
+    }
+
+    await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+      [convoId, 'user', `Demande de contact humain — ${name}, ${email || phone}${note ? ' — ' + note : ''}`]);
+    const confirmation = `Merci ${name.split(' ')[0]} ! Un membre de l'équipe ${business.name} vous recontacte très vite.`;
+    await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)', [convoId, 'assistant', confirmation]);
+
+    res.json({ ok: true, conversationId: convoId, confirmation });
+
+    const parts = name.split(/\s+/).filter(Boolean);
+    sendLeadToWebhook(business, {
+      type: 'handoff',
+      business: business.name,
+      slug: business.slug,
+      conversationId: convoId,
+      email: email || '',
+      phone: phone || '',
+      message: note || summary,
+      date: new Date().toISOString(),
+      name,
+      firstName: parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || ''),
+      lastName: parts.length > 1 ? parts[parts.length - 1] : (parts[0] || 'Visiteur du chat'),
+      summary,
+      score: 85,
+      status: 'nouveau',
+      leadId,
+    });
+  } catch (err) {
+    console.error('Erreur /api/handoff:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 app.post('/api/chat', async (req, res) => {
   try {
     // Anti-abus : évite qu'un visiteur (ou un script) fasse exploser la
