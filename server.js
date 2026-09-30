@@ -856,10 +856,12 @@ function slugify(name) {
 // permet de la changer sans toucher au code installé sur le site du client.
 app.get('/api/widget/:slug/look', async (req, res) => {
   try {
-    const { rows } = await query('SELECT bot_name, bot_avatar FROM businesses WHERE slug = $1', [req.params.slug]);
+    const { rows } = await query('SELECT bot_name, bot_avatar, bot_suggestions FROM businesses WHERE slug = $1', [req.params.slug]);
     if (!rows[0]) return res.status(404).json({ error: 'Entreprise inconnue.' });
+    let suggestions = null;
+    try { suggestions = rows[0].bot_suggestions ? JSON.parse(rows[0].bot_suggestions) : null; } catch (e) { suggestions = null; }
     res.setHeader('Cache-Control', 'public, max-age=300');
-    res.json({ name: rows[0].bot_name || '', avatar: rows[0].bot_avatar || '' });
+    res.json({ name: rows[0].bot_name || '', avatar: rows[0].bot_avatar || '', suggestions });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
@@ -2912,6 +2914,11 @@ async function ensureWhatgoBusiness() {
   await query(
     `UPDATE businesses SET bot_name = 'Victoria', bot_avatar = '/avatars/victoria.jpg'
      WHERE slug = 'whatgo' AND bot_name IS NULL AND bot_avatar IS NULL`
+  ).catch(() => {});
+  // Questions fréquentes cliquables du site whatgo.ai (une seule fois).
+  await query(
+    `UPDATE businesses SET bot_suggestions = '{"fr": [{"label": "📅 Obtenir une démo", "text": "Je souhaite obtenir une démo"}, {"label": "💶 Voir les tarifs", "text": "Quels sont vos tarifs ?"}, {"label": "⚙️ Comment ça marche", "text": "Comment fonctionne WHATGO AI ?"}, {"label": "🔗 Intégration CRM", "text": "Est-ce que WHATGO se connecte à mon CRM ?"}], "en": [{"label": "📅 Book a demo", "text": "I would like to book a demo"}, {"label": "💶 See pricing", "text": "What are your prices?"}, {"label": "⚙️ How it works", "text": "How does WHATGO AI work?"}, {"label": "🔗 CRM integration", "text": "Does WHATGO connect to my CRM?"}]}'
+     WHERE slug = 'whatgo' AND bot_suggestions IS NULL`
   ).catch(() => {});
   const { rows } = await query('SELECT * FROM businesses WHERE slug = $1', ['whatgo']);
   const existing = rows[0];

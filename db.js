@@ -158,6 +158,8 @@ async function initDb() {
   // Apparence du chatbot réglée côté serveur (prénom et photo de l'assistante).
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS bot_name TEXT`);
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS bot_avatar TEXT`);
+  // Questions fréquentes cliquables sous le chat (JSON, par langue).
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS bot_suggestions TEXT`);
 
   // Instructions spécifiques (page "Base de connaissances") : texte libre
   // du client, en plus des documents, que le bot doit toujours respecter.
