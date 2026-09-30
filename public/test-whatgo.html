@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Test du chatbot WHATGO</title>
+<meta name="robots" content="noindex, nofollow" />
+<!-- Page de TEST interne : affiche le chatbot de l'entreprise WHATGO (le
+     même que sur whatgo.ai) mais servi par le serveur de test, pour essayer
+     les nouveautés avant de les mettre en ligne. Les leads partent vers le
+     webhook Make réglé pour WHATGO (onglet Intégrations). -->
+<style>
+  body{margin:0;font-family:Inter,-apple-system,'Segoe UI',sans-serif;background:#F4F7F5;color:#12211A;display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box}
+  .card{background:#fff;border:1px solid #E2EAE6;border-radius:20px;padding:28px 30px;max-width:560px;box-shadow:0 20px 50px rgba(18,33,26,.08)}
+  h1{font-size:1.4rem;margin:0 0 8px}
+  p{color:#4E5E56;line-height:1.6;margin:0 0 12px;font-size:.95rem}
+  code{background:#EEF3F1;border-radius:6px;padding:2px 6px;font-size:.88rem}
+  .tag{display:inline-block;background:#FFF4DE;color:#8A5A12;font-size:.74rem;font-weight:700;padding:4px 10px;border-radius:999px;margin-bottom:12px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <span class="tag">Page de test interne</span>
+    <h1>Chatbot WHATGO — serveur de test</h1>
+    <p>C'est le même assistant que sur whatgo.ai, mais avec les dernières nouveautés du serveur de test.</p>
+    <p>Pour tester l'envoi vers Zoho, écrivez par exemple : <code>Bonjour, je m'appelle Marc Dupont, je voudrais une démo pour mon salon, marc@test.fr, 06 12 34 56 78</code></p>
+    <p>Le lead part vers le scénario Make réglé dans l'onglet Intégrations de WHATGO, avec le nom, le résumé du besoin et le score.</p>
+  </div>
+  <script
+    src="/widget.js"
+    data-server="/api/chat"
+    data-business="whatgo"
+    data-name="WHATGO Assistant"
+    data-color="#1FAA59"
+    data-nudge="false"
+  ></script>
+</body>
+</html>
