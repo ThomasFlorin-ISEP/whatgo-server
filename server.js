@@ -567,10 +567,18 @@ function parseAppointmentConfirmation(replyText) {
 // et/ou le téléphone du visiteur : sans ça, un "rendez-vous confirmé" ne
 // sert à rien (personne à recontacter), donc le bot n'a pas le droit de
 // valider la date avant d'avoir obtenu au moins l'un des deux.
+// Assistante par défaut de tous les chatbots WHATGO : Victoria et sa photo.
+// Un client peut la renommer ou changer la photo (Paramètres) ; un champ
+// vidé volontairement ('') n'est pas remplacé par la valeur par défaut.
+const DEFAULT_BOT_NAME = 'Victoria';
+const DEFAULT_BOT_AVATAR = '/avatars/victoria.jpg';
+function botNameOf(b) { return b.bot_name == null ? DEFAULT_BOT_NAME : b.bot_name; }
+function botAvatarOf(b) { return b.bot_avatar == null ? DEFAULT_BOT_AVATAR : b.bot_avatar; }
+
 function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo) {
   let prompt = business.system_prompt + LANGUAGE_INSTRUCTION;
-  if (business.bot_name) {
-    prompt += `\n\nTON PRÉNOM : tu t'appelles ${business.bot_name}, et tu es l'intelligence artificielle qui répond ` +
+  if (botNameOf(business)) {
+    prompt += `\n\nTON PRÉNOM : tu t'appelles ${botNameOf(business)}, et tu es l'intelligence artificielle qui répond ` +
       `aux visiteurs de "${business.name}". Si on te demande ton nom, présente-toi ainsi. Tu restes transparent(e) : ` +
       `si on te demande si tu es un humain, réponds que tu es une IA et propose de mettre le visiteur en relation avec l'équipe.`;
   }
@@ -861,7 +869,7 @@ app.get('/api/widget/:slug/look', async (req, res) => {
     let suggestions = null;
     try { suggestions = rows[0].bot_suggestions ? JSON.parse(rows[0].bot_suggestions) : null; } catch (e) { suggestions = null; }
     res.setHeader('Cache-Control', 'public, max-age=60');
-    res.json({ name: rows[0].bot_name || '', avatar: rows[0].bot_avatar || '', suggestions });
+    res.json({ name: botNameOf(rows[0]), avatar: botAvatarOf(rows[0]), suggestions });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
@@ -879,8 +887,8 @@ app.get('/api/dashboard/bot-look', requireAuth, requireRole(['admin', 'lecture']
     const sugg = parseSuggestions(b.bot_suggestions);
     const list = Array.isArray(sugg) ? sugg : (sugg && (sugg.fr || sugg.en)) || [];
     res.json({
-      name: b.bot_name || '',
-      avatar: b.bot_avatar || '',
+      name: botNameOf(b),
+      avatar: botAvatarOf(b),
       suggestions: list.map((q) => (typeof q === 'string' ? q : q.text || q.label)).filter(Boolean),
     });
   } catch (err) {
@@ -3030,21 +3038,23 @@ TON RÔLE :
 // Mot de passe : variable DEMO_PASSWORD sur Render (sinon valeur par défaut).
 const DEMO_SLUG = 'salon-demo';
 
-// Démos : un prénom, un avatar illustré et des questions fréquentes pour
-// chaque assistante/assistant (une seule fois, modifiable ensuite dans
+// Démos : Victoria + questions fréquentes (modifiable ensuite dans
 // Paramètres → Apparence du chatbot).
 async function ensureDemoLooks() {
+  // Victoria partout : remplace aussi les anciens prénoms de démo.
   await query(
-    `UPDATE businesses SET bot_name = 'Chloé', bot_avatar = '/avatars/chloe.svg', bot_suggestions = '["💰 Quels sont vos tarifs ?", "🕒 Quels sont vos horaires ?", "📍 Où se trouve le salon ?"]'
-     WHERE slug = 'salon-demo' AND bot_name IS NULL AND bot_avatar IS NULL AND bot_suggestions IS NULL`
+    `UPDATE businesses SET bot_name = 'Victoria', bot_avatar = '/avatars/victoria.jpg'
+     WHERE slug IN ('salon-demo', 'boutique-demo', 'hotel-demo')
+       AND (bot_name IS NULL OR bot_name IN ('Chloé', 'Lucas', 'Camille'))`
   ).catch(() => {});
   await query(
-    `UPDATE businesses SET bot_name = 'Lucas', bot_avatar = '/avatars/lucas.svg', bot_suggestions = '["🎁 Une idée cadeau ?"]'
-     WHERE slug = 'boutique-demo' AND bot_name IS NULL AND bot_avatar IS NULL AND bot_suggestions IS NULL`
+    `UPDATE businesses SET bot_suggestions = '["💰 Quels sont vos tarifs ?","🕒 Quels sont vos horaires ?","📍 Où se trouve le salon ?"]' WHERE slug = 'salon-demo' AND bot_suggestions IS NULL`
   ).catch(() => {});
   await query(
-    `UPDATE businesses SET bot_name = 'Camille', bot_avatar = '/avatars/camille.svg', bot_suggestions = '["🅿️ Avez-vous un parking ?"]'
-     WHERE slug = 'hotel-demo' AND bot_name IS NULL AND bot_avatar IS NULL AND bot_suggestions IS NULL`
+    `UPDATE businesses SET bot_suggestions = '["🎁 Une idée cadeau ?"]' WHERE slug = 'boutique-demo' AND bot_suggestions IS NULL`
+  ).catch(() => {});
+  await query(
+    `UPDATE businesses SET bot_suggestions = '["🅿️ Avez-vous un parking ?"]' WHERE slug = 'hotel-demo' AND bot_suggestions IS NULL`
   ).catch(() => {});
 }
 
