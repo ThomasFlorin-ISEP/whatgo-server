@@ -413,9 +413,9 @@ function parseAppointmentConfirmation(replyText) {
 function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo) {
   let prompt = business.system_prompt + LANGUAGE_INSTRUCTION;
   if (business.bot_name) {
-    prompt += `\n\nTON PRÉNOM : tu t'appelles ${business.bot_name}, l'assistante IA de "${business.name}". ` +
-      `Si on te demande ton nom, présente-toi ainsi. Tu restes transparente : si on te demande si tu es un humain, ` +
-      `réponds que tu es une assistante IA et propose de mettre le visiteur en relation avec l'équipe.`;
+    prompt += `\n\nTON PRÉNOM : tu t'appelles ${business.bot_name}, et tu es l'intelligence artificielle qui répond ` +
+      `aux visiteurs de "${business.name}". Si on te demande ton nom, présente-toi ainsi. Tu restes transparent(e) : ` +
+      `si on te demande si tu es un humain, réponds que tu es une IA et propose de mettre le visiteur en relation avec l'équipe.`;
   }
 
   if (shouldOfferAppointment) {
@@ -670,10 +670,65 @@ app.get('/api/widget/:slug/look', async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'Entreprise inconnue.' });
     let suggestions = null;
     try { suggestions = rows[0].bot_suggestions ? JSON.parse(rows[0].bot_suggestions) : null; } catch (e) { suggestions = null; }
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Cache-Control', 'public, max-age=60');
     res.json({ name: rows[0].bot_name || '', avatar: rows[0].bot_avatar || '', suggestions });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// Tableau de bord → Paramètres → « Apparence du chatbot » : prénom, photo
+// et questions fréquentes cliquables.
+function parseSuggestions(raw) {
+  try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+app.get('/api/dashboard/bot-look', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT bot_name, bot_avatar, bot_suggestions FROM businesses WHERE id = $1', [req.user.businessId]);
+    const b = rows[0] || {};
+    const sugg = parseSuggestions(b.bot_suggestions);
+    const list = Array.isArray(sugg) ? sugg : (sugg && (sugg.fr || sugg.en)) || [];
+    res.json({
+      name: b.bot_name || '',
+      avatar: b.bot_avatar || '',
+      suggestions: list.map((q) => (typeof q === 'string' ? q : q.text || q.label)).filter(Boolean),
+    });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/bot-look:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+app.put('/api/dashboard/bot-look', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const name = String(body.name || '').trim().slice(0, 40);
+    let avatar = String(body.avatar || '').trim();
+    const okAvatar = !avatar ||
+      /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(avatar) && avatar.length < 150000 ||
+      /^\/avatars\/[a-z0-9-]+\.(jpg|png|svg)$/.test(avatar) ||
+      /^https:\/\/[^\s"'<>]+$/.test(avatar) && avatar.length < 500;
+    if (!okAvatar) return res.status(400).json({ error: 'Photo invalide (JPG ou PNG, 100 Ko maximum).' });
+    const list = (Array.isArray(body.suggestions) ? body.suggestions : [])
+      .map((q) => String(q || '').trim().slice(0, 80)).filter(Boolean).slice(0, 6);
+
+    const { rows } = await query('SELECT bot_suggestions FROM businesses WHERE id = $1', [req.user.businessId]);
+    const prev = parseSuggestions(rows[0] && rows[0].bot_suggestions);
+    let stored;
+    // Suggestions multilingues (ex. site WHATGO fr/en) : on ne remplace que le français.
+    if (prev && !Array.isArray(prev) && typeof prev === 'object') {
+      const prevFr = (prev.fr || []).map((q) => (typeof q === 'string' ? q : q.text));
+      const same = prevFr.length === list.length && prevFr.every((t, i) => t === list[i]);
+      stored = same ? prev : Object.assign({}, prev, { fr: list });
+    } else {
+      stored = list;
+    }
+    await query('UPDATE businesses SET bot_name = $1, bot_avatar = $2, bot_suggestions = $3 WHERE id = $4',
+      // Chaînes vides (pas NULL) : un réglage vidé volontairement n'est jamais re-rempli au redémarrage.
+      [name, avatar, JSON.stringify(stored), req.user.businessId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/bot-look:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
 

@@ -243,7 +243,7 @@
     .wgt-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; padding: 8px 14px 2px; background: #fff; flex-shrink: 0; scrollbar-width: none; }
     .wgt-actions::-webkit-scrollbar { display: none; }
     .wgt-actions[hidden] { display: none; }
-    .wgt-actions .wgt-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: .76rem; padding: 7px 10px; text-align: center; }
+    .wgt-actions .wgt-chip { min-width: 0; font-size: .76rem; line-height: 1.25; padding: 7px 10px; text-align: center; border-radius: 16px; }
     @media (hover: none) { .wgt-chip:hover { background: #fff; color: var(--wgt-color); } }
 
     @media (max-width: 480px) {
@@ -386,7 +386,9 @@
           list = list[lang] || list.fr || list.en || [];
         }
         suggestions = (Array.isArray(list) ? list : []).slice(0, 6).map(function (q) {
-          return typeof q === 'string' ? { label: q, text: q } : { label: q.label || q.text, text: q.text || q.label };
+          // Un emoji en début de libellé n'est pas envoyé à l'assistant.
+          if (typeof q === 'string') return { label: q, text: q.replace(/^[^0-9A-Za-zÀ-ÿ¿¡]+/, '') || q };
+          return { label: q.label || q.text, text: q.text || q.label };
         }).filter(function (q) { return q.label && q.text; });
         if (welcomeShown) showQuickReplies();
       }
