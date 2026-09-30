@@ -240,10 +240,11 @@
       background: #fff; color: #1B2321; font-family: inherit; resize: vertical; }
 
     /* ---------- Boutons d'action toujours visibles au-dessus du champ ---------- */
-    .wgt-actions { display: flex; gap: 6px; overflow-x: auto; padding: 8px 14px 2px; background: #fff; flex-shrink: 0; scrollbar-width: none; }
+    .wgt-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; padding: 8px 14px 2px; background: #fff; flex-shrink: 0; scrollbar-width: none; }
     .wgt-actions::-webkit-scrollbar { display: none; }
     .wgt-actions[hidden] { display: none; }
-    .wgt-actions .wgt-chip { white-space: nowrap; flex-shrink: 0; font-size: .8rem; padding: 7px 12px; }
+    .wgt-actions .wgt-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: .76rem; padding: 7px 10px; text-align: center; }
+    @media (hover: none) { .wgt-chip:hover { background: #fff; color: var(--wgt-color); } }
 
     @media (max-width: 480px) {
       .wgt-root .wgt-panel { left: 16px; right: 16px; width: auto; }
@@ -365,6 +366,7 @@
 
   // Prénom et photo de l'assistante réglés côté serveur (ils priment sur
   // data-name / data-avatar, pour pouvoir les changer sans toucher au site).
+  var suggestions = []; // questions fréquentes cliquables (réglées côté serveur)
   function loadLook() {
     if (!BUSINESS) return;
     fetch(API_BASE + '/api/widget/' + encodeURIComponent(BUSINESS) + '/look').then(function (r) { return r.json(); }).then(function (data) {
@@ -375,6 +377,18 @@
         Array.prototype.forEach.call(log.querySelectorAll('.wgt-meta'), function (m) {
           m.textContent = BOT_NAME + ' • ' + m.textContent.split(' • ').slice(1).join(' • ');
         });
+      }
+      if (data.suggestions) {
+        // Soit une liste, soit { fr: [...], en: [...] } selon la langue de la page.
+        var list = data.suggestions;
+        if (!Array.isArray(list)) {
+          var lang = ((document.documentElement.lang || navigator.language || 'fr') + '').slice(0, 2).toLowerCase();
+          list = list[lang] || list.fr || list.en || [];
+        }
+        suggestions = (Array.isArray(list) ? list : []).slice(0, 6).map(function (q) {
+          return typeof q === 'string' ? { label: q, text: q } : { label: q.label || q.text, text: q.text || q.label };
+        }).filter(function (q) { return q.label && q.text; });
+        if (welcomeShown) showQuickReplies();
       }
       if (data.avatar) {
         AVATAR = absUrl(data.avatar);
@@ -529,6 +543,9 @@
       chips.push(["🍳 Services de l'hôtel", function () { sendText("Quels services propose l'hôtel (petit-déjeuner, parking, spa…) ?"); }]);
       chips.push(['📍 Accès & horaires', function () { sendText("Comment venir à l'hôtel, et à quelle heure puis-je arriver ?"); }]);
     }
+    suggestions.forEach(function (q) {
+      chips.push([q.label, function () { sendText(q.text); }]);
+    });
     actionsBar.innerHTML = '';
     chips.forEach(function (c) {
       var b = el('button', 'wgt-chip', c[0]);
