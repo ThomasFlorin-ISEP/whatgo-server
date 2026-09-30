@@ -115,10 +115,18 @@
     .wgt-row .wgt-av { width: 32px; height: 32px; font-size: .65rem; background: var(--wgt-color); }
     .wgt-col { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
     .wgt-msg { padding: 10px 14px; border-radius: 16px; font-size: .9rem; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
+    .wgt-msg.bot { white-space: normal; }
+    .wgt-msg.bot p { margin: 0 0 8px; } .wgt-msg.bot p:last-child { margin-bottom: 0; }
+    .wgt-msg.bot ul, .wgt-msg.bot ol { margin: 4px 0 8px; padding-left: 20px; } .wgt-msg.bot li { margin: 2px 0; }
+    .wgt-msg.bot ul:last-child, .wgt-msg.bot ol:last-child { margin-bottom: 0; }
+    .wgt-msg.bot strong { font-weight: 700; }
+    .wgt-msg.bot a { color: var(--wgt-color); text-decoration: underline; font-weight: 600; word-break: break-word; }
     .wgt-msg.bot { background: #EEF1F5; color: #1B2321; border-bottom-left-radius: 6px; }
     .wgt-msg.user { background: var(--wgt-color); color: #fff; align-self: flex-end; max-width: 82%; border-bottom-right-radius: 6px; }
     .wgt-meta { font-size: .7rem; color: #9AA3AD; padding-left: 4px; }
 
+    .wgt-typing-row { align-self: flex-start; display: flex; flex-direction: column; gap: 4px; padding-left: 40px; }
+    .wgt-typing-row small { font-size: .7rem; color: #9AA3AD; padding-left: 4px; }
     .wgt-typing { align-self: flex-start; display: flex; gap: 4px; padding: 12px 14px; background: #EEF1F5; border-radius: 16px; }
     .wgt-typing i { width: 6px; height: 6px; border-radius: 50%; background: #8A9089; animation: wgt-b 1s infinite ease-in-out; }
     .wgt-typing i:nth-child(2) { animation-delay: .15s; } .wgt-typing i:nth-child(3) { animation-delay: .3s; }
@@ -240,16 +248,46 @@
       background: #fff; color: #1B2321; font-family: inherit; resize: vertical; }
 
     /* ---------- Boutons d'action toujours visibles au-dessus du champ ---------- */
-    .wgt-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; padding: 8px 14px 2px; background: #fff; flex-shrink: 0; scrollbar-width: none; }
+    .wgt-actions { display: flex; gap: 6px; overflow-x: auto; padding: 8px 14px 2px; background: #fff; flex-shrink: 0; scrollbar-width: none; }
     .wgt-actions::-webkit-scrollbar { display: none; }
     .wgt-actions[hidden] { display: none; }
-    .wgt-actions .wgt-chip { min-width: 0; font-size: .76rem; line-height: 1.25; padding: 7px 10px; text-align: center; border-radius: 16px; }
+    .wgt-actions .wgt-chip { flex-shrink: 0; white-space: nowrap; font-size: .76rem; padding: 6px 11px; border-width: 1px; }
     @media (hover: none) { .wgt-chip:hover { background: #fff; color: var(--wgt-color); } }
+
+    /* ---------- Questions de suite sous une réponse ---------- */
+    .wgt-follow { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 40px; margin-top: -4px; }
+    .wgt-follow .wgt-chip { font-size: .78rem; padding: 6px 11px; border-width: 1px; }
+
+    /* ---------- Pastille « messages non lus » sur la bulle ---------- */
+    .wgt-badge { position: absolute; top: -3px; right: -3px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+      background: #E5383B; color: #fff; font-size: .72rem; font-weight: 800; display: flex; align-items: center; justify-content: center;
+      border: 2px solid #fff; animation: wgt-pop .3s ease-out; }
+    .wgt-badge[hidden] { display: none; }
+    @keyframes wgt-pop { from { transform: scale(0); } to { transform: scale(1); } }
+
+    /* ---------- Écran d'accueil ---------- */
+    .wgt-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 10px 0 6px; gap: 4px; }
+    .wgt-hero .wgt-av-wrap .wgt-av { width: 72px; height: 72px; }
+    .wgt-hero .wgt-dot { width: 15px; height: 15px; right: 2px; bottom: 3px; }
+    .wgt-hero b { font-size: 1.05rem; color: #1B2321; margin-top: 6px; }
+    .wgt-hero span { font-size: .78rem; color: #6B7580; }
+    .wgt-cards { display: flex; flex-direction: column; gap: 7px; padding-left: 40px; }
+    .wgt-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; cursor: pointer;
+      background: #fff; border: 1px solid #E3E7EC; border-radius: 14px; padding: 11px 14px; font-size: .86rem; font-weight: 600; color: #1B2321;
+      box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: border-color .15s, transform .15s; }
+    .wgt-card:hover { border-color: var(--wgt-color); transform: translateY(-1px); }
+    .wgt-card i { font-style: normal; color: var(--wgt-color); font-size: 1.1rem; line-height: 1; }
 
     @media (max-width: 480px) {
       .wgt-root .wgt-panel { left: 16px; right: 16px; width: auto; }
       .wgt-root.wgt-center .wgt-panel { left: 16px; }
-      .wgt-root .wgt-panel.wgt-expanded { top: 16px; bottom: 16px; height: auto; max-height: none; }
+      /* Téléphone : plein écran, le champ de saisie reste au-dessus du clavier. */
+      .wgt-root .wgt-panel.wgt-open, .wgt-root .wgt-panel.wgt-open.wgt-expanded {
+        top: 0; left: 0; right: 0; bottom: auto; width: 100%; max-width: none; height: 100vh; height: 100dvh; max-height: none; border-radius: 0; }
+      .wgt-root.wgt-is-open .wgt-bubble { display: none; }
+      .wgt-head { padding-top: max(14px, env(safe-area-inset-top)); }
+      .wgt-form { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+      html.wgt-lock, html.wgt-lock body { overflow: hidden; }
     }
   `;
   document.head.appendChild(style);
@@ -270,7 +308,7 @@
   }
   applyPosition(currentPos);
   root.innerHTML = `
-    <button class="wgt-bubble" aria-label="Ouvrir le chat">
+    <button class="wgt-bubble" aria-label="Ouvrir le chat"><span class="wgt-badge" hidden></span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
     </button>
     <div class="wgt-panel">
@@ -374,6 +412,7 @@
       if (data.name) {
         BOT_NAME = data.name;
         root.querySelector('.wgt-name').textContent = BOT_NAME;
+        if (log.querySelector('.wgt-hero')) renderHero();
         Array.prototype.forEach.call(log.querySelectorAll('.wgt-meta'), function (m) {
           m.textContent = BOT_NAME + ' • ' + m.textContent.split(' • ').slice(1).join(' • ');
         });
@@ -395,6 +434,7 @@
       if (data.avatar) {
         AVATAR = absUrl(data.avatar);
         headAv.replaceChild(makeAvatar(), headAv.firstChild);
+        if (log.querySelector('.wgt-hero')) renderHero();
         Array.prototype.forEach.call(log.querySelectorAll('.wgt-row > .wgt-av'), function (a) {
           a.parentNode.replaceChild(makeAvatar(), a);
         });
@@ -415,7 +455,89 @@
     }
   }
 
-  function addMessage(role, text) {
+  // --- Mise en forme légère des réponses : **gras**, listes, liens cliquables ---
+  function escHtml(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function fmtInline(t) {
+    var toks = [];
+    function tok(h) { toks.push(h); return '\u0000' + (toks.length - 1) + '\u0000'; }
+    function link(u, label) { return '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + label + '</a>'; }
+    t = escHtml(t);
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, function (m, l, u) { return tok(link(u, l)); });
+    t = t.replace(/https?:\/\/[^\s<]*[^\s<.,;:!?)\]]/g, function (u) { return tok(link(u, u.replace(/^https?:\/\//, ''))); });
+    t = t.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, function (e) { return tok('<a href="mailto:' + e + '">' + e + '</a>'); });
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    return t.replace(/\u0000(\d+)\u0000/g, function (m, i) { return toks[+i]; });
+  }
+  function formatText(text) {
+    var lines = String(text || '').replace(/\r/g, '').split('\n');
+    var html = '', para = [], list = null;
+    function flushPara() { if (para.length) { html += '<p>' + para.join('<br>') + '</p>'; para = []; } }
+    function flushList() { if (list) { html += '<' + list.tag + '>' + list.items.join('') + '</' + list.tag + '>'; list = null; } }
+    lines.forEach(function (line) {
+      var ul = line.match(/^\s*[-•*]\s+(.*)$/);
+      var ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      if (ul || ol) {
+        flushPara();
+        var tag = ul ? 'ul' : 'ol';
+        if (!list || list.tag !== tag) { flushList(); list = { tag: tag, items: [] }; }
+        list.items.push('<li>' + fmtInline((ul || ol)[1]) + '</li>');
+      } else if (!line.trim()) {
+        flushPara(); flushList();
+      } else {
+        flushList(); para.push(fmtInline(line));
+      }
+    });
+    flushPara(); flushList();
+    return html;
+  }
+
+  // Affichage progressif (mot à mot) d'une réponse déjà mise en forme.
+  function reveal(node, done) {
+    var reduce = false;
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+    var texts = [], n, total = 0;
+    while ((n = walker.nextNode())) { texts.push({ n: n, full: n.nodeValue }); total += n.nodeValue.length; }
+    if (reduce || total < 40) { if (done) done(); return; }
+    texts.forEach(function (t) { t.n.nodeValue = ''; });
+    var links = node.querySelectorAll('li, a, strong');
+    var step = Math.max(3, Math.ceil(total / 55)), shown = 0, idx = 0;
+    var timer = setInterval(function () {
+      var budget = step;
+      while (budget > 0 && idx < texts.length) {
+        var t = texts[idx], cur = t.n.nodeValue.length, left = t.full.length - cur;
+        var take = Math.min(left, budget);
+        // On avance jusqu'à la fin du mot pour ne pas couper les mots.
+        var end = cur + take;
+        while (end < t.full.length && /\S/.test(t.full.charAt(end))) end++;
+        t.n.nodeValue = t.full.slice(0, end);
+        budget -= (end - cur); shown += (end - cur);
+        if (end >= t.full.length) idx++;
+      }
+      log.scrollTop = log.scrollHeight;
+      if (idx >= texts.length) { clearInterval(timer); if (done) done(); }
+    }, 22);
+  }
+
+  var transcript = []; // messages affichés, gardés pendant la visite (changement de page)
+  var unread = 0;
+  var badge = root.querySelector('.wgt-badge');
+  function setUnread(n) {
+    unread = n;
+    badge.textContent = n > 9 ? '9+' : String(n);
+    badge.hidden = n <= 0;
+  }
+
+  function addMessage(role, text, opts) {
+    opts = opts || {};
+    if (!opts.restore) {
+      transcript.push({ r: role, t: text, d: nowStr() });
+      if (transcript.length > 80) transcript = transcript.slice(-80);
+      saveStateSoon();
+      if (role !== 'user' && !panel.classList.contains('wgt-open')) setUnread(unread + 1);
+    }
     if (role === 'user') {
       var u = document.createElement('div');
       u.className = 'wgt-msg user';
@@ -429,17 +551,37 @@
       col.className = 'wgt-col';
       var m = document.createElement('div');
       m.className = 'wgt-msg bot';
-      m.textContent = text;
+      m.innerHTML = formatText(text);
       var meta = document.createElement('div');
       meta.className = 'wgt-meta';
-      meta.textContent = BOT_NAME + ' • ' + nowStr();
+      meta.textContent = BOT_NAME + ' • ' + (opts.time || nowStr());
       col.appendChild(m);
       col.appendChild(meta);
       row.appendChild(col);
       log.appendChild(row);
+      if (opts.animate) { log.scrollTop = log.scrollHeight; reveal(m, opts.done); return m; }
     }
     log.scrollTop = log.scrollHeight;
+    if (opts.done) opts.done();
+    return null;
   }
+
+  // --- Conversation gardée pendant toute la visite, même en changeant de page ---
+  var STATE_KEY = 'wgt-state-' + (BUSINESS || '');
+  var saveTimer = null;
+  function saveStateSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveState, 0);
+  }
+  function saveState() {
+    try {
+      sessionStorage.setItem(STATE_KEY, JSON.stringify({
+        c: conversationId, h: history.slice(-40), m: transcript, o: panel.classList.contains('wgt-open'),
+        i: hasInteracted, u: unread,
+      }));
+    } catch (e) {}
+  }
+  function clearState() { try { sessionStorage.removeItem(STATE_KEY); } catch (e) {} }
 
   // ------------------------------------------------------------
   // RÉSERVATION : services → jour → créneau → coordonnées → confirmé.
@@ -548,15 +690,35 @@
     suggestions.forEach(function (q) {
       chips.push([q.label, function () { sendText(q.text); }]);
     });
+    function run(c) { hasInteracted = true; showQuickReplies(); c[1](); }
     actionsBar.innerHTML = '';
+    if (cardsBox) { cardsBox.remove(); cardsBox = null; }
+    if (!hasInteracted && welcomeShown && chips.length) {
+      // Avant le premier message : les questions en cartes sous l'accueil.
+      cardsBox = el('div', 'wgt-cards');
+      chips.forEach(function (c) {
+        var b = el('button', 'wgt-card');
+        b.type = 'button';
+        b.appendChild(el('span', null, c[0]));
+        b.appendChild(el('i', null, '›'));
+        b.addEventListener('click', function () { run(c); });
+        cardsBox.appendChild(b);
+      });
+      var anchor = log.querySelector('.wgt-row');
+      if (anchor && anchor.nextSibling) log.insertBefore(cardsBox, anchor.nextSibling); else log.appendChild(cardsBox);
+      actionsBar.hidden = true;
+      return;
+    }
+    // Ensuite : une barre compacte toujours visible au-dessus du champ.
     chips.forEach(function (c) {
       var b = el('button', 'wgt-chip', c[0]);
       b.type = 'button';
-      b.addEventListener('click', function () { hasInteracted = true; c[1](); });
+      b.addEventListener('click', function () { run(c); });
       actionsBar.appendChild(b);
     });
     actionsBar.hidden = !chips.length || !welcomeShown;
   }
+  var cardsBox = null;
   // Les boutons d'action restent visibles : plus rien à retirer.
   function removeQuickReplies() {}
 
@@ -921,12 +1083,14 @@
   }
 
   function showTyping() {
-    var t = document.createElement('div');
-    t.className = 'wgt-typing';
+    var wrap = el('div', 'wgt-typing-row');
+    var t = el('div', 'wgt-typing');
     t.innerHTML = '<i></i><i></i><i></i>';
-    log.appendChild(t);
+    wrap.appendChild(t);
+    wrap.appendChild(el('small', null, BOT_NAME + ' écrit…'));
+    log.appendChild(wrap);
     log.scrollTop = log.scrollHeight;
-    return t;
+    return wrap;
   }
 
   // --- Mémoire "déjà ouvert pendant cette visite" (pour ne pas rouvrir la fenêtre à chaque page) ---
@@ -945,36 +1109,75 @@
     try { sessionStorage.setItem('wgt-nudged', '1'); } catch (e) {}
   }
 
-  function showWelcome() {
+  // Écran d'accueil : grande photo, prénom, « répond en quelques secondes ».
+  function renderHero() {
+    var old = log.querySelector('.wgt-hero');
+    var hero = el('div', 'wgt-hero');
+    var w = el('div', 'wgt-av-wrap');
+    w.appendChild(makeAvatar());
+    w.appendChild(el('span', 'wgt-dot'));
+    hero.appendChild(w);
+    hero.appendChild(el('b', null, BOT_NAME));
+    hero.appendChild(el('span', null, 'Assistant IA · Répond en quelques secondes'));
+    if (old) old.parentNode.replaceChild(hero, old); else log.insertBefore(hero, log.firstChild);
+  }
+
+  function showWelcome(instant) {
     if (welcomed) return;
     welcomed = true;
-    var t = showTyping();
-    setTimeout(function () {
-      t.remove();
+    renderHero();
+    function done() {
       addMessage('bot', WELCOME);
       welcomeShown = true;
       showQuickReplies();
-    }, 900);
+    }
+    if (instant) return done();
+    var t = showTyping();
+    setTimeout(function () { t.remove(); done(); }, 900);
+  }
+
+  function isPhone() { return window.matchMedia && window.matchMedia('(max-width: 480px)').matches; }
+  // Téléphone : la fenêtre suit la hauteur visible (clavier ouvert compris).
+  function fitViewport() {
+    if (!panel.classList.contains('wgt-open') || !isPhone() || !window.visualViewport) { panel.style.height = ''; panel.style.top = ''; return; }
+    panel.style.height = window.visualViewport.height + 'px';
+    panel.style.top = window.visualViewport.offsetTop + 'px';
+    log.scrollTop = log.scrollHeight;
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitViewport);
+    window.visualViewport.addEventListener('scroll', fitViewport);
   }
 
   function openPanel(byUser) {
     panel.classList.add('wgt-open');
+    root.classList.add('wgt-is-open');
+    if (isPhone()) document.documentElement.classList.add('wgt-lock');
+    fitViewport();
+    setUnread(0);
     markSeen();
     showWelcome();
-    if (byUser) setTimeout(function () { input.focus(); }, 50);
+    saveStateSoon();
+    if (byUser && !isPhone()) setTimeout(function () { input.focus(); }, 50);
   }
 
   function closePanel() {
     closeMenu();
     panel.classList.remove('wgt-open');
+    root.classList.remove('wgt-is-open');
+    document.documentElement.classList.remove('wgt-lock');
+    panel.style.height = ''; panel.style.top = '';
     markSeen();
+    saveStateSoon();
   }
 
   // Relance : ré-ouvre la fenêtre avec un message proactif, comme à
   // l'arrivée sur le site, mais plus tard dans la visite — uniquement si
   // le visiteur n'a jamais écrit et n'a pas déjà été relancé cette visite.
   function showNudge() {
+    if (isPhone()) { showWelcome(true); addMessage('bot', NUDGE_MESSAGE); return; }
     panel.classList.add('wgt-open');
+    root.classList.add('wgt-is-open');
     markSeen();
     var t = showTyping();
     setTimeout(function () {
@@ -1045,6 +1248,9 @@
   function resetConversation() {
     convGen++;
     log.innerHTML = '';
+    cardsBox = null;
+    transcript = [];
+    clearState();
     history = [];
     conversationId = null;
     activeCard = null;
@@ -1109,6 +1315,7 @@
     else if (act === 'human') {
       closeMenu();
       hasInteracted = true;
+      showQuickReplies();
       var intro = "Bien sûr ! Laissez-moi vos coordonnées et un membre de l'équipe vous recontacte rapidement :";
       addMessage('bot', intro);
       history.push({ role: 'assistant', content: intro });
@@ -1125,8 +1332,8 @@
     stay: function () {
       openPanel(false);
       if (!hotelEnabled) return;
-      removeQuickReplies();
       hasInteracted = true;
+      showQuickReplies();
       setTimeout(function () {
         addMessage('bot', 'Avec plaisir ! Indiquez vos dates et le nombre de personnes :');
         history.push({ role: 'assistant', content: 'Avec plaisir ! Indiquez vos dates et le nombre de personnes :' });
@@ -1136,8 +1343,8 @@
     book: function () {
       openPanel(false);
       if (!bookingServices) return;
-      removeQuickReplies();
       hasInteracted = true;
+      showQuickReplies();
       setTimeout(function () {
         if (!activeCard) {
           addMessage('bot', bookingIntro());
@@ -1154,10 +1361,32 @@
   });
   closeBtn.addEventListener('click', closePanel);
 
-  // --- Ouverture automatique à l'arrivée sur la page (ordinateur et mobile, une fois par visite) ---
+  // --- Reprise de la conversation après un changement de page ---
+  (function restoreState() {
+    var st = null;
+    try { st = JSON.parse(sessionStorage.getItem(STATE_KEY) || 'null'); } catch (e) { st = null; }
+    if (!st || !st.m || !st.m.length) return;
+    conversationId = st.c || null;
+    history = Array.isArray(st.h) ? st.h : [];
+    transcript = st.m;
+    hasInteracted = !!st.i;
+    welcomed = true;
+    welcomeShown = true;
+    renderHero();
+    transcript.forEach(function (m) { addMessage(m.r, m.t, { restore: true, time: m.d || '' }); });
+    showQuickReplies();
+    if (st.o && !isPhone()) openPanel(false);
+    else setUnread(st.u || 0);
+  })();
+
+  // --- Ouverture automatique à l'arrivée sur la page (une fois par visite).
+  // Sur téléphone, on n'ouvre pas en plein écran : le message d'accueil
+  // arrive avec une pastille sur la bulle. ---
   if (AUTO_OPEN && !alreadySeen()) {
     setTimeout(function () {
-      if (!alreadySeen() && !panel.classList.contains('wgt-open')) openPanel(false);
+      if (alreadySeen() || panel.classList.contains('wgt-open')) return;
+      if (isPhone()) { markSeen(); showWelcome(true); }
+      else openPanel(false);
     }, AUTO_DELAY);
   }
 
@@ -1181,10 +1410,59 @@
     sendText(text);
   });
 
+  function clearFollowups() {
+    Array.prototype.forEach.call(log.querySelectorAll('.wgt-follow'), function (f) { f.remove(); });
+  }
+  function showFollowups(list) {
+    if (!list || !list.length) return;
+    var box = el('div', 'wgt-follow');
+    list.forEach(function (q) {
+      var b = el('button', 'wgt-chip', q);
+      b.type = 'button';
+      b.addEventListener('click', function () { sendText(q); });
+      box.appendChild(b);
+    });
+    log.appendChild(box);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Formulaire de coordonnées : envoie un message clair à l'assistant, ce qui
+  // crée le lead (nom, email, téléphone) exactement comme s'il les avait tapés.
+  function showContactForm() {
+    if (log.querySelector('.wgt-contact')) return;
+    var card = el('div', 'wgt-bk wgt-contact');
+    card.appendChild(el('h4', null, 'Vos coordonnées'));
+    var nameIn = el('input'); nameIn.placeholder = 'Prénom et nom'; nameIn.autocomplete = 'name';
+    var emailIn = el('input'); emailIn.placeholder = 'Email'; emailIn.type = 'email'; emailIn.autocomplete = 'email';
+    var phoneIn = el('input'); phoneIn.placeholder = 'Téléphone'; phoneIn.type = 'tel'; phoneIn.autocomplete = 'tel';
+    var err = el('p', 'wgt-bk-err'); err.style.display = 'none';
+    var btn = el('button', 'wgt-cta', 'Envoyer'); btn.type = 'button';
+    [nameIn, emailIn, phoneIn, btn, err].forEach(function (n) { card.appendChild(n); });
+    card.appendChild(el('p', 'wgt-bk-legal', "Vos coordonnées servent uniquement à vous recontacter."));
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
+    btn.addEventListener('click', function () {
+      var name = nameIn.value.trim(), email = emailIn.value.trim(), phone = phoneIn.value.trim();
+      err.style.display = 'none';
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = "L'email ne semble pas valide."; err.style.display = 'block'; return; }
+      if (phone && phone.replace(/\D/g, '').length < 8) { err.textContent = 'Le numéro de téléphone ne semble pas valide.'; err.style.display = 'block'; return; }
+      if (!email && !phone) { err.textContent = 'Indiquez au moins un email ou un téléphone.'; err.style.display = 'block'; return; }
+      var parts = [];
+      if (name) parts.push("Je m'appelle " + name + '.');
+      if (email) parts.push('Mon email : ' + email + '.');
+      if (phone) parts.push('Mon téléphone : ' + phone + '.');
+      card.remove();
+      sendText(parts.join(' '));
+    });
+  }
+
   async function sendText(text) {
     sendBtn.disabled = true;
     hasInteracted = true;
-    removeQuickReplies();
+    showQuickReplies();
+    clearFollowups();
+    var oldContact = log.querySelector('.wgt-contact');
+    if (oldContact) oldContact.remove();
 
     addMessage('user', text);
     history.push({ role: 'user', content: text });
@@ -1206,22 +1484,29 @@
       if (data.error) {
         addMessage('bot', "Désolé, une erreur est survenue. Réessayez dans un instant.");
       } else {
-        addMessage('bot', data.reply);
-        ding();
         history.push({ role: 'assistant', content: data.reply });
         conversationId = data.conversationId;
-        // Le serveur demande d'afficher un module : réservation, fiches
-        // produits ou suivi de commande.
-        if (data.ui && data.ui.type === 'booking' && bookingServices) startBooking();
-        if (data.ui && data.ui.type === 'products' && data.ui.items && data.ui.items.length) showProducts(data.ui.items);
-        if (data.ui && data.ui.type === 'order') showOrderForm();
-        if (data.ui && data.ui.type === 'stay' && hotelEnabled) showStayForm();
+        ding();
+        // Réponse affichée mot à mot, puis les modules demandés par le
+        // serveur (réservation, fiches produits, suivi de commande, séjour,
+        // formulaire de coordonnées) et les questions de suite.
+        addMessage('bot', data.reply, { animate: true, done: function () {
+          if (gen !== convGen) return;
+          if (data.ui && data.ui.type === 'booking' && bookingServices) startBooking();
+          if (data.ui && data.ui.type === 'products' && data.ui.items && data.ui.items.length) showProducts(data.ui.items);
+          if (data.ui && data.ui.type === 'order') showOrderForm();
+          if (data.ui && data.ui.type === 'stay' && hotelEnabled) showStayForm();
+          if (data.contactForm) showContactForm();
+          showFollowups(data.followups);
+          saveStateSoon();
+        } });
       }
     } catch (err) {
       typing.remove();
       if (gen === convGen) addMessage('bot', "Impossible de contacter le serveur. Vérifiez votre connexion.");
     }
     sendBtn.disabled = false;
-    input.focus();
+    saveStateSoon();
+    if (!isPhone()) input.focus();
   }
 })();

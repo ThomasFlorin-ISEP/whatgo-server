@@ -410,6 +410,44 @@ function parseAppointmentConfirmation(replyText) {
 // et/ou le téléphone du visiteur : sans ça, un "rendez-vous confirmé" ne
 // sert à rien (personne à recontacter), donc le bot n'a pas le droit de
 // valider la date avant d'avoir obtenu au moins l'un des deux.
+// ------------------------------------------------------------
+// Confort du chat : mise en forme, questions de suite, formulaire de
+// coordonnées. Les marqueurs sont retirés avant affichage et enregistrement.
+// ------------------------------------------------------------
+const FOLLOWUPS_MARKER_REGEX = /\[\s*SUITES?\s*:\s*([^\]]*)\]/gi;
+const CONTACT_FORM_MARKER = '[FORMULAIRE_CONTACT]';
+const CONTACT_ASK_REGEX = /\b(votre|vos|ton|tes|your)\s+(adresse\s+)?(e-?mail|mail|num[ée]ro|t[ée]l[ée]phone|portable|coordonn[ée]es|phone|contact details)/i;
+const CHAT_UX_INSTRUCTION =
+  `\n\nMISE EN FORME : réponses courtes et aérées. Tu peux mettre en **gras** les points clés et faire des listes ` +
+  `avec des tirets ("- ") quand il y a plusieurs éléments. Écris les liens en entier (https://...).` +
+  `\n\nQUESTIONS DE SUITE : termine CHAQUE réponse par une dernière ligne, seule, au format exact ` +
+  `[SUITES: question 1 | question 2 | question 3] avec 2 ou 3 questions très courtes (6 mots maximum) que le visiteur ` +
+  `pourrait vouloir poser ensuite, écrites de son point de vue et dans la langue de la conversation. Ne les annonce pas ` +
+  `et ne les répète pas dans le texte.`;
+const CONTACT_FORM_INSTRUCTION =
+  `\n\nFORMULAIRE DE COORDONNÉES : quand tu demandes au visiteur son email ou son téléphone, ajoute le marqueur ` +
+  `[FORMULAIRE_CONTACT] juste avant la ligne [SUITES: ...] : un petit formulaire s'affichera sous ton message.`;
+function extractChatExtras(reply, hasContactInfo) {
+  let followups = [];
+  let text = String(reply || '').replace(FOLLOWUPS_MARKER_REGEX, (m, list) => {
+    followups = String(list).split('|').map((q) => q.replace(/^[\s"«»“”-]+|[\s"«»“”]+$/g, '').slice(0, 60))
+      .filter((q) => q.length > 1).slice(0, 3);
+    return '';
+  });
+  // Filet de sécurité : ligne « SUITES : a | b » écrite sans crochets.
+  text = text.replace(/^[ \t*_]*SUITES?[ \t*_]*:[ \t]*(.+)$/gim, (m, list) => {
+    if (!followups.length) {
+      followups = String(list).split('|').map((q) => q.replace(/^[\s"«»“”*-]+|[\s"«»“”*\]]+$/g, '').slice(0, 60))
+        .filter((q) => q.length > 1).slice(0, 3);
+    }
+    return '';
+  });
+  const hadMarker = text.includes(CONTACT_FORM_MARKER);
+  text = text.split(CONTACT_FORM_MARKER).join('').trim();
+  const contactForm = !hasContactInfo && (hadMarker || CONTACT_ASK_REGEX.test(text));
+  return { text, followups, contactForm };
+}
+
 // Assistante par défaut de tous les chatbots WHATGO : Victoria et sa photo.
 // Un client peut la renommer ou changer la photo (Paramètres) ; un champ
 // vidé volontairement ('') n'est pas remplacé par la valeur par défaut.
@@ -419,7 +457,8 @@ function botNameOf(b) { return b.bot_name == null ? DEFAULT_BOT_NAME : b.bot_nam
 function botAvatarOf(b) { return b.bot_avatar == null ? DEFAULT_BOT_AVATAR : b.bot_avatar; }
 
 function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo) {
-  let prompt = business.system_prompt + LANGUAGE_INSTRUCTION;
+  let prompt = business.system_prompt + LANGUAGE_INSTRUCTION + CHAT_UX_INSTRUCTION +
+    (hasContactInfo ? '' : CONTACT_FORM_INSTRUCTION);
   if (botNameOf(business)) {
     prompt += `\n\nTON PRÉNOM : tu t'appelles ${botNameOf(business)}, et tu es l'intelligence artificielle qui répond ` +
       `aux visiteurs de "${business.name}". Si on te demande ton nom, présente-toi ainsi. Tu restes transparent(e) : ` +
@@ -1048,6 +1087,8 @@ app.post('/api/chat', async (req, res) => {
     // instruite d'écrire (voir buildSystemPromptForCall).
     const parsedConfirmation = parseAppointmentConfirmation(reply);
     reply = parsedConfirmation.cleanedReply;
+    const chatExtras = extractChatExtras(reply, hasContactInfo);
+    reply = chatExtras.text || "Avec plaisir !";
     // Filet de sécurité : même si l'IA a émis le marqueur malgré la
     // consigne, on n'enregistre jamais un rendez-vous "confirmé" sans
     // aucun moyen de recontacter le visiteur (ça ne servirait à rien).
@@ -1129,7 +1170,7 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    res.json({ reply, conversationId: convoId });
+    res.json({ reply, conversationId: convoId, followups: chatExtras.followups, contactForm: chatExtras.contactForm });
 
     // Fiche lead (nom + résumé du besoin) : en arrière-plan, APRÈS avoir
     // répondu au visiteur — jamais bloquant, jamais visible dans le chat.
