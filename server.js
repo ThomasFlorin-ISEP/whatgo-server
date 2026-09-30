@@ -410,10 +410,18 @@ function parseAppointmentConfirmation(replyText) {
 // et/ou le téléphone du visiteur : sans ça, un "rendez-vous confirmé" ne
 // sert à rien (personne à recontacter), donc le bot n'a pas le droit de
 // valider la date avant d'avoir obtenu au moins l'un des deux.
+// Assistante par défaut de tous les chatbots WHATGO : Victoria et sa photo.
+// Un client peut la renommer ou changer la photo (Paramètres) ; un champ
+// vidé volontairement ('') n'est pas remplacé par la valeur par défaut.
+const DEFAULT_BOT_NAME = 'Victoria';
+const DEFAULT_BOT_AVATAR = '/avatars/victoria.jpg';
+function botNameOf(b) { return b.bot_name == null ? DEFAULT_BOT_NAME : b.bot_name; }
+function botAvatarOf(b) { return b.bot_avatar == null ? DEFAULT_BOT_AVATAR : b.bot_avatar; }
+
 function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo) {
   let prompt = business.system_prompt + LANGUAGE_INSTRUCTION;
-  if (business.bot_name) {
-    prompt += `\n\nTON PRÉNOM : tu t'appelles ${business.bot_name}, et tu es l'intelligence artificielle qui répond ` +
+  if (botNameOf(business)) {
+    prompt += `\n\nTON PRÉNOM : tu t'appelles ${botNameOf(business)}, et tu es l'intelligence artificielle qui répond ` +
       `aux visiteurs de "${business.name}". Si on te demande ton nom, présente-toi ainsi. Tu restes transparent(e) : ` +
       `si on te demande si tu es un humain, réponds que tu es une IA et propose de mettre le visiteur en relation avec l'équipe.`;
   }
@@ -671,7 +679,7 @@ app.get('/api/widget/:slug/look', async (req, res) => {
     let suggestions = null;
     try { suggestions = rows[0].bot_suggestions ? JSON.parse(rows[0].bot_suggestions) : null; } catch (e) { suggestions = null; }
     res.setHeader('Cache-Control', 'public, max-age=60');
-    res.json({ name: rows[0].bot_name || '', avatar: rows[0].bot_avatar || '', suggestions });
+    res.json({ name: botNameOf(rows[0]), avatar: botAvatarOf(rows[0]), suggestions });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
@@ -689,8 +697,8 @@ app.get('/api/dashboard/bot-look', requireAuth, requireRole(['admin', 'lecture']
     const sugg = parseSuggestions(b.bot_suggestions);
     const list = Array.isArray(sugg) ? sugg : (sugg && (sugg.fr || sugg.en)) || [];
     res.json({
-      name: b.bot_name || '',
-      avatar: b.bot_avatar || '',
+      name: botNameOf(b),
+      avatar: botAvatarOf(b),
       suggestions: list.map((q) => (typeof q === 'string' ? q : q.text || q.label)).filter(Boolean),
     });
   } catch (err) {
