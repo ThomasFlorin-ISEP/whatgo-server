@@ -13,7 +13,7 @@
  *   data-color="#B5122B"          couleur principale (bouton, en-tête, messages du visiteur)
  *   data-subtitle="Votre conseiller"   petite ligne sous le nom
  *   data-welcome="Bonjour et bienvenue chez WHATGO, puis-je vous renseigner ?"
- *   data-avatar="https://.../photo.jpg"   photo du conseiller (sinon pastille "AI")
+ *   data-avatar="https://.../photo.jpg"   photo du conseiller (sinon petit personnage illustré)
  *   data-position="right"         "right" (défaut) ou "left"
  *   data-autoopen="true"          ouvre la fenêtre toute seule ("false" pour désactiver)
  *   data-delay="1500"             délai avant l'ouverture automatique, en millisecondes
@@ -191,8 +191,53 @@
     .wgt-prod-tot { font-size: .74rem; color: #1B2321; font-weight: 600; }
     .wgt-status { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .74rem; font-weight: 700; background: #E7F5EC; color: #1E7A46; margin-bottom: 8px; }
 
+    /* ---------- En-tête : avatar, pastille « en ligne », menu … ---------- */
+    .wgt-av-wrap { position: relative; flex-shrink: 0; }
+    .wgt-av.wgt-av-svg { background: #fff; }
+    .wgt-av.wgt-av-svg svg { width: 100%; height: 100%; display: block; }
+    .wgt-row .wgt-av.wgt-av-svg { background: #fff; box-shadow: 0 0 0 1px #E3E7EC; }
+    .wgt-dot { position: absolute; right: 0; bottom: 1px; width: 12px; height: 12px; border-radius: 50%;
+      background: #22C55E; border: 2px solid #fff; }
+    .wgt-dot::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid #22C55E; opacity: .6; animation: wgt-pulse 2s infinite; }
+    @keyframes wgt-pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(1.9); opacity: 0; } }
+    .wgt-head-txt { min-width: 0; }
+    .wgt-title { display: flex; align-items: center; gap: 7px; }
+    .wgt-title b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wgt-ia { font-size: .62rem; font-weight: 800; letter-spacing: .04em; background: rgba(255,255,255,.22); border-radius: 999px; padding: 2px 7px; flex-shrink: 0; }
+    .wgt-head-txt .wgt-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wgt-head-btns { margin-left: auto; display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+    .wgt-head-btns .wgt-close { margin-left: 0; }
+    .wgt-more { background: none; border: none; color: #fff; cursor: pointer; opacity: .85; width: 30px; height: 30px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; }
+    .wgt-more:hover, .wgt-more[aria-expanded="true"] { opacity: 1; background: rgba(255,255,255,.16); }
+    .wgt-menu { position: absolute; top: 62px; right: 12px; z-index: 5; background: #fff; border-radius: 14px; min-width: 232px; padding: 6px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.04); animation: wgt-in .15s ease-out; }
+    .wgt-menu[hidden] { display: none; }
+    .wgt-menu button { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; border-radius: 9px;
+      padding: 9px 10px; font-size: .86rem; color: #1B2321; cursor: pointer; text-align: left; }
+    .wgt-menu button:hover { background: #F2F4F7; }
+    .wgt-menu button svg { width: 17px; height: 17px; flex-shrink: 0; color: #5B6570; }
+    .wgt-menu .wgt-grow { flex: 1; }
+    .wgt-check { color: var(--wgt-color); font-weight: 800; visibility: hidden; }
+    .wgt-menu .is-on .wgt-check { visibility: visible; }
+    .wgt-switch { width: 30px; height: 18px; border-radius: 999px; background: #CBD2D9; position: relative; flex-shrink: 0; transition: background .15s; }
+    .wgt-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+    .wgt-menu .is-on .wgt-switch { background: var(--wgt-color); }
+    .wgt-menu .is-on .wgt-switch::after { transform: translateX(12px); }
+    .wgt-sep { height: 1px; background: #EEF1F5; margin: 4px 6px; }
+    .wgt-panel.wgt-expanded { width: 560px; height: calc(100vh - 120px); max-height: 820px; }
+    .wgt-bk textarea { width: 100%; border: 1px solid #DDE2E7; border-radius: 10px; padding: 10px 12px; font-size: 16px; margin-bottom: 8px;
+      background: #fff; color: #1B2321; font-family: inherit; resize: vertical; }
+
+    /* ---------- Boutons d'action toujours visibles au-dessus du champ ---------- */
+    .wgt-actions { display: flex; gap: 6px; overflow-x: auto; padding: 8px 14px 2px; background: #fff; flex-shrink: 0; scrollbar-width: none; }
+    .wgt-actions::-webkit-scrollbar { display: none; }
+    .wgt-actions[hidden] { display: none; }
+    .wgt-actions .wgt-chip { white-space: nowrap; flex-shrink: 0; font-size: .8rem; padding: 7px 12px; }
+
     @media (max-width: 480px) {
       .wgt-root .wgt-panel { left: 16px; right: 16px; width: auto; }
+      .wgt-root .wgt-panel.wgt-expanded { top: 16px; bottom: 16px; height: auto; max-height: none; }
     }
   `;
   document.head.appendChild(style);
@@ -207,12 +252,25 @@
     </button>
     <div class="wgt-panel">
       <div class="wgt-head">
-        <div class="wgt-head-txt"><b class="wgt-name"></b><span class="wgt-sub"></span></div>
-        <button class="wgt-close" aria-label="Réduire">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/></svg>
-        </button>
+        <div class="wgt-head-txt"><div class="wgt-title"><b class="wgt-name"></b><span class="wgt-ia">IA</span></div><span class="wgt-sub"></span></div>
+        <div class="wgt-head-btns">
+          <button class="wgt-more" type="button" aria-label="Options" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+          </button>
+          <button class="wgt-close" aria-label="Réduire">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="wgt-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-act="new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="wgt-grow">Nouvelle conversation</span></button>
+        <button type="button" role="menuitem" data-act="expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg><span class="wgt-grow">Mode agrandi</span><span class="wgt-check">✓</span></button>
+        <button type="button" role="menuitem" data-act="sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg><span class="wgt-grow">Son des réponses</span><span class="wgt-switch"></span></button>
+        <div class="wgt-sep"></div>
+        <button type="button" role="menuitem" data-act="human"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="wgt-grow">Parler à un humain</span></button>
       </div>
       <div class="wgt-log"></div>
+      <div class="wgt-actions" hidden></div>
       <div class="wgt-powered">Propulsé par <b>WHATGO</b></div>
       <form class="wgt-form">
         <input type="text" placeholder="Tapez votre message ici…" autocomplete="off" />
@@ -234,7 +292,25 @@
   var sendBtn = root.querySelector('.wgt-send');
 
   root.querySelector('.wgt-name').textContent = BOT_NAME;
-  root.querySelector('.wgt-sub').textContent = SUBTITLE;
+  root.querySelector('.wgt-sub').textContent = 'En ligne · ' + SUBTITLE;
+  var moreBtn = root.querySelector('.wgt-more');
+  var menu = root.querySelector('.wgt-menu');
+  var actionsBar = root.querySelector('.wgt-actions');
+
+  // Petit personnage illustré (couleur de la marque) quand aucune photo
+  // n'est fournie via data-avatar.
+  var SAFE_COLOR = /^(#[0-9a-fA-F]{3,8}|rgba?\([0-9.,\s%]+\))$/.test(COLOR) ? COLOR : '#1FAA59';
+  var AVATAR_SVG = '<svg viewBox="0 0 40 40" aria-hidden="true">' +
+    '<circle cx="20" cy="20" r="20" fill="#fff"/>' +
+    '<path d="M20 6.5v4" stroke="' + SAFE_COLOR + '" stroke-width="2" stroke-linecap="round"/>' +
+    '<circle cx="20" cy="5.8" r="2.2" fill="' + SAFE_COLOR + '"/>' +
+    '<rect x="8" y="10.5" width="24" height="20" rx="9" fill="' + SAFE_COLOR + '" opacity=".14"/>' +
+    '<ellipse cx="15" cy="19" rx="2.3" ry="2.8" fill="' + SAFE_COLOR + '"/>' +
+    '<ellipse cx="25" cy="19" rx="2.3" ry="2.8" fill="' + SAFE_COLOR + '"/>' +
+    '<circle cx="15.8" cy="18" r=".85" fill="#fff"/><circle cx="25.8" cy="18" r=".85" fill="#fff"/>' +
+    '<circle cx="11.3" cy="23.8" r="1.9" fill="#FF8FA3" opacity=".55"/><circle cx="28.7" cy="23.8" r="1.9" fill="#FF8FA3" opacity=".55"/>' +
+    '<path d="M15.5 24.3q4.5 3.8 9 0" stroke="' + SAFE_COLOR + '" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+    '</svg>';
 
   function makeAvatar() {
     var av = document.createElement('div');
@@ -245,11 +321,19 @@
       img.alt = '';
       av.appendChild(img);
     } else {
-      av.textContent = 'AI';
+      av.classList.add('wgt-av-svg');
+      av.innerHTML = AVATAR_SVG;
     }
     return av;
   }
-  head.insertBefore(makeAvatar(), head.firstChild);
+  var headAv = document.createElement('div');
+  headAv.className = 'wgt-av-wrap';
+  headAv.appendChild(makeAvatar());
+  var onlineDot = document.createElement('span');
+  onlineDot.className = 'wgt-dot';
+  onlineDot.title = 'En ligne';
+  headAv.appendChild(onlineDot);
+  head.insertBefore(headAv, head.firstChild);
   loadBookingConfig();
   loadShopConfig();
 
@@ -360,9 +444,8 @@
 
   // Boutons rapides sous le message d'accueil, selon ce que l'entreprise
   // propose (réservation, boutique, suivi de commande).
-  var quickRow = null;
+  // Ils restent affichés en permanence au-dessus du champ de saisie.
   function showQuickReplies() {
-    if (quickRow || hasInteracted) return;
     var chips = [];
     if (bookingServices) {
       chips.push(['📅 Prendre rendez-vous', function () {
@@ -397,18 +480,17 @@
       chips.push(["🍳 Services de l'hôtel", function () { sendText("Quels services propose l'hôtel (petit-déjeuner, parking, spa…) ?"); }]);
       chips.push(['📍 Accès & horaires', function () { sendText("Comment venir à l'hôtel, et à quelle heure puis-je arriver ?"); }]);
     }
-    if (!chips.length) return;
-    quickRow = el('div', 'wgt-quick');
+    actionsBar.innerHTML = '';
     chips.forEach(function (c) {
       var b = el('button', 'wgt-chip', c[0]);
       b.type = 'button';
-      b.addEventListener('click', function () { removeQuickReplies(); hasInteracted = true; c[1](); });
-      quickRow.appendChild(b);
+      b.addEventListener('click', function () { hasInteracted = true; c[1](); });
+      actionsBar.appendChild(b);
     });
-    log.appendChild(quickRow);
-    log.scrollTop = log.scrollHeight;
+    actionsBar.hidden = !chips.length || !welcomeShown;
   }
-  function removeQuickReplies() { if (quickRow) { quickRow.remove(); quickRow = null; } }
+  // Les boutons d'action restent visibles : plus rien à retirer.
+  function removeQuickReplies() {}
 
   var activeCard = null;
   function bookingIntro() {
@@ -815,6 +897,7 @@
   }
 
   function closePanel() {
+    closeMenu();
     panel.classList.remove('wgt-open');
     markSeen();
   }
@@ -831,6 +914,132 @@
       addMessage('bot', NUDGE_MESSAGE);
     }, 900);
   }
+
+  // ------------------------------------------------------------
+  // MENU « … » : nouvelle conversation, mode agrandi, son, parler à un humain.
+  // ------------------------------------------------------------
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  var soundOn = lsGet('wgt-sound') !== 'off';
+  var audioCtx = null;
+  function unlockAudio() {
+    try {
+      if (!audioCtx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+  }
+  // Petit « ding » doux à deux notes quand l'assistant répond.
+  function ding() {
+    if (!soundOn || !audioCtx) return;
+    try {
+      var t = audioCtx.currentTime;
+      [660, 880].forEach(function (f, i) {
+        var o = audioCtx.createOscillator();
+        var g = audioCtx.createGain();
+        var s0 = t + i * 0.09;
+        o.type = 'sine';
+        o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, s0);
+        g.gain.exponentialRampToValueAtTime(0.12, s0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, s0 + 0.22);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(s0); o.stop(s0 + 0.25);
+      });
+    } catch (e) {}
+  }
+  root.addEventListener('pointerdown', unlockAudio);
+
+  var expandItem = menu.querySelector('[data-act="expand"]');
+  var soundItem = menu.querySelector('[data-act="sound"]');
+  function syncMenu() {
+    expandItem.classList.toggle('is-on', panel.classList.contains('wgt-expanded'));
+    soundItem.classList.toggle('is-on', soundOn);
+  }
+  function openMenu() { syncMenu(); menu.hidden = false; moreBtn.setAttribute('aria-expanded', 'true'); }
+  function closeMenu() { menu.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); }
+  moreBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (menu.hidden) openMenu(); else closeMenu();
+  });
+  document.addEventListener('click', function (e) {
+    if (!menu.hidden && !menu.contains(e.target) && e.target !== moreBtn) closeMenu();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
+
+  function resetConversation() {
+    log.innerHTML = '';
+    history = [];
+    conversationId = null;
+    activeCard = null;
+    hasInteracted = false;
+    welcomed = false;
+    welcomeShown = false;
+    actionsBar.hidden = true;
+    input.value = '';
+    showWelcome();
+  }
+
+  function showHandoffForm() {
+    var card = el('div', 'wgt-bk');
+    card.appendChild(el('h4', null, 'Être recontacté par un conseiller'));
+    var nameIn = el('input'); nameIn.placeholder = 'Votre nom'; nameIn.autocomplete = 'name';
+    var contactIn = el('input'); contactIn.placeholder = 'Email ou téléphone'; contactIn.autocomplete = 'email';
+    var noteIn = el('textarea'); noteIn.placeholder = 'Votre message (facultatif)'; noteIn.rows = 2;
+    var err = el('p', 'wgt-bk-err'); err.style.display = 'none';
+    var btn = el('button', 'wgt-cta', 'Envoyer ma demande'); btn.type = 'button';
+    [nameIn, contactIn, noteIn, btn, err].forEach(function (n) { card.appendChild(n); });
+    card.appendChild(el('p', 'wgt-bk-legal', 'Vos coordonnées servent uniquement à vous recontacter.'));
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
+    setTimeout(function () { nameIn.focus(); }, 50);
+
+    btn.addEventListener('click', async function () {
+      err.style.display = 'none';
+      var name = nameIn.value.trim();
+      var contact = contactIn.value.trim();
+      if (!name || !contact) { err.textContent = 'Indiquez votre nom et un email ou un téléphone.'; err.style.display = 'block'; return; }
+      btn.disabled = true; btn.textContent = 'Envoi…';
+      try {
+        var res = await fetch(API_BASE + '/api/handoff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ business: BUSINESS, conversationId: conversationId, name: name, contact: contact, message: noteIn.value.trim() }),
+        });
+        var data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Erreur');
+        conversationId = data.conversationId || conversationId;
+        card.remove();
+        addMessage('bot', data.confirmation);
+        history.push({ role: 'assistant', content: data.confirmation });
+        ding();
+      } catch (e) {
+        err.textContent = (e && e.message && e.message !== 'Failed to fetch') ? e.message : 'Impossible de contacter le serveur.';
+        err.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Envoyer ma demande';
+      }
+    });
+  }
+
+  menu.addEventListener('click', function (e) {
+    var item = e.target.closest ? e.target.closest('[data-act]') : null;
+    if (!item) return;
+    var act = item.getAttribute('data-act');
+    if (act === 'new') { closeMenu(); resetConversation(); }
+    else if (act === 'expand') { panel.classList.toggle('wgt-expanded'); syncMenu(); log.scrollTop = log.scrollHeight; }
+    else if (act === 'sound') { soundOn = !soundOn; lsSet('wgt-sound', soundOn ? 'on' : 'off'); syncMenu(); if (soundOn) { unlockAudio(); ding(); } }
+    else if (act === 'human') {
+      closeMenu();
+      hasInteracted = true;
+      var intro = "Bien sûr ! Laissez-moi vos coordonnées et un membre de l'équipe vous recontacte rapidement :";
+      addMessage('bot', intro);
+      history.push({ role: 'assistant', content: intro });
+      showHandoffForm();
+    }
+  });
 
   // Petite API pour le site du client : un bouton « Réserver » de sa page
   // peut ouvrir directement le parcours de réservation du widget.
@@ -920,6 +1129,7 @@
         addMessage('bot', "Désolé, une erreur est survenue. Réessayez dans un instant.");
       } else {
         addMessage('bot', data.reply);
+        ding();
         history.push({ role: 'assistant', content: data.reply });
         conversationId = data.conversationId;
         // Le serveur demande d'afficher un module : réservation, fiches
