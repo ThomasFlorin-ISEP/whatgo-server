@@ -970,7 +970,9 @@
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
 
+  var convGen = 0; // change à chaque « Nouvelle conversation »
   function resetConversation() {
+    convGen++;
     log.innerHTML = '';
     history = [];
     conversationId = null;
@@ -1011,6 +1013,7 @@
         });
         var data = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error || 'Erreur');
+        if (!card.isConnected) return;
         conversationId = data.conversationId || conversationId;
         card.remove();
         addMessage('bot', data.confirmation);
@@ -1115,6 +1118,7 @@
     history.push({ role: 'user', content: text });
 
     var typing = showTyping();
+    var gen = convGen;
 
     try {
       var res = await fetch(SERVER_URL, {
@@ -1124,6 +1128,8 @@
       });
       var data = await res.json();
       typing.remove();
+      // Réponse d'une conversation effacée entre-temps : on l'ignore.
+      if (gen !== convGen) { sendBtn.disabled = false; return; }
 
       if (data.error) {
         addMessage('bot', "Désolé, une erreur est survenue. Réessayez dans un instant.");
@@ -1141,7 +1147,7 @@
       }
     } catch (err) {
       typing.remove();
-      addMessage('bot', "Impossible de contacter le serveur. Vérifiez votre connexion.");
+      if (gen === convGen) addMessage('bot', "Impossible de contacter le serveur. Vérifiez votre connexion.");
     }
     sendBtn.disabled = false;
     input.focus();
