@@ -402,7 +402,7 @@ function logChatEvent(businessId, conversationId, type, productId, detail) {
 // is..."). Volontairement prudent : mieux vaut ne rien détecter (l'équipe
 // peut toujours saisir le nom à la main dans la fiche) que d'enregistrer
 // "Pour" à partir de "moi c'est pour un devis".
-const NAME_INTRO_REGEX = /(?:je\s+m['’]\s*appelle|moi\s*,?\s*c['’]\s*est|mon\s+(?:pr[ée]nom|nom)\s+(?:est|c['’]est)|my\s+name\s+is)\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]*(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]*)?)/i;
+const NAME_INTRO_REGEX = /(?:je\s+m['’]?\s*appel+e?|moi\s*,?\s*c['’]?\s*est|mon\s+(?:pr[ée]nom|nom)\s+(?:est|c['’]?\s*est)|my\s+name\s+is)\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]*(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]*)?)/i;
 const NAME_STOPWORDS = new Set([
   'pour', 'un', 'une', 'le', 'la', 'les', 'pas', 'bien', 'ok', 'juste', 'que', 'qui', 'au', 'aux', 'du', 'de',
   'des', 'en', 'sur', 'avec', 'a', 'à', 'très', 'tres', 'vraiment', 'moi', 'toi', 'nous', 'vous', 'ça', 'ca',
@@ -626,6 +626,39 @@ function computeLeadScore(message, isFirstUserMessage) {
 
 // Envoie le lead vers Make/Zapier/etc. sans jamais bloquer ni casser la
 // réponse du chatbot si le webhook est lent, en panne, ou mal configuré.
+// Envoi "enrichi" d'un lead vers Make/Zapier : on relit la fiche du lead
+// juste avant l'envoi pour y joindre le nom détecté, le résumé du besoin
+// (généré par l'IA) et le score. Les champs historiques (email, phone,
+// message, date, type) restent identiques pour ne casser aucun scénario Make.
+async function sendEnrichedLeadWebhook(pending) {
+  const { business, convoId, base } = pending;
+  let lead = null;
+  try {
+    const { rows } = await query(
+      'SELECT id, name, summary, score, status, email, phone FROM leads WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [convoId]
+    );
+    lead = rows[0] || null;
+  } catch (e) {
+    console.error('Lecture du lead pour le webhook:', e.message);
+  }
+  const name = (lead && lead.name) || '';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  sendLeadToWebhook(business, {
+    ...base,
+    email: base.email || (lead && lead.email) || '',
+    phone: base.phone || (lead && lead.phone) || '',
+    name,
+    firstName: parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || ''),
+    // Toujours rempli : les CRM (Zoho, Salesforce…) exigent souvent un nom.
+    lastName: parts.length > 1 ? parts[parts.length - 1] : (parts[0] || 'Visiteur du chat'),
+    summary: (lead && lead.summary) || '',
+    score: lead ? lead.score : null,
+    status: lead ? lead.status : '',
+    leadId: lead ? lead.id : null,
+  });
+}
+
 function sendLeadToWebhook(business, payload) {
   if (!business.webhook_url) return;
   fetch(business.webhook_url, {
@@ -809,6 +842,15 @@ function slugify(name) {
 // 1) ROUTE PUBLIQUE — le widget parle ici (une entreprise à la fois)
 // ============================================================
 app.post('/api/chat', async (req, res) => {
+  // Lead à envoyer vers Make/Zapier : envoyé APRÈS la réponse au visiteur,
+  // une fois le nom et le résumé du besoin calculés (voir plus bas).
+  let pendingLeadWebhook = null;
+  const flushLeadWebhook = () => {
+    if (!pendingLeadWebhook) return;
+    const p = pendingLeadWebhook;
+    pendingLeadWebhook = null;
+    sendEnrichedLeadWebhook(p).catch((e) => console.error('Webhook lead:', e.message));
+  };
   try {
     // Anti-abus : évite qu'un visiteur (ou un script) fasse exploser la
     // facture Gemini/Groq en spammant le chat. 20 messages/minute/IP laisse
@@ -892,15 +934,18 @@ app.post('/api/chat', async (req, res) => {
            VALUES ($1, $2, $3, $4, $5, $6, 'nouveau', $7)`,
           [business.id, convoId, newEmail || null, newPhone || null, lastUserMessage.content, score, existingAppointmentAt]
         );
-        sendLeadToWebhook(business, {
-          business: business.name,
-          slug: business.slug,
-          conversationId: convoId,
-          email: newEmail || '',
-          phone: newPhone || '',
-          message: lastUserMessage.content,
-          date: new Date().toISOString(),
-        });
+        pendingLeadWebhook = {
+          business, convoId,
+          base: {
+            business: business.name,
+            slug: business.slug,
+            conversationId: convoId,
+            email: newEmail || '',
+            phone: newPhone || '',
+            message: lastUserMessage.content,
+            date: new Date().toISOString(),
+          },
+        };
       } else {
         // Lead déjà existant pour cette conversation : on ne complète que
         // les champs qui manquaient encore (jamais on n'écrase un email ou
@@ -914,16 +959,19 @@ app.post('/api/chat', async (req, res) => {
         if (fieldsToUpdate.length) {
           params.push(existingLead.id);
           await query(`UPDATE leads SET ${fieldsToUpdate.join(', ')}, updated_at = NOW() WHERE id = $${i}`, params);
-          sendLeadToWebhook(business, {
-            business: business.name,
-            slug: business.slug,
-            conversationId: convoId,
-            email: newEmail || existingLead.email || '',
-            phone: newPhone || existingLead.phone || '',
-            message: lastUserMessage.content,
-            date: new Date().toISOString(),
-            type: 'lead_updated',
-          });
+          pendingLeadWebhook = {
+            business, convoId,
+            base: {
+              business: business.name,
+              slug: business.slug,
+              conversationId: convoId,
+              email: newEmail || existingLead.email || '',
+              phone: newPhone || existingLead.phone || '',
+              message: lastUserMessage.content,
+              date: new Date().toISOString(),
+              type: 'lead_updated',
+            },
+          };
         }
       }
     }
@@ -938,7 +986,9 @@ app.post('/api/chat', async (req, res) => {
       res.json({ reply: DRAFT_REPLY, conversationId: convoId });
       // Brouillon : pas d'appel à l'IA pour le résumé, mais on capte quand
       // même le nom si le visiteur s'est présenté.
-      refreshLeadNameOnly(convoId, messages).catch((e) => console.error('Nom lead (brouillon):', e.message));
+      refreshLeadNameOnly(convoId, messages)
+        .catch((e) => console.error('Nom lead (brouillon):', e.message))
+        .finally(flushLeadWebhook);
       return;
     }
 
@@ -1023,6 +1073,7 @@ app.post('/api/chat', async (req, res) => {
         reply = fallbackReply;
         usedFallback = true;
       } else {
+        flushLeadWebhook();
         return res.status(500).json({ error: data.error.message });
       }
     } else {
@@ -1172,10 +1223,12 @@ app.post('/api/chat', async (req, res) => {
     // Fiche lead (nom + résumé du besoin) : en arrière-plan, APRÈS avoir
     // répondu au visiteur — jamais bloquant, jamais visible dans le chat.
     refreshLeadCard(convoId, [...messages, { role: 'assistant', content: reply }])
-      .catch((e) => console.error('Erreur mise à jour fiche lead:', e.message));
+      .catch((e) => console.error('Erreur mise à jour fiche lead:', e.message))
+      .finally(flushLeadWebhook);
 
   } catch (err) {
     console.error('Erreur /api/chat:', err);
+    flushLeadWebhook();
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
