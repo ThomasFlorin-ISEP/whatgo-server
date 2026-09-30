@@ -66,8 +66,14 @@
   var HOTEL_URL = API_BASE + '/api/hotel/' + encodeURIComponent(BUSINESS || '');
 
   var style = document.createElement('style');
+  // Polices hébergées sur notre serveur (pas de Google Fonts : rapide et
+  // sans transfert d'adresse IP des visiteurs). Licence OFL dans /fonts.
   style.textContent = `
-    .wgt-root, .wgt-root * { box-sizing: border-box; font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; }
+    @font-face { font-family: 'WG Figtree'; src: url('${API_BASE}/fonts/figtree.woff') format('woff'); font-weight: 300 900; font-display: swap; }
+    @font-face { font-family: 'WG Serif'; src: url('${API_BASE}/fonts/sourceserif4.woff') format('woff'); font-weight: 400 700; font-display: swap; }
+    .wgt-root, .wgt-root * { box-sizing: border-box; font-family: 'WG Figtree', -apple-system, 'Segoe UI', sans-serif; }
+    .wgt-root .wgt-name, .wgt-root .wgt-hero b { font-family: 'WG Serif', Georgia, serif; font-weight: 600; letter-spacing: -.005em; }
+    .wgt-root .wgt-name { font-size: 1.2rem; line-height: 1.15; }
 
     .wgt-bubble {
       position: fixed; bottom: 22px; right: 22px; width: 58px; height: 58px;
@@ -269,7 +275,7 @@
     .wgt-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 10px 0 6px; gap: 4px; }
     .wgt-hero .wgt-av-wrap .wgt-av { width: 72px; height: 72px; }
     .wgt-hero .wgt-dot { width: 15px; height: 15px; right: 2px; bottom: 3px; }
-    .wgt-hero b { font-size: 1.05rem; color: #1B2321; margin-top: 6px; }
+    .wgt-hero b { font-size: 1.75rem; line-height: 1.1; color: #1B2321; margin-top: 6px; }
     .wgt-hero span { font-size: .78rem; color: #6B7580; }
     .wgt-cards { display: flex; flex-direction: column; gap: 7px; padding-left: 40px; }
     .wgt-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; cursor: pointer;
