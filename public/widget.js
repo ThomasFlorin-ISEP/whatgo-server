@@ -14,7 +14,7 @@
  *   data-subtitle="Votre conseiller"   petite ligne sous le nom
  *   data-welcome="Bonjour et bienvenue chez WHATGO, puis-je vous renseigner ?"
  *   data-avatar="https://.../photo.jpg"   photo du conseiller (sinon petit personnage illustré)
- *   data-position="right"         "right" (défaut) ou "left"
+ *   data-position="right"         "right" (défaut), "left" ou "center" — le visiteur peut aussi le changer dans le menu « … "
  *   data-autoopen="true"          ouvre la fenêtre toute seule ("false" pour désactiver)
  *   data-delay="1500"             délai avant l'ouverture automatique, en millisecondes
  *   data-nudge="true"             relance automatique si le visiteur n'a jamais écrit ("false" pour désactiver)
@@ -86,6 +86,9 @@
       overflow: hidden; z-index: 999999;
     }
     .wgt-left .wgt-panel { right: auto; left: 22px; }
+    .wgt-center .wgt-bubble { right: auto; left: calc(50% - 29px); }
+    .wgt-center .wgt-panel { right: auto; left: max(16px, calc(50% - 180px)); }
+    .wgt-center .wgt-panel.wgt-expanded { left: max(16px, calc(50% - 280px)); }
     .wgt-panel.wgt-open { display: flex; animation: wgt-in .25s ease-out; }
     @keyframes wgt-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
@@ -224,6 +227,13 @@
     .wgt-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
     .wgt-menu .is-on .wgt-switch { background: var(--wgt-color); }
     .wgt-menu .is-on .wgt-switch::after { transform: translateX(12px); }
+    .wgt-menu { min-width: 272px; }
+    .wgt-pos-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: .86rem; color: #1B2321; }
+    .wgt-pos-row svg { width: 17px; height: 17px; flex-shrink: 0; color: #5B6570; }
+    .wgt-seg { display: flex; background: #EEF1F5; border-radius: 8px; padding: 2px; gap: 2px; }
+    .wgt-menu .wgt-seg button { width: auto; padding: 4px 8px; font-size: .74rem; font-weight: 600; color: #5B6570; border-radius: 6px; }
+    .wgt-menu .wgt-seg button:hover { background: #fff; }
+    .wgt-menu .wgt-seg button.is-on { background: #fff; color: var(--wgt-color); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
     .wgt-sep { height: 1px; background: #EEF1F5; margin: 4px 6px; }
     .wgt-panel.wgt-expanded { width: 560px; height: calc(100vh - 120px); max-height: 820px; }
     .wgt-bk textarea { width: 100%; border: 1px solid #DDE2E7; border-radius: 10px; padding: 10px 12px; font-size: 16px; margin-bottom: 8px;
@@ -237,6 +247,7 @@
 
     @media (max-width: 480px) {
       .wgt-root .wgt-panel { left: 16px; right: 16px; width: auto; }
+      .wgt-root.wgt-center .wgt-panel { left: 16px; }
       .wgt-root .wgt-panel.wgt-expanded { top: 16px; bottom: 16px; height: auto; max-height: none; }
     }
   `;
@@ -245,7 +256,18 @@
   var root = document.createElement('div');
   root.className = 'wgt-root';
   root.style.setProperty('--wgt-color', COLOR);
-  if (POSITION === 'left') root.classList.add('wgt-left');
+  // Position : choix du visiteur (menu « … ») s'il en a fait un, sinon celle du site.
+  var currentPos = POSITION === 'left' || POSITION === 'center' ? POSITION : 'right';
+  try {
+    var savedPos = localStorage.getItem('wgt-pos');
+    if (savedPos === 'left' || savedPos === 'center' || savedPos === 'right') currentPos = savedPos;
+  } catch (e) {}
+  function applyPosition(pos) {
+    currentPos = pos;
+    root.classList.toggle('wgt-left', pos === 'left');
+    root.classList.toggle('wgt-center', pos === 'center');
+  }
+  applyPosition(currentPos);
   root.innerHTML = `
     <button class="wgt-bubble" aria-label="Ouvrir le chat">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
@@ -266,6 +288,9 @@
         <button type="button" role="menuitem" data-act="new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="wgt-grow">Nouvelle conversation</span></button>
         <button type="button" role="menuitem" data-act="expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg><span class="wgt-grow">Mode agrandi</span><span class="wgt-check">✓</span></button>
         <button type="button" role="menuitem" data-act="sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg><span class="wgt-grow">Son des réponses</span><span class="wgt-switch"></span></button>
+        <div class="wgt-pos-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M13 15h5"/></svg><span class="wgt-grow">Position</span>
+          <div class="wgt-seg"><button type="button" data-act="pos" data-pos="left">Gauche</button><button type="button" data-act="pos" data-pos="center">Centre</button><button type="button" data-act="pos" data-pos="right">Droite</button></div>
+        </div>
         <div class="wgt-sep"></div>
         <button type="button" role="menuitem" data-act="human"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="wgt-grow">Parler à un humain</span></button>
       </div>
@@ -958,6 +983,9 @@
   function syncMenu() {
     expandItem.classList.toggle('is-on', panel.classList.contains('wgt-expanded'));
     soundItem.classList.toggle('is-on', soundOn);
+    Array.prototype.forEach.call(menu.querySelectorAll('[data-pos]'), function (b) {
+      b.classList.toggle('is-on', b.getAttribute('data-pos') === currentPos);
+    });
   }
   function openMenu() { syncMenu(); menu.hidden = false; moreBtn.setAttribute('aria-expanded', 'true'); }
   function closeMenu() { menu.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); }
@@ -1032,6 +1060,7 @@
     if (!item) return;
     var act = item.getAttribute('data-act');
     if (act === 'new') { closeMenu(); resetConversation(); }
+    else if (act === 'pos') { applyPosition(item.getAttribute('data-pos')); lsSet('wgt-pos', currentPos); syncMenu(); }
     else if (act === 'expand') { panel.classList.toggle('wgt-expanded'); syncMenu(); log.scrollTop = log.scrollHeight; }
     else if (act === 'sound') { soundOn = !soundOn; lsSet('wgt-sound', soundOn ? 'on' : 'off'); syncMenu(); if (soundOn) { unlockAudio(); ding(); } }
     else if (act === 'human') {
