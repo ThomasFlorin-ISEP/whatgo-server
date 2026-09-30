@@ -101,7 +101,7 @@
       font-weight: 700; font-size: .85rem; display: flex; align-items: center; justify-content: center;
       overflow: hidden; flex-shrink: 0;
     }
-    .wgt-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .wgt-av img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; display: block; }
     .wgt-head-txt b { font-size: 1rem; font-weight: 700; display: block; }
     .wgt-head-txt span { font-size: .8rem; opacity: .85; }
     .wgt-close {
@@ -361,6 +361,30 @@
   head.insertBefore(headAv, head.firstChild);
   loadBookingConfig();
   loadShopConfig();
+  loadLook();
+
+  // Prénom et photo de l'assistante réglés côté serveur (ils priment sur
+  // data-name / data-avatar, pour pouvoir les changer sans toucher au site).
+  function loadLook() {
+    if (!BUSINESS) return;
+    fetch(API_BASE + '/api/widget/' + encodeURIComponent(BUSINESS) + '/look').then(function (r) { return r.json(); }).then(function (data) {
+      if (!data) return;
+      if (data.name) {
+        BOT_NAME = data.name;
+        root.querySelector('.wgt-name').textContent = BOT_NAME;
+        Array.prototype.forEach.call(log.querySelectorAll('.wgt-meta'), function (m) {
+          m.textContent = BOT_NAME + ' • ' + m.textContent.split(' • ').slice(1).join(' • ');
+        });
+      }
+      if (data.avatar) {
+        AVATAR = absUrl(data.avatar);
+        headAv.replaceChild(makeAvatar(), headAv.firstChild);
+        Array.prototype.forEach.call(log.querySelectorAll('.wgt-row > .wgt-av'), function (a) {
+          a.parentNode.replaceChild(makeAvatar(), a);
+        });
+      }
+    }).catch(function () {});
+  }
 
   var history = [];
   var welcomed = false;

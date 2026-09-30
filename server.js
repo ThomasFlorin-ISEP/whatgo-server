@@ -569,6 +569,11 @@ function parseAppointmentConfirmation(replyText) {
 // valider la date avant d'avoir obtenu au moins l'un des deux.
 function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo) {
   let prompt = business.system_prompt + LANGUAGE_INSTRUCTION;
+  if (business.bot_name) {
+    prompt += `\n\nTON PRÉNOM : tu t'appelles ${business.bot_name}, l'assistante IA de "${business.name}". ` +
+      `Si on te demande ton nom, présente-toi ainsi. Tu restes transparente : si on te demande si tu es un humain, ` +
+      `réponds que tu es une assistante IA et propose de mettre le visiteur en relation avec l'équipe.`;
+  }
 
   if (shouldOfferAppointment) {
     prompt += `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
@@ -847,6 +852,19 @@ function slugify(name) {
 // (visible dans le tableau de bord) et on l'envoie vers Make → CRM, avec
 // les mêmes champs qu'un lead classique (type "handoff").
 // ------------------------------------------------------------
+// Apparence du chatbot (prénom + photo) lue par le widget au chargement :
+// permet de la changer sans toucher au code installé sur le site du client.
+app.get('/api/widget/:slug/look', async (req, res) => {
+  try {
+    const { rows } = await query('SELECT bot_name, bot_avatar FROM businesses WHERE slug = $1', [req.params.slug]);
+    if (!rows[0]) return res.status(404).json({ error: 'Entreprise inconnue.' });
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json({ name: rows[0].bot_name || '', avatar: rows[0].bot_avatar || '' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 app.post('/api/handoff', async (req, res) => {
   try {
     if (isRateLimited(`handoff:${clientIp(req)}`, 5, 10 * 60 * 1000)) {
@@ -2889,6 +2907,12 @@ const PORT = process.env.PORT || 3000;
 // existent toujours, même sur un serveur tout neuf (comme Render)
 // ============================================================
 async function ensureWhatgoBusiness() {
+  // Assistante du site whatgo.ai : Victoria (une seule fois, sans écraser un
+  // réglage fait ensuite).
+  await query(
+    `UPDATE businesses SET bot_name = 'Victoria', bot_avatar = '/avatars/victoria.jpg'
+     WHERE slug = 'whatgo' AND bot_name IS NULL AND bot_avatar IS NULL`
+  ).catch(() => {});
   const { rows } = await query('SELECT * FROM businesses WHERE slug = $1', ['whatgo']);
   const existing = rows[0];
 
