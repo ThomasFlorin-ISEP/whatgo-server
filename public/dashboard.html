@@ -1015,6 +1015,24 @@ table.tbl tbody tr:last-child td{border-bottom:none}
           </select></div>
         <button type="button" class="btn btn--primary" id="bizTypeSave">Enregistrer</button>
       </div>
+      <div class="card" style="max-width:560px" id="lookCard">
+        <div class="card__head"><div><h3>Apparence du chatbot</h3>
+          <p class="card__sub">Le prénom, la photo et les questions cliquables que voient vos visiteurs.</p></div></div>
+        <div class="field"><label for="look-name">Prénom de l'assistant</label>
+          <input type="text" id="look-name" maxlength="40" placeholder="Ex. : Victoria" />
+          <p class="help">Laissez vide pour garder le nom indiqué dans le code du site.</p></div>
+        <div class="field"><label>Photo</label>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div id="look-preview" style="width:56px;height:56px;border-radius:50%;overflow:hidden;background:#EEF1F5;flex-shrink:0;display:grid;place-items:center;color:#8A9089;font-size:.7rem">Aucune</div>
+            <label class="btn btn--ghost btn--sm" style="cursor:pointer">Choisir une photo<input type="file" id="look-file" accept="image/*" hidden /></label>
+            <button type="button" class="btn btn--ghost btn--sm" id="look-remove">Retirer</button>
+          </div>
+          <p class="help">Carrée de préférence. Sans photo, un petit personnage illustré s'affiche.</p></div>
+        <div class="field"><label for="look-sugg">Questions fréquentes cliquables</label>
+          <textarea id="look-sugg" rows="4" placeholder="Une question par ligne (6 maximum), ex. :&#10;Je souhaite obtenir une démo&#10;Quels sont vos tarifs ?"></textarea>
+          <p class="help">Affichées en bas du chat : un clic envoie la question à l'assistant.</p></div>
+        <button type="button" class="btn btn--primary" id="lookSave">Enregistrer</button>
+      </div>
       <div class="card" style="max-width:420px">
         <div class="card__head"><div><h3>Changer mon mot de passe</h3></div></div>
         <form id="passwordForm" novalidate>
@@ -1248,11 +1266,76 @@ $$('.nav-item').forEach(function (el) {
 var diagnosticsNavItem = $('#diagnosticsNavItem');
 if (diagnosticsNavItem) diagnosticsNavItem.addEventListener('click', loadDiagnostics);
 function switchTab(tab) {
+  if (tab === 'settings') loadBotLook();
   $$('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
   $$('.tab-page').forEach(function (el) { el.classList.toggle('active', el.id === 'page-' + tab); });
   $('#sidebar').classList.remove('open');
   window.scrollTo(0, 0);
 }
+/* ---------- Paramètres → Apparence du chatbot ---------- */
+var lookAvatar = '';
+function renderLookPreview() {
+  var pv = $('#look-preview');
+  if (!pv) return;
+  pv.innerHTML = '';
+  if (lookAvatar) {
+    var img = document.createElement('img');
+    img.src = lookAvatar; img.alt = '';
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center 30%';
+    pv.appendChild(img);
+  } else { pv.textContent = 'Aucune'; }
+}
+async function loadBotLook() {
+  var card = $('#lookCard');
+  if (!card) return;
+  try {
+    var res = await fetch(API + '/api/dashboard/bot-look', { credentials: 'include' });
+    if (!res.ok) { card.hidden = true; return; }
+    var d = await res.json();
+    card.hidden = false;
+    $('#look-name').value = d.name || '';
+    lookAvatar = d.avatar || '';
+    $('#look-sugg').value = (d.suggestions || []).join('\n');
+    renderLookPreview();
+    var admin = ME && ME.role === 'admin';
+    ['#look-name', '#look-sugg', '#look-file', '#look-remove', '#lookSave'].forEach(function (s) { var n = $(s); if (n) n.disabled = !admin; });
+  } catch (e) { card.hidden = true; }
+}
+if ($('#look-file')) $('#look-file').addEventListener('change', function (e) {
+  var f = e.target.files && e.target.files[0];
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    var img = new Image();
+    img.onload = function () {
+      // Recadrage carré + réduction à 192 px : photo légère (quelques Ko).
+      var size = Math.min(img.width, img.height);
+      var c = document.createElement('canvas'); c.width = 192; c.height = 192;
+      c.getContext('2d').drawImage(img, (img.width - size) / 2, 0, size, size, 0, 0, 192, 192);
+      lookAvatar = c.toDataURL('image/jpeg', 0.85);
+      renderLookPreview();
+    };
+    img.onerror = function () { toast('Image illisible.', true); };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(f);
+  e.target.value = '';
+});
+if ($('#look-remove')) $('#look-remove').addEventListener('click', function () { lookAvatar = ''; renderLookPreview(); });
+if ($('#lookSave')) $('#lookSave').addEventListener('click', async function () {
+  var suggestions = $('#look-sugg').value.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+  if (suggestions.length > 6) { toast('6 questions maximum.', true); return; }
+  try {
+    var res = await fetch(API + '/api/dashboard/bot-look', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ name: $('#look-name').value, avatar: lookAvatar, suggestions: suggestions }),
+    });
+    var d = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(d.error || '');
+    toast('Apparence du chatbot enregistrée (visible sur le site d\'ici 1 minute)');
+  } catch (e) { toast(e.message || "Impossible d'enregistrer.", true); }
+});
+
 var burger = $('#burger');
 if (burger) burger.addEventListener('click', function () { $('#sidebar').classList.toggle('open'); });
 
