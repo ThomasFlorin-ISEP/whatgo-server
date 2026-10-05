@@ -160,6 +160,12 @@ async function initDb() {
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS bot_avatar TEXT`);
   // Questions fréquentes cliquables sous le chat (JSON, par langue).
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS bot_suggestions TEXT`);
+  // « Questions à améliorer » : avis 👍/👎 des visiteurs, réponses où l'IA ne
+  // savait pas, et réponses ajoutées ensuite par le client.
+  await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback SMALLINT`);
+  await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS unanswered BOOLEAN DEFAULT false`);
+  await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS learned_answers TEXT`);
 
   // Instructions spécifiques (page "Base de connaissances") : texte libre
   // du client, en plus des documents, que le bot doit toujours respecter.

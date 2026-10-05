@@ -494,6 +494,9 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       <button class="nav-item" data-tab="knowledge" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5V5a2 2 0 012-2h13v18H6a2 2 0 01-2-1.5z" stroke-linejoin="round"/><path d="M8 7h7M8 11h5" stroke-linecap="round"/></svg>
         <span>Base de connaissances</span></button>
+      <button class="nav-item" data-tab="improve" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z" stroke-linejoin="round"/></svg>
+        <span>Questions à améliorer</span><span class="pill-soon" id="improveCount" hidden style="background:var(--red-soft);color:var(--red)"></span></button>
       <button class="nav-item" data-tab="catalog" data-grp="client" data-need="ecommerce hotel" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 7h12l-1 13H7L6 7z" stroke-linejoin="round"/><path d="M9 7a3 3 0 016 0" stroke-linecap="round"/></svg>
         <span id="catalogNavLabel">Catalogue</span></button>
@@ -695,6 +698,19 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     </section>
 
     <!-- ============================== BASE DE CONNAISSANCES -->
+    <section class="tab-page" id="page-improve">
+      <div class="topbar"><div><h2>Questions à améliorer</h2>
+        <p>Les réponses où votre assistant ne savait pas, et celles que vos visiteurs ont notées 👎. Ajoutez la bonne réponse : il l'utilisera dès la prochaine question.</p></div></div>
+      <div class="kpis" id="impKpis"></div>
+      <div id="impList"></div>
+      <div class="card" style="max-width:760px">
+        <div class="card__head"><div><h3>Réponses ajoutées</h3>
+          <p class="card__sub">Ce que vous avez appris à votre assistant. Il les utilise en priorité. Vous pouvez les modifier ou les supprimer ici.</p></div></div>
+        <div class="field"><textarea id="impLearned" rows="8" placeholder="Aucune réponse ajoutée pour l'instant."></textarea></div>
+        <button type="button" class="btn btn--primary" id="impLearnedSave">Enregistrer</button>
+      </div>
+    </section>
+
     <section class="tab-page" id="page-knowledge">
       <div class="topbar"><div><h2>Base de connaissances</h2><p>Indexation de documents et pages web pour enrichir l'assistant.</p></div></div>
       <div class="betahero">
@@ -1171,6 +1187,7 @@ $('#logoutBtn').addEventListener('click', async function () {
 });
 
 function enterApp() {
+  if (ME && ME.role !== 'super_admin') refreshImproveCount();
   $('#loginView').style.display = 'none';
   $('#appView').classList.add('is-on');
   $('#appView').style.display = 'block';
@@ -1267,11 +1284,96 @@ var diagnosticsNavItem = $('#diagnosticsNavItem');
 if (diagnosticsNavItem) diagnosticsNavItem.addEventListener('click', loadDiagnostics);
 function switchTab(tab) {
   if (tab === 'settings') loadBotLook();
+  if (tab === 'improve') loadImprove();
   $$('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
   $$('.tab-page').forEach(function (el) { el.classList.toggle('active', el.id === 'page-' + tab); });
   $('#sidebar').classList.remove('open');
   window.scrollTo(0, 0);
 }
+/* ---------- Questions à améliorer ---------- */
+async function loadImprove() {
+  var list = $('#impList');
+  if (!list) return;
+  try {
+    var res = await fetch(API + '/api/dashboard/improve', { credentials: 'include' });
+    if (!res.ok) throw new Error();
+    var d = await res.json();
+    var st = d.stats || {};
+    var votes = (st.up || 0) + (st.down || 0);
+    var sat = votes ? Math.round(100 * st.up / votes) + ' %' : '—';
+    $('#impKpis').innerHTML =
+      '<div class="kpi"><div class="kpi__l">Satisfaction (30 j)</div><div class="kpi__v">' + sat + '</div></div>' +
+      '<div class="kpi"><div class="kpi__l">👍 Réponses utiles</div><div class="kpi__v">' + (st.up || 0) + '</div></div>' +
+      '<div class="kpi"><div class="kpi__l">👎 Pas utiles</div><div class="kpi__v">' + (st.down || 0) + '</div></div>' +
+      '<div class="kpi"><div class="kpi__l">Sans réponse (30 j)</div><div class="kpi__v">' + (st.unknown || 0) + '</div></div>';
+    $('#impLearned').value = d.learned || '';
+    var admin = ME && ME.role === 'admin';
+    $('#impLearned').disabled = !admin; $('#impLearnedSave').hidden = !admin;
+    setImproveCount(d.items.length);
+    if (!d.items.length) {
+      list.innerHTML = '<div class="card" style="max-width:760px;text-align:center;color:var(--ink-faint)">🎉 Rien à améliorer pour l\'instant : votre assistant a répondu à tout.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    d.items.forEach(function (it) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.style.maxWidth = '760px';
+      var tag = it.reason === 'down' ? '<span class="tag tag--red">👎 Notée pas utile</span>' : '<span class="tag tag--amber">❓ Sans réponse</span>';
+      var date = new Date(it.date).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      card.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">' + tag +
+        '<span style="font-size:.78rem;color:var(--ink-faint)">' + esc(date) + '</span></div>' +
+        '<div style="font-size:.78rem;font-weight:700;color:var(--ink-faint);margin-bottom:4px">Question du visiteur</div>' +
+        '<div style="font-weight:600;margin-bottom:12px">' + esc(it.question || '—') + '</div>' +
+        '<div style="font-size:.78rem;font-weight:700;color:var(--ink-faint);margin-bottom:4px">Réponse de l\'assistant</div>' +
+        '<div style="color:var(--ink-soft);white-space:pre-wrap;margin-bottom:14px;max-height:140px;overflow:auto">' + esc(it.answer) + '</div>' +
+        (admin ? '<div class="field" style="margin-bottom:10px"><textarea rows="3" placeholder="La bonne réponse, telle que l\'assistant doit la donner…"></textarea></div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn--primary btn--sm" data-act="answer">Enregistrer la réponse</button>' +
+          '<button type="button" class="btn btn--ghost btn--sm" data-act="dismiss">Ignorer</button></div>' : '');
+      card.addEventListener('click', async function (e) {
+        var b = e.target.closest && e.target.closest('button[data-act]');
+        if (!b) return;
+        var act = b.getAttribute('data-act');
+        var answer = act === 'answer' ? card.querySelector('textarea').value.trim() : '';
+        if (act === 'answer' && !answer) { toast('Écrivez la bonne réponse.', true); return; }
+        b.disabled = true;
+        try {
+          var r = await fetch(API + '/api/dashboard/improve/' + it.id, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ action: act, answer: answer, question: it.question }),
+          });
+          if (!r.ok) throw new Error();
+          toast(act === 'answer' ? 'Réponse ajoutée : votre assistant l\'utilisera dès maintenant' : 'Question ignorée');
+          loadImprove();
+        } catch (err) { b.disabled = false; toast("Impossible d'enregistrer.", true); }
+      });
+      list.appendChild(card);
+    });
+  } catch (e) { list.innerHTML = ''; toast('Impossible de charger les questions à améliorer.', true); }
+}
+function refreshImproveCount() {
+  fetch(API + '/api/dashboard/improve', { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { if (d) setImproveCount(d.items.length); }).catch(function () {});
+}
+function setImproveCount(n) {
+  var c = $('#improveCount');
+  if (!c) return;
+  c.textContent = n > 99 ? '99+' : String(n);
+  c.hidden = !n;
+}
+if ($('#impLearnedSave')) $('#impLearnedSave').addEventListener('click', async function () {
+  try {
+    var r = await fetch(API + '/api/dashboard/learned', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ learned: $('#impLearned').value }),
+    });
+    if (!r.ok) throw new Error();
+    toast('Réponses enregistrées');
+  } catch (e) { toast("Impossible d'enregistrer.", true); }
+});
+
 /* ---------- Paramètres → Apparence du chatbot ---------- */
 var lookAvatar = '';
 function renderLookPreview() {
