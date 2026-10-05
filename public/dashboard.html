@@ -190,6 +190,18 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 
 /* ============================================================ KPI */
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+/* ---- Base de connaissances : documents ---- */
+.docs-add{display:grid;grid-template-columns:1fr 1.3fr;gap:12px;margin-bottom:12px}
+.docs-drop,.docs-url{display:flex;gap:12px;align-items:center;padding:16px;border-radius:16px;border:1.5px dashed var(--green-line);background:rgba(223,246,234,.35);cursor:pointer;transition:background .15s,border-color .15s}
+.docs-url{cursor:default;border-style:solid;border-color:var(--line,#E3E9E5);background:rgba(255,255,255,.6)}
+.docs-drop:hover,.docs-drop.is-over{background:rgba(223,246,234,.75);border-color:var(--green)}
+.docs-drop b,.docs-url b{display:block;font-size:.92rem}
+.docs-drop small{display:block;font-size:.78rem;color:var(--ink-faint);margin-top:2px}
+.docs-drop__ic{font-size:1.5rem;width:44px;height:44px;border-radius:12px;background:#fff;display:grid;place-items:center;flex-shrink:0;box-shadow:0 2px 8px rgba(11,26,20,.06)}
+.docs-usage{font-size:.78rem;color:var(--ink-faint);margin:6px 0 10px}
+.docs-usage .funnel__bar{height:6px;margin-top:5px;max-width:320px}
+.docs-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+@media (max-width:800px){.docs-add{grid-template-columns:1fr}}
 /* ---- Vue d'ensemble : à faire, évolutions, entonnoir, sujets, courbe ---- */
 .ovtodo{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
 .todo{display:flex;gap:14px;align-items:center;padding:16px 18px;border-radius:18px;text-align:left;width:100%;font:inherit;color:inherit;
@@ -619,14 +631,27 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     </section>
 
     <section class="tab-page" id="page-knowledge">
-      <div class="topbar"><div><h2>Base de connaissances</h2><p>Indexation de documents et pages web pour enrichir l'assistant.</p></div></div>
-      <div class="betahero">
-        <div class="betahero__ic" style="background:linear-gradient(160deg,#3E7BD6,#28518F);width:54px;height:54px;border-radius:16px;display:grid;place-items:center;margin-bottom:14px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5V5a2 2 0 012-2h13v18H6a2 2 0 01-2-1.5z" stroke-linejoin="round"/><path d="M8 7h7M8 11h5" stroke-linecap="round"/></svg>
+      <div class="topbar"><div><h2>Base de connaissances</h2><p>Tout ce que votre assistant sait sur votre entreprise : vos documents, votre site et vos consignes.</p></div></div>
+      <div class="card" id="docsCard">
+        <div class="card__head"><div><h3>Documents et site internet</h3>
+          <p class="card__sub">Votre assistant lit ces documents et s'en sert pour répondre : cartes, tarifs, FAQ, conditions, brochures… Formats : PDF, Word (.docx), texte · 10 Mo maximum par fichier.</p></div></div>
+        <div class="docs-add" id="docsAdd">
+          <label class="docs-drop" id="docsDrop">
+            <input type="file" id="docsFile" accept=".pdf,.docx,.txt,.md,.csv,application/pdf" hidden />
+            <span class="docs-drop__ic">📄</span>
+            <span><b>Importer un fichier</b><small>Cliquez ou glissez un PDF, un Word ou un texte ici</small></span>
+          </label>
+          <form class="docs-url" id="docsUrlForm" novalidate>
+            <span class="docs-drop__ic">🌐</span>
+            <div style="flex:1;min-width:0"><b>Lire votre site internet</b>
+              <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="docsUrl" placeholder="www.votre-site.fr" style="flex:1;min-width:0" />
+              <button type="submit" class="btn btn--primary btn--sm" id="docsUrlBtn">Lire le site</button></div></div>
+          </form>
         </div>
-        <span class="soonbadge">Bientôt disponible</span>
-        <h3>Import de documents</h3>
-        <p>Bientôt disponible — l'import de documents et de pages web n'est pas encore développé. En attendant, renseignez l'assistant avec les instructions spécifiques ci-dessous.</p>
+        <p class="msg" id="docsMsg" style="display:none"></p>
+        <div class="docs-usage" id="docsUsage"></div>
+        <div class="tablewrap"><table class="tbl" id="docsTable"></table></div>
+        <input type="file" id="docsReplaceFile" accept=".pdf,.docx,.txt,.md,.csv,application/pdf" hidden />
       </div>
 
       <div class="card">
@@ -1056,11 +1081,116 @@ if (diagnosticsNavItem) diagnosticsNavItem.addEventListener('click', loadDiagnos
 function switchTab(tab) {
   if (tab === 'settings') loadBotLook();
   if (tab === 'improve') loadImprove();
+  if (tab === 'knowledge') loadDocs();
   $$('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
   $$('.tab-page').forEach(function (el) { el.classList.toggle('active', el.id === 'page-' + tab); });
   $('#sidebar').classList.remove('open');
   window.scrollTo(0, 0);
 }
+/* ---------- Base de connaissances : documents ---------- */
+function docsMsg(text, isErr) {
+  var m = $('#docsMsg');
+  if (!m) return;
+  m.textContent = text || '';
+  m.className = 'msg ' + (isErr ? 'msg--err' : 'msg--ok');
+  m.style.display = text ? 'block' : 'none';
+}
+function approxPages(chars) { var n = Math.max(1, Math.round(chars / 3000)); return '≈ ' + n + ' page' + (n > 1 ? 's' : ''); }
+async function loadDocs() {
+  var table = $('#docsTable');
+  if (!table) return;
+  try {
+    var res = await fetch(API + '/api/dashboard/docs', { credentials: 'include' });
+    if (!res.ok) throw new Error();
+    var d = await res.json();
+    var admin = ME && ME.role === 'admin';
+    $('#docsAdd').style.display = admin ? '' : 'none';
+    var pct = Math.min(100, Math.round(d.used / d.limit * 100));
+    $('#docsUsage').innerHTML = d.docs.length ? 'Espace utilisé : ' + pct + ' % (' + approxPages(d.used) + ' sur ≈ ' + Math.round(d.limit / 3000) + ')' +
+      '<div class="funnel__bar"><i style="width:' + Math.max(2, pct) + '%"></i></div>' : '';
+    table.innerHTML = '<thead><tr><th>Document</th><th>Type</th><th>Taille</th><th>Ajouté le</th><th class="right"></th></tr></thead><tbody>' +
+      (d.docs.length ? d.docs.map(function (x) {
+        var type = x.kind === 'url' ? '🌐 Site web' + (x.pages ? ' · ' + x.pages + ' page' + (x.pages > 1 ? 's' : '') + ' lue' + (x.pages > 1 ? 's' : '') : '')
+          : /pdf/i.test(x.mime || x.name) ? '📕 PDF' : /word|docx/i.test(x.mime || x.name) ? '📘 Word' : '📄 Texte';
+        return '<tr data-id="' + x.id + '"><td><b>' + esc(x.name) + '</b>' + (x.truncated ? ' <span class="tag tag--amber">tronqué</span>' : '') +
+          '<div class="cell-sub">' + esc((x.excerpt || '').replace(/\s+/g, ' ').slice(0, 110)) + '…</div></td>' +
+          '<td class="cell-sub">' + type + '</td><td class="cell-sub" style="white-space:nowrap">' + approxPages(x.chars) + '</td>' +
+          '<td class="cell-sub">' + new Date(x.updated_at || x.created_at).toLocaleDateString('fr-FR') + '</td>' +
+          '<td><div class="docs-actions"><button type="button" class="btn btn--ghost btn--sm" data-act="view">Voir le texte</button>' +
+          (admin ? '<button type="button" class="btn btn--ghost btn--sm" data-act="replace" data-kind="' + x.kind + '" data-url="' + esc(x.source_url || '') + '">' + (x.kind === 'url' ? 'Relire' : 'Remplacer') + '</button>' +
+            '<button type="button" class="btn btn--ghost btn--sm" data-act="delete" style="color:var(--red)">Supprimer</button>' : '') +
+          '</div></td></tr>';
+      }).join('') : emptyRow(5, 'Aucun document pour l\'instant', 'Importez votre carte, vos tarifs ou lisez votre site : votre assistant s\'en servira pour répondre.')) +
+      '</tbody>';
+  } catch (e) { toast('Impossible de charger les documents.', true); }
+}
+async function uploadDoc(file, replaceId) {
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { docsMsg('Fichier trop lourd (10 Mo maximum).', true); return; }
+  docsMsg((/\.pdf$/i.test(file.name) ? 'Lecture du PDF en cours… (jusqu\'à une minute pour un gros document)' : 'Import en cours…'), false);
+  try {
+    var res = await fetch(API + '/api/dashboard/docs/upload?name=' + encodeURIComponent(file.name) + (replaceId ? '&replace=' + replaceId : ''), {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file,
+    });
+    var d = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(d.error || 'Import impossible.');
+    docsMsg('✓ « ' + file.name + ' » importé (' + approxPages(d.chars) + ')' + (d.truncated ? ' : document très long, seul le début a été gardé.' : '. Votre assistant l\'utilise dès maintenant.'), false);
+    loadDocs();
+  } catch (e) { docsMsg(e.message, true); }
+}
+async function readSite(url, replaceId) {
+  var btn = $('#docsUrlBtn');
+  if (btn) btn.disabled = true;
+  docsMsg('Lecture du site en cours… (environ 30 secondes)', false);
+  try {
+    var res = await fetch(API + '/api/dashboard/docs/url', {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url, replace: replaceId || null }),
+    });
+    var d = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(d.error || 'Lecture impossible.');
+    docsMsg('✓ Site lu : ' + d.pages + ' page' + (d.pages > 1 ? 's' : '') + ' (' + approxPages(d.chars) + '). Votre assistant l\'utilise dès maintenant.', false);
+    if ($('#docsUrl')) $('#docsUrl').value = '';
+    loadDocs();
+  } catch (e) { docsMsg(e.message, true); }
+  if (btn) btn.disabled = false;
+}
+(function () {
+  var file = $('#docsFile'), drop = $('#docsDrop'), form = $('#docsUrlForm'), table = $('#docsTable'), repl = $('#docsReplaceFile');
+  if (!file) return;
+  var replaceTarget = null;
+  file.addEventListener('change', function () { uploadDoc(file.files[0]); file.value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('is-over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('is-over'); }); });
+  drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files[0]) uploadDoc(e.dataTransfer.files[0]); });
+  form.addEventListener('submit', function (e) { e.preventDefault(); var u = $('#docsUrl').value.trim(); if (u) readSite(u); });
+  repl.addEventListener('change', function () { uploadDoc(repl.files[0], replaceTarget); repl.value = ''; });
+  table.addEventListener('click', async function (e) {
+    var b = e.target.closest && e.target.closest('button[data-act]');
+    if (!b) return;
+    var id = b.closest('tr').getAttribute('data-id');
+    var act = b.getAttribute('data-act');
+    if (act === 'view') {
+      try {
+        var r = await fetch(API + '/api/dashboard/docs/' + id, { credentials: 'include' });
+        var d = await r.json();
+        openDrawer(d.name, (d.source_url || '') + ' · texte lu par votre assistant', '<div style="white-space:pre-wrap;font-size:.86rem;line-height:1.55">' + esc(d.content) + '</div>');
+      } catch (err) { toast('Impossible d\'ouvrir le document.', true); }
+    } else if (act === 'replace') {
+      if (b.getAttribute('data-kind') === 'url') readSite(b.getAttribute('data-url'), id);
+      else { replaceTarget = id; repl.click(); }
+    } else if (act === 'delete') {
+      if (!confirm('Supprimer ce document ? Votre assistant ne s\'en servira plus.')) return;
+      try {
+        var rd = await fetch(API + '/api/dashboard/docs/' + id, { method: 'DELETE', credentials: 'include' });
+        if (!rd.ok) throw new Error();
+        toast('Document supprimé');
+        loadDocs();
+      } catch (err) { toast('Impossible de supprimer.', true); }
+    }
+  });
+})();
+
 /* ---------- Questions à améliorer ---------- */
 async function loadImprove() {
   var list = $('#impList');
