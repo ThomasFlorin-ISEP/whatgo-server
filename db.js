@@ -166,6 +166,18 @@ async function initDb() {
   await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS unanswered BOOLEAN DEFAULT false`);
   await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`);
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS learned_answers TEXT`);
+  // Événements du chat (ouvertures…) pour l'entonnoir de la Vue d'ensemble.
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_events (
+      id              SERIAL PRIMARY KEY,
+      business_id     INTEGER NOT NULL REFERENCES businesses(id),
+      conversation_id INTEGER,
+      type            TEXT NOT NULL,
+      product_id      INTEGER,
+      detail          TEXT DEFAULT '',
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 
   // Instructions spécifiques (page "Base de connaissances") : texte libre
   // du client, en plus des documents, que le bot doit toujours respecter.

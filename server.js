@@ -920,6 +920,114 @@ app.put('/api/dashboard/learned', requireAuth, requireRole('admin'), async (req,
   }
 });
 
+// ------------------------------------------------------------
+// Ouverture du chat (une fois par visite) : première étape de l'entonnoir
+// de la Vue d'ensemble.
+// ------------------------------------------------------------
+app.post('/api/widget/:slug/open', async (req, res) => {
+  try {
+    if (isRateLimited(`open:${clientIp(req)}`, 20, 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes.' });
+    const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [req.params.slug]);
+    if (!rows[0]) return res.status(404).json({ error: 'Entreprise inconnue.' });
+    await query("INSERT INTO chat_events (business_id, type) VALUES ($1, 'open')", [rows[0].id]).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ------------------------------------------------------------
+// Vue d'ensemble : tout est calculé en heure de Paris, sur une période
+// (7, 30 ou 90 jours) comparée à la période précédente de même durée.
+// ------------------------------------------------------------
+const OVERVIEW_TOPICS = [
+  ['Prix & tarifs', /\b(prix|tarifs?|co[uû]te?s?|combien|price|pricing|cost|budget|devis|€)/i],
+  ['Rendez-vous & démo', /(rendez|rdv|d[ée]mo|r[ée]serv|booking|book|cr[ée]neau|appointment)/i],
+  ['Horaires & accès', /(horaires?|ouvert|ferm[ée]|adresse|o[uù] (se trouve|[êe]tes)|acc[eè]s|parking|venir|opening|hours|address)/i],
+  ['Disponibilités', /(dispo|chambre|stock|places?\b|available|availability|room)/i],
+  ['Livraison & commandes', /(livr|commande|retour|colis|exp[ée]di|delivery|order|shipping|refund|rembours)/i],
+  ['Fonctionnement & intégrations', /(comment (ça|ca|cela) (marche|fonctionne)|fonctionn|int[ée]gr|crm|install|how (does|do) it work|integrat)/i],
+  ['Parler à quelqu\'un', /(humain|conseiller|quelqu['’]un d['’]autre|parler à quelqu|appelez|m['’]appeler|rappel|human|call me|speak to)/i],
+];
+
+app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const bid = req.user.businessId;
+    const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+    const safe = async (sql, params, fallback) => {
+      try { return (await query(sql, params)).rows; } catch (e) { return fallback; }
+    };
+    const TODAY = `(NOW() AT TIME ZONE 'Europe/Paris')::date`;
+    const D = (col) => `(${col} AT TIME ZONE 'Europe/Paris')::date`;
+    const CUR = (col) => `${D(col)} > ${TODAY} - $2::int`;
+    const PREV = (col) => `${D(col)} <= ${TODAY} - $2::int AND ${D(col)} > ${TODAY} - 2 * $2::int`;
+    const P = [bid, days];
+    const pair = (r) => ({ cur: Number((r && r.cur) || 0), prev: Number((r && r.prev) || 0) });
+
+    const [conv] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('started_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('started_at')}) AS prev
+      FROM conversations WHERE business_id = $1`, P, [{}]);
+    const [leads] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('created_at')}) AS prev
+      FROM leads WHERE business_id = $1`, P, [{}]);
+    const [rdv] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('created_at')}) AS prev
+      FROM leads WHERE business_id = $1 AND (appointment_at IS NOT NULL OR status = 'rdv_pris')`, P, [{}]);
+    const [opens] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('created_at')}) AS prev
+      FROM chat_events WHERE business_id = $1 AND type = 'open'`, P, [{}]);
+    const [fb] = await safe(`SELECT COUNT(*) FILTER (WHERE m.feedback = 1 AND ${CUR('m.created_at')}) AS up,
+        COUNT(*) FILTER (WHERE m.feedback = -1 AND ${CUR('m.created_at')}) AS down,
+        COUNT(*) FILTER (WHERE m.feedback = 1 AND ${PREV('m.created_at')}) AS pup,
+        COUNT(*) FILTER (WHERE m.feedback = -1 AND ${PREV('m.created_at')}) AS pdown
+      FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = $1 AND m.role = 'assistant'`, P, [{}]);
+
+    // À faire
+    const hot = await safe(`SELECT id, name, email, phone, score, conversation_id FROM leads
+      WHERE business_id = $1 AND status = 'nouveau' ORDER BY score DESC NULLS LAST, created_at DESC LIMIT 200`, [bid], []);
+    const hotLeads = hot.filter((l) => Number(l.score) >= 70);
+    const [today] = await safe(`SELECT COUNT(*) AS n FROM leads WHERE business_id = $1 AND ${D('appointment_at')} = ${TODAY}`, [bid], [{}]);
+    const [impr] = await safe(`SELECT COUNT(*) AS n FROM messages m JOIN conversations c ON c.id = m.conversation_id
+      WHERE c.business_id = $1 AND m.role = 'assistant' AND m.reviewed_at IS NULL AND (m.feedback = -1 OR m.unanswered = true)`, [bid], [{}]);
+
+    // Courbe par jour (heure de Paris, jours sans activité à 0)
+    const series = await safe(`WITH d AS (
+        SELECT generate_series(${TODAY} - ($2::int - 1), ${TODAY}, interval '1 day')::date AS day)
+      SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+        (SELECT COUNT(*) FROM conversations c WHERE c.business_id = $1 AND ${D('c.started_at')} = d.day) AS conv,
+        (SELECT COUNT(*) FROM leads l WHERE l.business_id = $1 AND ${D('l.created_at')} = d.day) AS leads
+      FROM d ORDER BY d.day`, P, []);
+
+    // Sujets les plus demandés (une conversation compte une fois par sujet)
+    const texts = await safe(`SELECT m.conversation_id, string_agg(m.content, ' ') AS t
+      FROM messages m JOIN conversations c ON c.id = m.conversation_id
+      WHERE c.business_id = $1 AND m.role = 'user' AND ${CUR('m.created_at')}
+      GROUP BY m.conversation_id LIMIT 3000`, P, []);
+    const topicCounts = OVERVIEW_TOPICS.map(([label, re]) => ({
+      label, count: texts.filter((r) => re.test((typeof r === 'string' ? r : r.t) || '')).length,
+    })).filter((t) => t.count > 0).sort((a, b) => b.count - a.count).slice(0, 6);
+
+    res.json({
+      days,
+      kpis: {
+        conversations: pair(conv), leads: pair(leads), rdv: pair(rdv), opens: pair(opens),
+        satisfaction: {
+          up: Number(fb.up || 0), down: Number(fb.down || 0), prevUp: Number(fb.pup || 0), prevDown: Number(fb.pdown || 0),
+        },
+      },
+      todo: {
+        newLeads: hot.length,
+        hotLeads: hotLeads.length,
+        hotNames: hotLeads.slice(0, 3).map((l) => l.name || l.email || l.phone || 'Visiteur'),
+        rdvToday: Number(today.n || 0),
+        improve: Number(impr.n || 0),
+      },
+      series: series.map((r) => ({ day: r.day, conv: Number(r.conv), leads: Number(r.leads) })),
+      topics: topicCounts,
+      topicsTotal: texts.length,
+    });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/overview:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
 app.post('/api/handoff', async (req, res) => {
   try {
     if (isRateLimited(`handoff:${clientIp(req)}`, 5, 10 * 60 * 1000)) {
