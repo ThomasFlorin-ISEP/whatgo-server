@@ -448,6 +448,9 @@ function extractChatExtras(reply, hasContactInfo) {
   return { text, followups, contactForm };
 }
 
+// Réponse où l'IA reconnaît ne pas savoir : remontée dans « Questions à améliorer ».
+const UNANSWERED_REGEX = /je ne (sais|connais) pas|je n['’]ai pas (cette|d['’]|l['’]|ces|les)\s*informations?|je ne dispose pas|je n['’]ai pas acc[eè]s|pas en mesure de (vous )?(r[ée]pondre|donner|pr[ée]ciser)|je ne trouve pas|i don['’]t (know|have (that|this|any) information)|i do not have (that|this) information|i['’]m not able to (answer|tell)|i can['’]t find/i;
+
 // Assistante par défaut de tous les chatbots WHATGO : Victoria et sa photo.
 // Un client peut la renommer ou changer la photo (Paramètres) ; un champ
 // vidé volontairement ('') n'est pas remplacé par la valeur par défaut.
@@ -459,6 +462,9 @@ function botAvatarOf(b) { return b.bot_avatar == null ? DEFAULT_BOT_AVATAR : b.b
 function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo) {
   let prompt = business.system_prompt + LANGUAGE_INSTRUCTION + CHAT_UX_INSTRUCTION +
     (hasContactInfo ? '' : CONTACT_FORM_INSTRUCTION);
+  if (business.learned_answers && business.learned_answers.trim()) {
+    prompt += `\n\nRÉPONSES VALIDÉES PAR L'ÉQUIPE (prioritaires sur tout le reste) :\n${business.learned_answers.trim()}`;
+  }
   if (botNameOf(business)) {
     prompt += `\n\nTON PRÉNOM : tu t'appelles ${botNameOf(business)}, et tu es l'intelligence artificielle qui répond ` +
       `aux visiteurs de "${business.name}". Si on te demande ton nom, présente-toi ainsi. Tu restes transparent(e) : ` +
@@ -718,7 +724,7 @@ app.get('/api/widget/:slug/look', async (req, res) => {
     let suggestions = null;
     try { suggestions = rows[0].bot_suggestions ? JSON.parse(rows[0].bot_suggestions) : null; } catch (e) { suggestions = null; }
     res.setHeader('Cache-Control', 'public, max-age=60');
-    res.json({ name: botNameOf(rows[0]), avatar: botAvatarOf(rows[0]), suggestions });
+    res.json({ name: botNameOf(rows[0]), avatar: botAvatarOf(rows[0]), suggestions, mic: Boolean(GROQ_API_KEY) });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
@@ -775,6 +781,141 @@ app.put('/api/dashboard/bot-look', requireAuth, requireRole('admin'), async (req
     res.json({ ok: true });
   } catch (err) {
     console.error('Erreur PUT /api/dashboard/bot-look:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+// ------------------------------------------------------------
+// 👍 / 👎 du visiteur sur une réponse de l'assistant.
+// ------------------------------------------------------------
+app.post('/api/feedback', async (req, res) => {
+  try {
+    if (isRateLimited(`feedback:${clientIp(req)}`, 30, 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes.' });
+    const body = req.body || {};
+    const value = Number(body.value);
+    if (![1, -1, 0].includes(value)) return res.status(400).json({ error: 'Valeur invalide.' });
+    const { rowCount } = await query(
+      `UPDATE messages m SET feedback = $1, reviewed_at = NULL
+       FROM conversations c, businesses b
+       WHERE m.id = $2 AND m.conversation_id = $3 AND m.role = 'assistant'
+         AND c.id = m.conversation_id AND b.id = c.business_id AND b.slug = $4`,
+      [value || null, Number(body.messageId) || 0, Number(body.conversationId) || 0, String(body.business || '')]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Message introuvable.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur /api/feedback:', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ------------------------------------------------------------
+// Micro du chat : l'audio du visiteur est transcrit en texte par Groq
+// (Whisper). Rien n'est conservé : le texte revient dans le champ de saisie.
+// ------------------------------------------------------------
+const AUDIO_EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-m4a': 'm4a', 'audio/aac': 'm4a' };
+app.post('/api/transcribe', express.raw({ type: () => true, limit: '6mb' }), async (req, res) => {
+  try {
+    if (!GROQ_API_KEY) return res.status(503).json({ error: 'Micro indisponible.' });
+    if (isRateLimited(`transcribe:${clientIp(req)}`, 12, 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes, patientez une minute.' });
+    const slug = String((req.query && req.query.business) || '');
+    const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [slug]);
+    if (!rows[0]) return res.status(404).json({ error: 'Entreprise inconnue.' });
+    const audio = req.body;
+    if (!Buffer.isBuffer(audio) || audio.length < 800) return res.status(400).json({ error: 'Enregistrement trop court.' });
+    const mime = String(req.headers['content-type'] || 'audio/webm').split(';')[0].trim().toLowerCase();
+    const ext = AUDIO_EXT[mime] || 'webm';
+    const form = new FormData();
+    form.append('file', new Blob([audio], { type: mime }), 'audio.' + ext);
+    form.append('model', 'whisper-large-v3-turbo');
+    form.append('response_format', 'json');
+    form.append('temperature', '0');
+    const lang = String((req.query && req.query.lang) || '').slice(0, 2).toLowerCase();
+    if (/^[a-z]{2}$/.test(lang)) form.append('language', lang);
+    const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+      body: form,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      console.error('Erreur transcription Groq:', r.status, data && data.error);
+      return res.status(502).json({ error: 'Transcription impossible, réessayez.' });
+    }
+    res.json({ text: String(data.text || '').trim() });
+  } catch (err) {
+    console.error('Erreur /api/transcribe:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ------------------------------------------------------------
+// Tableau de bord → « Questions à améliorer ».
+// ------------------------------------------------------------
+app.get('/api/dashboard/improve', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const bid = req.user.businessId;
+    const { rows } = await query(
+      `SELECT m.id, m.content AS answer, m.feedback, m.unanswered, m.created_at, m.conversation_id,
+              (SELECT u.content FROM messages u WHERE u.conversation_id = m.conversation_id AND u.role = 'user' AND u.id < m.id
+               ORDER BY u.id DESC LIMIT 1) AS question
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.business_id = $1 AND m.role = 'assistant' AND m.reviewed_at IS NULL
+         AND (m.feedback = -1 OR m.unanswered = true)
+       ORDER BY m.created_at DESC LIMIT 100`, [bid]);
+    const { rows: st } = await query(
+      `SELECT COUNT(*) FILTER (WHERE m.feedback = 1) AS up, COUNT(*) FILTER (WHERE m.feedback = -1) AS down,
+              COUNT(*) FILTER (WHERE m.unanswered) AS unknown, COUNT(*) AS total
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.business_id = $1 AND m.role = 'assistant' AND m.created_at > NOW() - INTERVAL '30 days'`, [bid]);
+    const { rows: b } = await query('SELECT learned_answers FROM businesses WHERE id = $1', [bid]);
+    res.json({
+      items: rows.map((r) => ({
+        id: r.id, conversationId: r.conversation_id, question: r.question || '', answer: r.answer,
+        reason: r.feedback === -1 ? 'down' : 'unknown', date: r.created_at,
+      })),
+      stats: { up: Number(st[0].up), down: Number(st[0].down), unknown: Number(st[0].unknown), total: Number(st[0].total) },
+      learned: (b[0] && b[0].learned_answers) || '',
+    });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/improve:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.post('/api/dashboard/improve/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const bid = req.user.businessId;
+    const { rows } = await query(
+      `SELECT m.id, (SELECT u.content FROM messages u WHERE u.conversation_id = m.conversation_id AND u.role = 'user' AND u.id < m.id
+               ORDER BY u.id DESC LIMIT 1) AS question
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE m.id = $1 AND c.business_id = $2`, [Number(req.params.id) || 0, bid]);
+    if (!rows[0]) return res.status(404).json({ error: 'Introuvable.' });
+    const answer = String((req.body && req.body.answer) || '').trim().slice(0, 1500);
+    if (req.body && req.body.action === 'answer') {
+      if (!answer) return res.status(400).json({ error: 'Écrivez la bonne réponse.' });
+      const question = String((req.body && req.body.question) || rows[0].question || '').trim().slice(0, 300);
+      const entry = `- Question : ${question.replace(/\s+/g, ' ')}\n  Réponse : ${answer.replace(/\s+/g, ' ')}`;
+      await query(
+        `UPDATE businesses SET learned_answers = LEFT(CONCAT_WS(E'\n', NULLIF(learned_answers, ''), $1::text), 20000) WHERE id = $2`,
+        [entry, bid]);
+    }
+    await query('UPDATE messages SET reviewed_at = NOW() WHERE id = $1', [rows[0].id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur POST /api/dashboard/improve:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.put('/api/dashboard/learned', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const text = typeof (req.body && req.body.learned) === 'string' ? req.body.learned.trim().slice(0, 20000) : '';
+    await query('UPDATE businesses SET learned_answers = $1 WHERE id = $2', [text, req.user.businessId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/learned:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
   }
 });
@@ -1097,10 +1238,11 @@ app.post('/api/chat', async (req, res) => {
     // Enregistrer la réponse de l'IA aussi (avec le marqueur used_fallback,
     // visible seulement côté équipe WHATGO, pour suivre à quel point ce
     // secours est réellement sollicité en production).
-    await query(
-      'INSERT INTO messages (conversation_id, role, content, used_fallback) VALUES ($1, $2, $3, $4)',
-      [convoId, 'assistant', reply, usedFallback]
+    const { rows: assistantRows } = await query(
+      'INSERT INTO messages (conversation_id, role, content, used_fallback, unanswered) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [convoId, 'assistant', reply, usedFallback, UNANSWERED_REGEX.test(reply)]
     );
+    const assistantMessageId = assistantRows[0] ? assistantRows[0].id : null;
 
     // Le rendez-vous vient d'être proposé dans cette réponse : on le note
     // pour cette conversation (pour ne jamais le reproposer une 2e fois),
@@ -1170,7 +1312,7 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    res.json({ reply, conversationId: convoId, followups: chatExtras.followups, contactForm: chatExtras.contactForm });
+    res.json({ reply, conversationId: convoId, messageId: assistantMessageId, followups: chatExtras.followups, contactForm: chatExtras.contactForm });
 
     // Fiche lead (nom + résumé du besoin) : en arrière-plan, APRÈS avoir
     // répondu au visiteur — jamais bloquant, jamais visible dans le chat.

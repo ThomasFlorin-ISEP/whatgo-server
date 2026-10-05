@@ -260,6 +260,24 @@
     .wgt-actions .wgt-chip { flex-shrink: 0; white-space: nowrap; font-size: .76rem; padding: 6px 11px; border-width: 1px; }
     @media (hover: none) { .wgt-chip:hover { background: #fff; color: var(--wgt-color); } }
 
+    /* ---------- 👍 / 👎 sous les réponses ---------- */
+    .wgt-metarow { display: flex; align-items: center; gap: 8px; }
+    .wgt-fb { display: inline-flex; gap: 2px; opacity: .7; transition: opacity .15s; }
+    .wgt-row:hover .wgt-fb, .wgt-fb.has-vote { opacity: 1; }
+    .wgt-fb button { background: none; border: none; cursor: pointer; padding: 2px 3px; border-radius: 6px; color: #A7AFB8; line-height: 0; }
+    .wgt-fb button:hover { color: #5B6570; background: #F2F4F7; }
+    .wgt-fb button.is-on { color: var(--wgt-color); }
+    .wgt-fb svg { width: 14px; height: 14px; }
+
+    /* ---------- Micro ---------- */
+    .wgt-mic { border: none; background: #EEF1F5; color: #5B6570; width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .15s, color .15s; }
+    .wgt-mic[hidden] { display: none; }
+    .wgt-mic:hover { color: var(--wgt-color); }
+    .wgt-mic.is-rec { background: #E5383B; color: #fff; animation: wgt-recpulse 1.4s infinite; }
+    .wgt-mic.is-busy { opacity: .5; cursor: default; }
+    @keyframes wgt-recpulse { 0% { box-shadow: 0 0 0 0 rgba(229,56,59,.45); } 100% { box-shadow: 0 0 0 10px rgba(229,56,59,0); } }
+
     /* ---------- Questions de suite sous une réponse ---------- */
     .wgt-follow { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 40px; margin-top: -4px; }
     .wgt-follow .wgt-chip { font-size: .78rem; padding: 6px 11px; border-width: 1px; }
@@ -344,6 +362,9 @@
       <div class="wgt-powered">Propulsé par <b>WHATGO</b></div>
       <form class="wgt-form">
         <input type="text" placeholder="Tapez votre message ici…" autocomplete="off" />
+        <button type="button" class="wgt-mic" aria-label="Dicter un message" title="Dicter un message" hidden>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
         <button type="submit" class="wgt-send" aria-label="Envoyer">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="m22 2-7 20-4-9-9-4Z"/></svg>
         </button>
@@ -423,6 +444,7 @@
           m.textContent = BOT_NAME + ' • ' + m.textContent.split(' • ').slice(1).join(' • ');
         });
       }
+      if (data.mic) setupMic();
       if (data.suggestions) {
         // Soit une liste, soit { fr: [...], en: [...] } selon la langue de la page.
         var list = data.suggestions;
@@ -539,7 +561,7 @@
   function addMessage(role, text, opts) {
     opts = opts || {};
     if (!opts.restore) {
-      transcript.push({ r: role, t: text, d: nowStr() });
+      transcript.push({ r: role, t: text, d: nowStr(), mid: opts.mid || null, f: 0 });
       if (transcript.length > 80) transcript = transcript.slice(-80);
       saveStateSoon();
       if (role !== 'user' && !panel.classList.contains('wgt-open')) setUnread(unread + 1);
@@ -562,7 +584,14 @@
       meta.className = 'wgt-meta';
       meta.textContent = BOT_NAME + ' • ' + (opts.time || nowStr());
       col.appendChild(m);
-      col.appendChild(meta);
+      if (opts.mid) {
+        var mr = el('div', 'wgt-metarow');
+        mr.appendChild(meta);
+        mr.appendChild(feedbackButtons(opts.mid, opts.f || 0));
+        col.appendChild(mr);
+      } else {
+        col.appendChild(meta);
+      }
       row.appendChild(col);
       log.appendChild(row);
       if (opts.animate) { log.scrollTop = log.scrollHeight; reveal(m, opts.done); return m; }
@@ -570,6 +599,109 @@
     log.scrollTop = log.scrollHeight;
     if (opts.done) opts.done();
     return null;
+  }
+
+  // --- 👍 / 👎 : l'avis du visiteur remonte dans « Questions à améliorer » ---
+  var THUMB_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v11H4V10zM7 10l4-8a2.5 2.5 0 0 1 2.5 2.5V8h5.3a2 2 0 0 1 2 2.3l-1.4 9A2 2 0 0 1 17.4 21H7"/></svg>';
+  var THUMB_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="M7 10v11H4V10zM7 10l4-8a2.5 2.5 0 0 1 2.5 2.5V8h5.3a2 2 0 0 1 2 2.3l-1.4 9A2 2 0 0 1 17.4 21H7"/></svg>';
+  function feedbackButtons(mid, current) {
+    var box = el('span', 'wgt-fb');
+    var up = el('button'); up.type = 'button'; up.innerHTML = THUMB_UP; up.setAttribute('aria-label', 'Réponse utile'); up.title = 'Réponse utile';
+    var down = el('button'); down.type = 'button'; down.innerHTML = THUMB_DOWN; down.setAttribute('aria-label', 'Réponse pas utile'); down.title = 'Pas utile';
+    box.appendChild(up); box.appendChild(down);
+    function paint(v) {
+      up.classList.toggle('is-on', v === 1);
+      down.classList.toggle('is-on', v === -1);
+      box.classList.toggle('has-vote', v !== 0);
+    }
+    var value = current || 0;
+    paint(value);
+    function vote(v) {
+      value = value === v ? 0 : v;
+      paint(value);
+      transcript.forEach(function (t) { if (t.mid === mid) t.f = value; });
+      saveStateSoon();
+      fetch(API_BASE + '/api/feedback', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business: BUSINESS, conversationId: conversationId, messageId: mid, value: value }),
+      }).catch(function () {});
+    }
+    up.addEventListener('click', function () { vote(1); });
+    down.addEventListener('click', function () { vote(-1); });
+    return box;
+  }
+
+  // --- Micro : enregistrement, puis transcription par le serveur (Groq Whisper) ---
+  var micBtn = root.querySelector('.wgt-mic');
+  var micReady = false;
+  function setupMic() {
+    if (micReady) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return;
+    micReady = true;
+    micBtn.hidden = false;
+    var rec = null, chunks = [], stream = null, timer = null, started = 0, busy = false;
+    var basePlaceholder = input.placeholder;
+    function hint(t, ms) {
+      input.placeholder = t;
+      if (ms) setTimeout(function () { if (!rec && !busy) input.placeholder = basePlaceholder; }, ms);
+    }
+    function stopTracks() { if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+    function stop() { if (rec && rec.state !== 'inactive') rec.stop(); }
+    micBtn.addEventListener('click', async function () {
+      unlockAudio();
+      if (busy) return;
+      if (rec) { stop(); return; }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        hint('Micro refusé : autorisez-le dans votre navigateur.', 4000);
+        return;
+      }
+      var mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].filter(function (m) {
+        return window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m);
+      })[0] || '';
+      try { rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
+      catch (e) { stopTracks(); hint('Micro indisponible sur ce navigateur.', 4000); return; }
+      chunks = [];
+      rec.ondataavailable = function (ev) { if (ev.data && ev.data.size) chunks.push(ev.data); };
+      rec.onstop = async function () {
+        clearInterval(timer);
+        stopTracks();
+        micBtn.classList.remove('is-rec');
+        var type = (rec.mimeType || mime || 'audio/webm').split(';')[0];
+        rec = null;
+        var blob = new Blob(chunks, { type: type });
+        if (Date.now() - started < 700 || blob.size < 800) { hint('Maintenez un peu plus longtemps…', 2500); return; }
+        busy = true;
+        micBtn.classList.add('is-busy');
+        input.disabled = true;
+        hint('Transcription…');
+        try {
+          var res = await fetch(API_BASE + '/api/transcribe?business=' + encodeURIComponent(BUSINESS || ''), {
+            method: 'POST', headers: { 'Content-Type': type }, body: blob,
+          });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.error || '');
+          input.value = (input.value ? input.value + ' ' : '') + (data.text || '');
+          input.placeholder = basePlaceholder;
+        } catch (e) {
+          hint((e && e.message) || 'Transcription impossible, réessayez.', 4000);
+        }
+        busy = false;
+        micBtn.classList.remove('is-busy');
+        input.disabled = false;
+        input.focus();
+      };
+      rec.start();
+      started = Date.now();
+      micBtn.classList.add('is-rec');
+      hint('🔴 0:00 · touchez ■ pour arrêter');
+      timer = setInterval(function () {
+        var sec = Math.floor((Date.now() - started) / 1000);
+        hint('🔴 0:' + (sec < 10 ? '0' : '') + sec + ' · touchez ■ pour arrêter');
+        if (sec >= 60) stop();
+      }, 500);
+    });
   }
 
   // --- Conversation gardée pendant toute la visite, même en changeant de page ---
@@ -1379,7 +1511,7 @@
     welcomed = true;
     welcomeShown = true;
     renderHero();
-    transcript.forEach(function (m) { addMessage(m.r, m.t, { restore: true, time: m.d || '' }); });
+    transcript.forEach(function (m) { addMessage(m.r, m.t, { restore: true, time: m.d || '', mid: m.mid, f: m.f }); });
     showQuickReplies();
     if (st.o && !isPhone()) openPanel(false);
     else setUnread(st.u || 0);
@@ -1496,7 +1628,7 @@
         // Réponse affichée mot à mot, puis les modules demandés par le
         // serveur (réservation, fiches produits, suivi de commande, séjour,
         // formulaire de coordonnées) et les questions de suite.
-        addMessage('bot', data.reply, { animate: true, done: function () {
+        addMessage('bot', data.reply, { animate: true, mid: data.messageId || null, done: function () {
           if (gen !== convGen) return;
           if (data.ui && data.ui.type === 'booking' && bookingServices) startBooking();
           if (data.ui && data.ui.type === 'products' && data.ui.items && data.ui.items.length) showProducts(data.ui.items);
