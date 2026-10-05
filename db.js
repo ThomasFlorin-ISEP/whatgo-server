@@ -166,6 +166,23 @@ async function initDb() {
   await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS unanswered BOOLEAN DEFAULT false`);
   await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`);
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS learned_answers TEXT`);
+  // Base de connaissances : documents importés (PDF, Word, texte) et sites web lus.
+  await query(`
+    CREATE TABLE IF NOT EXISTS knowledge_docs (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES businesses(id),
+      kind        TEXT NOT NULL DEFAULT 'file',
+      name        TEXT NOT NULL,
+      source_url  TEXT,
+      mime        TEXT,
+      chars       INTEGER NOT NULL DEFAULT 0,
+      pages       INTEGER,
+      content     TEXT NOT NULL DEFAULT '',
+      truncated   BOOLEAN DEFAULT false,
+      created_at  TIMESTAMPTZ DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 
   // Instructions spécifiques (page "Base de connaissances") : texte libre
   // du client, en plus des documents, que le bot doit toujours respecter.

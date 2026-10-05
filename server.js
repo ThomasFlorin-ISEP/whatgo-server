@@ -1218,6 +1218,306 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
   }
 });
 
+// ============================================================
+// BASE DE CONNAISSANCES : import de documents et lecture de sites web.
+// Le texte extrait est stocké en base puis donné à l'assistant à chaque
+// question (documents de taille raisonnable : cartes, tarifs, FAQ…).
+// ============================================================
+const DOCS_MAX_FILE_BYTES = 10 * 1024 * 1024;   // 10 Mo par fichier
+const DOCS_MAX_DOC_CHARS = 150000;              // ≈ 40 pages par document
+const DOCS_MAX_TOTAL_CHARS = 300000;            // ≈ 80 pages au total par client
+const DOCS_FALLBACK_CHARS = 24000;              // version courte pour le secours Groq
+const docsCache = new Map();                    // business_id -> { at, full, short }
+
+function decodeEntities(t) {
+  return String(t)
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (m, n) => String.fromCodePoint(parseInt(n, 16)));
+}
+function cleanText(t) {
+  return String(t).replace(/\r/g, '').replace(/[ \t\f\v]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// --- Word (.docx) : un .docx est un zip ; on lit word/document.xml. ---
+function unzipEntry(buf, wanted) {
+  const zlib = require('zlib');
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('zip');
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  for (let n = 0; n < count; n++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) break;
+    const method = buf.readUInt16LE(p + 10);
+    const csize = buf.readUInt32LE(p + 20);
+    const nlen = buf.readUInt16LE(p + 28), xlen = buf.readUInt16LE(p + 30), clen = buf.readUInt16LE(p + 32);
+    const local = buf.readUInt32LE(p + 42);
+    const name = buf.slice(p + 46, p + 46 + nlen).toString('utf8');
+    if (name === wanted) {
+      const lnlen = buf.readUInt16LE(local + 26), lxlen = buf.readUInt16LE(local + 28);
+      const data = buf.slice(local + 30 + lnlen + lxlen, local + 30 + lnlen + lxlen + csize);
+      return method === 8 ? zlib.inflateRawSync(data) : data;
+    }
+    p += 46 + nlen + xlen + clen;
+  }
+  return null;
+}
+function docxToText(buf) {
+  const xml = unzipEntry(buf, 'word/document.xml');
+  if (!xml) throw new Error('docx');
+  return cleanText(decodeEntities(xml.toString('utf8')
+    .replace(/<w:tab\/>/g, '\t').replace(/<w:br[^>]*\/>/g, '\n')
+    .replace(/<\/w:p>/g, '\n').replace(/<\/w:tc>/g, ' | ').replace(/<\/w:tr>/g, '\n')
+    .replace(/<[^>]+>/g, '')));
+}
+
+// --- PDF : Gemini lit le PDF et renvoie son texte (pas de bibliothèque à installer). ---
+async function pdfToText(buf) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [
+        { inline_data: { mime_type: 'application/pdf', data: buf.toString('base64') } },
+        { text: "Recopie fidèlement TOUT le texte de ce document, dans l'ordre, sans le résumer ni le commenter. " +
+                'Garde les titres, listes, prix et horaires. Écris les tableaux ligne par ligne avec des « | » entre les colonnes.' },
+      ] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 60000 },
+    }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) throw new Error((data.error && data.error.message) || 'Lecture du PDF impossible');
+  const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+  return cleanText(parts.map((x) => x.text || '').join(''));
+}
+
+// --- Pages web : lecture sécurisée (pas d'adresse interne) ---
+function isPrivateIp(ip) {
+  return /^(127\.|10\.|192\.168\.|169\.254\.|0\.|::1$|fc|fd|fe80)/i.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+}
+async function safeFetchPage(rawUrl) {
+  const dns = require('dns').promises;
+  let current = rawUrl;
+  for (let hop = 0; hop < 4; hop++) {
+    const u = new URL(current);
+    if (!/^https?:$/.test(u.protocol)) throw new Error('Adresse invalide');
+    if (!process.env.ALLOW_PRIVATE_FETCH) {
+      if (/^(localhost|.*\.local|.*\.internal)$/i.test(u.hostname)) throw new Error('Adresse non autorisée');
+      const addrs = await dns.lookup(u.hostname, { all: true }).catch(() => []);
+      if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) throw new Error('Site introuvable');
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    let r;
+    try {
+      r = await fetch(u.toString(), { redirect: 'manual', signal: ctrl.signal, headers: { 'User-Agent': 'WHATGO-Bot/1.0 (+https://whatgo.ai)', Accept: 'text/html,*/*' } });
+    } finally { clearTimeout(timer); }
+    if (r.status >= 300 && r.status < 400 && r.headers.get('location')) { current = new URL(r.headers.get('location'), u).toString(); continue; }
+    if (!r.ok) throw new Error('Page inaccessible (' + r.status + ')');
+    const type = String(r.headers.get('content-type') || '');
+    if (!/html|text\/plain/i.test(type)) throw new Error('Pas une page web');
+    const html = (await r.text()).slice(0, 2 * 1024 * 1024);
+    return { url: u.toString(), html };
+  }
+  throw new Error('Trop de redirections');
+}
+function htmlToText(html) {
+  const title = (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+  const body = html
+    .replace(/<(script|style|noscript|svg|template|iframe)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<head[\s\S]*?<\/head>/i, ' ')
+    .replace(/<li[^>]*>/gi, '\n- ')
+    .replace(/<\/(p|div|h[1-6]|li|tr|section|article|header|footer|ul|ol|table|blockquote)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<\/t[dh]>/gi, ' | ')
+    .replace(/<[^>]+>/g, ' ');
+  return { title: cleanText(decodeEntities(title)), text: cleanText(decodeEntities(body)) };
+}
+function sameSiteLinks(html, baseUrl) {
+  const base = new URL(baseUrl);
+  const out = [];
+  const re = /<a\s[^>]*href\s*=\s*["']([^"'#]+)["']/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    try {
+      const u = new URL(decodeEntities(m[1]), base);
+      u.hash = '';
+      if (u.hostname.replace(/^www\./, '') !== base.hostname.replace(/^www\./, '')) continue;
+      if (/\.(pdf|jpe?g|png|gif|webp|svg|zip|mp4|mp3|docx?|xlsx?)$/i.test(u.pathname)) continue;
+      if (/(login|connexion|panier|cart|checkout|account|compte|wp-admin|mentions|cgv|cookies?|privacy|confidentialit)/i.test(u.pathname)) continue;
+      const s = u.toString();
+      if (s !== base.toString() && !out.includes(s)) out.push(s);
+    } catch (e) { /* lien invalide */ }
+  }
+  return out;
+}
+async function readWebsite(startUrl) {
+  const first = await safeFetchPage(startUrl);
+  const pages = [];
+  const p0 = htmlToText(first.html);
+  pages.push({ url: first.url, title: p0.title, text: p0.text });
+  const links = sameSiteLinks(first.html, first.url).slice(0, 12);
+  for (const link of links) {
+    if (pages.length >= 10) break;
+    try {
+      const pg = await safeFetchPage(link);
+      const t = htmlToText(pg.html);
+      if (t.text.length > 80) pages.push({ url: pg.url, title: t.title, text: t.text });
+    } catch (e) { /* page ignorée */ }
+  }
+  // Retire les lignes répétées sur toutes les pages (menus, pieds de page).
+  const lineCount = new Map();
+  pages.forEach((pg) => new Set(pg.text.split('\n')).forEach((l) => lineCount.set(l, (lineCount.get(l) || 0) + 1)));
+  const repeated = (l) => pages.length > 2 && l.length < 120 && lineCount.get(l) >= Math.ceil(pages.length * 0.7);
+  const text = pages.map((pg, i) => {
+    const lines = pg.text.split('\n').filter((l) => i === 0 || !repeated(l));
+    return `## ${pg.title || pg.url}\n(${pg.url})\n${lines.join('\n')}`;
+  }).join('\n\n');
+  return { text: cleanText(text), pages: pages.length, title: p0.title };
+}
+
+async function loadDocsBlock(businessId) {
+  const hit = docsCache.get(businessId);
+  if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit;
+  let rows = [];
+  try {
+    rows = (await query('SELECT name, content FROM knowledge_docs WHERE business_id = $1 ORDER BY created_at ASC', [businessId])).rows;
+  } catch (e) { rows = []; }
+  const body = rows.map((r) => `### ${r.name}\n${r.content}`).join('\n\n');
+  const head = `\n\nDOCUMENTS DE L'ENTREPRISE (source officielle : appuie-toi dessus pour répondre ; ` +
+    `si l'information n'y figure pas, ne l'invente pas) :\n`;
+  const out = {
+    at: Date.now(),
+    full: body ? head + body : '',
+    short: body ? head + body.slice(0, DOCS_FALLBACK_CHARS) : '',
+  };
+  docsCache.set(businessId, out);
+  return out;
+}
+
+async function docsUsage(businessId, exceptId) {
+  const { rows } = await query('SELECT COALESCE(SUM(chars), 0) AS n FROM knowledge_docs WHERE business_id = $1 AND id <> $2', [businessId, exceptId || 0]);
+  return Number(rows[0].n || 0);
+}
+async function saveDoc(businessId, replaceId, doc) {
+  let content = doc.text || '';
+  if (!content.trim()) throw Object.assign(new Error('Aucun texte trouvé dans ce document.'), { status: 422 });
+  let truncated = false;
+  if (content.length > DOCS_MAX_DOC_CHARS) { content = content.slice(0, DOCS_MAX_DOC_CHARS); truncated = true; }
+  const used = await docsUsage(businessId, replaceId);
+  if (used + content.length > DOCS_MAX_TOTAL_CHARS) {
+    throw Object.assign(new Error("Limite atteinte : supprimez un document avant d'en ajouter un autre."), { status: 413 });
+  }
+  let id;
+  if (replaceId) {
+    const { rows } = await query(
+      `UPDATE knowledge_docs SET kind = $1, name = $2, source_url = $3, mime = $4, chars = $5, pages = $6, content = $7, truncated = $8, updated_at = NOW()
+       WHERE id = $9 AND business_id = $10 RETURNING id`,
+      [doc.kind, doc.name, doc.url || null, doc.mime || null, content.length, doc.pages || null, content, truncated, replaceId, businessId]);
+    if (!rows[0]) throw Object.assign(new Error('Document introuvable.'), { status: 404 });
+    id = rows[0].id;
+  } else {
+    const { rows } = await query(
+      `INSERT INTO knowledge_docs (business_id, kind, name, source_url, mime, chars, pages, content, truncated)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [businessId, doc.kind, doc.name, doc.url || null, doc.mime || null, content.length, doc.pages || null, content, truncated]);
+    id = rows[0].id;
+  }
+  docsCache.delete(businessId);
+  return { id, chars: content.length, truncated };
+}
+
+app.get('/api/dashboard/docs', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, kind, name, source_url, mime, chars, pages, truncated, created_at, updated_at, LEFT(content, 220) AS excerpt
+       FROM knowledge_docs WHERE business_id = $1 ORDER BY created_at DESC`, [req.user.businessId]);
+    const used = rows.reduce((a, r) => a + Number(r.chars || 0), 0);
+    res.json({ docs: rows, used, limit: DOCS_MAX_TOTAL_CHARS, maxFileMb: DOCS_MAX_FILE_BYTES / 1024 / 1024 });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/docs:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.get('/api/dashboard/docs/:id', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT id, name, kind, source_url, content FROM knowledge_docs WHERE id = $1 AND business_id = $2',
+      [Number(req.params.id) || 0, req.user.businessId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Document introuvable.' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.post('/api/dashboard/docs/upload', requireAuth, requireRole('admin'),
+  express.raw({ type: () => true, limit: DOCS_MAX_FILE_BYTES }), async (req, res) => {
+  try {
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: 'Fichier vide.' });
+    if (buf.length > DOCS_MAX_FILE_BYTES) return res.status(413).json({ error: 'Fichier trop lourd (10 Mo maximum).' });
+    const name = String((req.query && req.query.name) || 'Document').slice(0, 160);
+    const ext = (name.match(/\.([a-z0-9]+)$/i) || [])[1] ? name.match(/\.([a-z0-9]+)$/i)[1].toLowerCase() : '';
+    const mime = String(req.headers['content-type'] || '').split(';')[0].toLowerCase();
+    let text;
+    let kind = 'file';
+    if (ext === 'pdf' || mime === 'application/pdf' || buf.slice(0, 4).toString() === '%PDF') {
+      text = await pdfToText(buf);
+    } else if (ext === 'docx' || /wordprocessingml/.test(mime)) {
+      try { text = docxToText(buf); } catch (e) { return res.status(422).json({ error: 'Fichier Word illisible.' }); }
+    } else if (['txt', 'md', 'csv'].includes(ext) || /^text\//.test(mime)) {
+      text = cleanText(buf.toString('utf8'));
+    } else if (ext === 'doc') {
+      return res.status(415).json({ error: 'Ancien format Word (.doc) : enregistrez-le en .docx ou en PDF.' });
+    } else {
+      return res.status(415).json({ error: 'Format non pris en charge : PDF, Word (.docx) ou texte.' });
+    }
+    const replaceId = Number(req.query && req.query.replace) || null;
+    const saved = await saveDoc(req.user.businessId, replaceId, { kind, name, mime: mime || ext, text });
+    res.json({ ok: true, ...saved });
+  } catch (err) {
+    console.error('Erreur import de document:', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Impossible de lire ce document. Réessayez ou essayez un autre format." });
+  }
+});
+
+app.post('/api/dashboard/docs/url', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    if (isRateLimited(`docs-url:${req.user.businessId}`, 10, 10 * 60 * 1000)) return res.status(429).json({ error: 'Trop de lectures, réessayez dans quelques minutes.' });
+    let raw = String((req.body && req.body.url) || '').trim();
+    if (!raw) return res.status(400).json({ error: "Indiquez l'adresse du site." });
+    if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+    let site;
+    try { site = await readWebsite(raw); }
+    catch (e) { return res.status(422).json({ error: 'Impossible de lire ce site : ' + (e.message || 'erreur') + '.' }); }
+    const host = new URL(raw).hostname.replace(/^www\./, '');
+    const replaceId = Number(req.body && req.body.replace) || null;
+    const saved = await saveDoc(req.user.businessId, replaceId, {
+      kind: 'url', name: 'Site ' + host, url: raw, mime: 'text/html', text: site.text, pages: site.pages,
+    });
+    res.json({ ok: true, pages: site.pages, ...saved });
+  } catch (err) {
+    console.error('Erreur lecture de site:', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erreur interne du serveur.' });
+  }
+});
+
+app.delete('/api/dashboard/docs/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await query('DELETE FROM knowledge_docs WHERE id = $1 AND business_id = $2', [Number(req.params.id) || 0, req.user.businessId]);
+    docsCache.delete(req.user.businessId);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
 app.post('/api/handoff', async (req, res) => {
   try {
     if (isRateLimited(`handoff:${clientIp(req)}`, 5, 10 * 60 * 1000)) {
@@ -1516,7 +1816,9 @@ app.post('/api/chat', async (req, res) => {
     if (bookingOn) systemPromptForCall += buildBookingInstruction(bookingConfig);
     const isHotel = business.business_type === 'hotel';
     systemPromptForCall += isHotel ? (shop.products.length ? buildHotelInstruction(shop) : '') : buildShopInstruction(shop);
-    const data = await callGemini(systemPromptForCall, contents);
+    // Documents de la base de connaissances (version courte pour le secours Groq).
+    const docsBlock = await loadDocsBlock(business.id);
+    const data = await callGemini(systemPromptForCall + docsBlock.full, contents);
 
     let reply;
     let usedFallback = false;
@@ -1527,7 +1829,7 @@ app.post('/api/chat', async (req, res) => {
       // ait quand même une réponse plutôt qu'un message d'erreur.
       let fallbackReply = null;
       try {
-        fallbackReply = await callGroqFallback(systemPromptForCall, contents);
+        fallbackReply = await callGroqFallback(systemPromptForCall + docsBlock.short, contents);
       } catch (fallbackErr) {
         console.error('Erreur fallback Groq:', fallbackErr.message);
       }
