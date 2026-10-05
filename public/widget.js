@@ -1287,6 +1287,13 @@
     window.visualViewport.addEventListener('scroll', fitViewport);
   }
 
+  // Compte une ouverture du chat par visite (entonnoir du tableau de bord).
+  function trackOpen() {
+    if (!BUSINESS) return;
+    try { if (sessionStorage.getItem('wgt-open-' + BUSINESS)) return; sessionStorage.setItem('wgt-open-' + BUSINESS, '1'); } catch (e) {}
+    fetch(API_BASE + '/api/widget/' + encodeURIComponent(BUSINESS) + '/open', { method: 'POST' }).catch(function () {});
+  }
+
   function openPanel(byUser) {
     panel.classList.add('wgt-open');
     root.classList.add('wgt-is-open');
@@ -1294,6 +1301,7 @@
     fitViewport();
     setUnread(0);
     markSeen();
+    trackOpen();
     showWelcome();
     saveStateSoon();
     if (byUser && !isPhone()) setTimeout(function () { input.focus(); }, 50);

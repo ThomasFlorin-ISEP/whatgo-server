@@ -191,6 +191,41 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 
 /* ============================================================ KPI */
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+/* ---- Vue d'ensemble : à faire, évolutions, entonnoir, sujets, courbe ---- */
+.ovtodo{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+.todo{display:flex;gap:14px;align-items:center;padding:16px 18px;border-radius:18px;text-align:left;width:100%;font:inherit;color:inherit;
+  background:linear-gradient(170deg,rgba(255,255,255,.95),rgba(255,255,255,.7));border:1px solid rgba(255,255,255,.95);
+  box-shadow:0 8px 24px rgba(11,26,20,.06);cursor:pointer;transition:transform .15s,box-shadow .15s}
+.todo:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(11,26,20,.1)}
+.todo__ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:1.3rem;flex-shrink:0}
+.todo--hot .todo__ic{background:#FDE8E4}.todo--rdv .todo__ic{background:#EAE8FD}.todo--imp .todo__ic{background:var(--amber-soft)}
+.todo b{display:block;font-family:'Space Grotesk',sans-serif;font-size:1.55rem;line-height:1;letter-spacing:-.02em}
+.todo div>span{display:block;font-size:.84rem;font-weight:600;color:var(--ink);margin-top:3px}
+.todo small{display:block;font-size:.74rem;color:var(--ink-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.todo.is-zero{opacity:.62}.todo.is-zero b{color:var(--ink-faint)}
+.todo-ok{grid-column:1/-1;padding:14px 18px;border-radius:16px;background:var(--green-soft);color:var(--green-deep);font-weight:600;font-size:.9rem}
+.kpi__d{font-size:.74rem;font-weight:600;margin-top:6px;color:var(--ink-faint)}
+.kpi__d.up{color:var(--green-deep)}.kpi__d.down{color:var(--red)}
+.kpi__s{font-size:.74rem;color:var(--ink-faint);margin-top:2px}
+.funnel__row{margin-bottom:12px}
+.funnel__top{display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:5px}
+.funnel__top b{font-family:'Space Grotesk',sans-serif;font-size:1.05rem}
+.funnel__bar{height:12px;border-radius:999px;background:var(--line-soft,#EEF2EF);overflow:hidden}
+.funnel__bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),#17A9B4)}
+.funnel__rate{font-size:.74rem;color:var(--ink-faint);margin:-4px 0 10px 2px}
+.topic{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;margin-bottom:11px;font-size:.86rem}
+.topic .funnel__bar{grid-column:1/-1;height:8px}
+.topic .funnel__bar i{background:var(--green)}
+.ovlegend{display:flex;gap:14px;font-size:.78rem;color:var(--ink-soft)}
+.ovlegend i{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--green-deep);margin-right:6px;vertical-align:-1px}
+.ovlegend i.light{background:#9FDDB9}
+.ovchart{display:flex;align-items:flex-end;gap:4px;height:190px;padding-top:10px}
+.ovchart__col{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;min-width:0}
+.ovchart__bars{flex:1;display:flex;align-items:flex-end;gap:2px;width:100%;justify-content:center}
+.ovchart__bars i{display:block;width:42%;max-width:16px;border-radius:4px 4px 0 0;background:#9FDDB9;min-height:2px}
+.ovchart__bars i.l{background:var(--green-deep)}
+.ovchart__x{font-size:.66rem;color:var(--ink-faint);margin-top:6px;height:12px;white-space:nowrap}
+@media (max-width:900px){.ovtodo{grid-template-columns:1fr}}
 .kpi{background:linear-gradient(170deg,rgba(255,255,255,.92),rgba(255,255,255,.66));
   -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
   border:1px solid rgba(255,255,255,.9);border-radius:var(--r-l);padding:17px 19px;box-shadow:var(--sh-m)}
@@ -556,29 +591,20 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     <section class="tab-page active" id="page-overview">
       <div class="topbar">
         <div><h2>Vue d'ensemble</h2><p>Ce que votre assistant a fait pour vous, à partir des vraies conversations enregistrées.</p></div>
-        <div class="topbar__act"><span class="tag tag--dot" id="statusBadge">—</span></div>
+        <div class="topbar__act" style="display:flex;gap:10px;align-items:center">
+          <select id="ovRange" class="rangepick"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select>
+          <span class="tag tag--dot" id="statusBadge">—</span></div>
       </div>
-      <div class="kpis" id="ovKpis"></div>
+      <div class="ovtodo" id="ovTodo"></div>
+      <div class="kpis" id="ovKpis4" style="grid-template-columns:repeat(4,1fr)"></div>
       <div class="split split--even">
-        <div class="card card--chart">
-          <div class="card__head"><div><h3>Conversations — 14 derniers jours</h3></div></div>
-          <div class="chart" id="chart"></div>
-        </div>
-        <div class="card">
-          <div class="card__head"><div><h3>Taux de conversion</h3></div></div>
-          <div class="donut-wrap donut-wrap--solo" id="ovConvRing"></div>
-        </div>
+        <div class="card"><div class="card__head"><div><h3>De la visite au rendez-vous</h3><p class="card__sub" id="ovFunnelSub"></p></div></div><div id="ovFunnel"></div></div>
+        <div class="card"><div class="card__head"><div><h3>Sujets les plus demandés</h3><p class="card__sub" id="ovTopicsSub"></p></div></div><div id="ovTopics"></div></div>
       </div>
       <div class="card card--chart">
-        <div class="card__head">
-          <div><h3>Leads traités</h3></div>
-          <select id="leadsRangeSelect" class="rangepick">
-            <option value="14d">14 derniers jours</option>
-            <option value="week">Cette semaine</option>
-            <option value="24h">Dernières 24h</option>
-          </select>
-        </div>
-        <div class="areachart" id="leadsArea"></div>
+        <div class="card__head"><div><h3 id="ovChartTitle">Conversations et leads par jour</h3></div>
+          <div class="ovlegend"><span><i class="light"></i>Conversations</span><span><i></i>Leads</span></div></div>
+        <div class="ovchart" id="ovChart"></div>
       </div>
       <div class="card card--flush" id="ovLeadsCard">
         <div class="card__head card__head--pad">
@@ -1507,7 +1533,112 @@ function renderOverviewConversionRing(rate) {
     '<p class="card__sub">' + OV.leads + ' lead(s) captés sur ' + OV.conv + ' conversation(s).</p>';
 }
 
-async function loadStats() {
+async function loadStats() { return loadOverview(); }
+
+/* ---- Nouvelle Vue d'ensemble ---- */
+var OV_RANGE = 30;
+try { OV_RANGE = [7, 30, 90].indexOf(Number(localStorage.getItem('ov-range'))) >= 0 ? Number(localStorage.getItem('ov-range')) : 30; } catch (e) {}
+function plural(n, one, many) { return n + ' ' + (n > 1 ? many : one); }
+function deltaHtml(cur, prev, days) {
+  if (!cur && !prev) return '<div class="kpi__d">—</div>';
+  if (!prev) return '<div class="kpi__d up">Nouveau sur la période</div>';
+  var pct = Math.round((cur - prev) / prev * 100);
+  var cls = pct > 0 ? 'up' : pct < 0 ? 'down' : '';
+  return '<div class="kpi__d ' + cls + '">' + (pct > 0 ? '↑ +' : pct < 0 ? '↓ ' : '= ') + pct + ' % vs ' + days + ' j précédents</div>';
+}
+async function loadOverview() {
+  var sel = $('#ovRange');
+  if (sel) sel.value = String(OV_RANGE);
+  try {
+    var res = await fetch(API + '/api/dashboard/overview?days=' + OV_RANGE, { credentials: 'include' });
+    if (!res.ok) throw new Error();
+    renderOverview(await res.json());
+  } catch (e) { toast('Impossible de charger la vue d\'ensemble.', true); }
+}
+function renderOverview(o) {
+  var k = o.kpis, t = o.todo, days = o.days;
+  // 1) À faire
+  var todo = $('#ovTodo');
+  if (todo) {
+    var hotN = t.hotLeads || t.newLeads;
+    var hotLabel = t.hotLeads ? (t.hotLeads > 1 ? 'leads chauds à rappeler' : 'lead chaud à rappeler')
+      : (t.newLeads > 1 ? 'nouveaux leads à contacter' : 'nouveau lead à contacter');
+    var uniq = (t.hotNames || []).filter(function (n, i, a) { return a.indexOf(n) === i; });
+    var hotSub = uniq.length ? uniq.join(', ') : (t.newLeads ? 'Statut « Nouveau » dans Leads' : 'Tous vos leads sont pris en charge');
+    var items = [
+      ['hot', '🔥', hotN, hotLabel, hotSub, 'leads'],
+      ['rdv', '📅', t.rdvToday, t.rdvToday > 1 ? 'rendez-vous aujourd\'hui' : 'rendez-vous aujourd\'hui', t.rdvToday ? 'Voir l\'agenda' : 'Aucun rendez-vous prévu', 'appointments'],
+      ['imp', '⭐', t.improve, t.improve > 1 ? 'questions à améliorer' : 'question à améliorer', t.improve ? 'Apprenez-les à votre assistant' : 'Votre assistant a réponse à tout', 'improve'],
+    ];
+    todo.innerHTML = items.map(function (it) {
+      return '<button type="button" class="todo todo--' + it[0] + (it[2] ? '' : ' is-zero') + '" data-go="' + it[5] + '">' +
+        '<span class="todo__ic">' + it[1] + '</span><div><b>' + it[2] + '</b><span>' + esc(it[3]) + '</span><small>' + esc(it[4]) + '</small></div></button>';
+    }).join('');
+    $$('[data-go]', todo).forEach(function (b) {
+      b.addEventListener('click', function () {
+        var tab = b.getAttribute('data-go');
+        if (document.querySelector('.nav-item[data-tab="' + tab + '"]:not([hidden])')) switchTab(tab); else switchTab('leads');
+      });
+    });
+  }
+  // 2) Chiffres clés
+  var s = k.satisfaction, votes = s.up + s.down, pvotes = s.prevUp + s.prevDown;
+  var sat = votes ? Math.round(100 * s.up / votes) : null, psat = pvotes ? Math.round(100 * s.prevUp / pvotes) : null;
+  var satDelta = sat === null ? '<div class="kpi__d">Pas encore d\'avis</div>'
+    : psat === null ? '<div class="kpi__d">' + plural(votes, 'avis', 'avis') + ' 👍/👎</div>'
+    : '<div class="kpi__d ' + (sat > psat ? 'up' : sat < psat ? 'down' : '') + '">' + (sat >= psat ? '+' : '') + (sat - psat) + ' pts vs ' + days + ' j précédents</div>';
+  $('#ovKpis4').innerHTML =
+    '<div class="kpi kpi--hero"><div class="kpi__l">Conversations</div><div class="kpi__v">' + k.conversations.cur + '</div>' + deltaHtml(k.conversations.cur, k.conversations.prev, days) + '</div>' +
+    '<div class="kpi"><div class="kpi__l">Leads captés</div><div class="kpi__v">' + k.leads.cur + '</div>' + deltaHtml(k.leads.cur, k.leads.prev, days) + '</div>' +
+    '<div class="kpi"><div class="kpi__l">Rendez-vous pris</div><div class="kpi__v">' + k.rdv.cur + '</div>' + deltaHtml(k.rdv.cur, k.rdv.prev, days) + '</div>' +
+    '<div class="kpi"><div class="kpi__l">Satisfaction</div><div class="kpi__v">' + (sat === null ? '—' : sat + ' %') + '</div>' + satDelta + '</div>';
+  // 3) Entonnoir
+  var steps = [];
+  var opensTracked = k.opens.cur >= k.conversations.cur && k.opens.cur > 0;
+  if (opensTracked) steps.push(['Chats ouverts', k.opens.cur]);
+  steps.push(['Conversations', k.conversations.cur], ['Leads captés', k.leads.cur], ['Rendez-vous pris', k.rdv.cur]);
+  var top = Math.max(1, steps[0][1]);
+  $('#ovFunnel').innerHTML = steps.map(function (st, i) {
+    var w = Math.max(st[1] ? 3 : 0, Math.round(st[1] / top * 100));
+    var rate = i > 0 && steps[i - 1][1] ? '<div class="funnel__rate">↳ ' + Math.round(st[1] / steps[i - 1][1] * 100) + ' % de l\'étape précédente</div>' : '';
+    return rate + '<div class="funnel__row"><div class="funnel__top"><span>' + st[0] + '</span><b>' + st[1] + '</b></div><div class="funnel__bar"><i style="width:' + w + '%"></i></div></div>';
+  }).join('');
+  $('#ovFunnelSub').textContent = days + ' derniers jours' + (opensTracked ? '' : ' · les ouvertures du chat seront comptées à partir de maintenant');
+  // 4) Sujets
+  var tmax = Math.max(1, ...(o.topics.length ? o.topics.map(function (x) { return x.count; }) : [1]));
+  $('#ovTopicsSub').textContent = o.topicsTotal ? 'Sur ' + plural(o.topicsTotal, 'conversation', 'conversations') + ' · ' + days + ' derniers jours' : days + ' derniers jours';
+  $('#ovTopics').innerHTML = o.topics.length ? o.topics.map(function (x) {
+    return '<div class="topic"><span>' + esc(x.label) + '</span><b>' + x.count + '</b><div class="funnel__bar"><i style="width:' + Math.round(x.count / tmax * 100) + '%"></i></div></div>';
+  }).join('') : '<p class="card__sub">Pas encore assez de conversations sur cette période.</p>';
+  // 5) Courbe (par semaine sur 90 jours)
+  var pts = o.series;
+  var weekly = days > 31;
+  if (weekly) {
+    var g = [];
+    for (var i = pts.length; i > 0; i -= 7) {
+      var chunk = pts.slice(Math.max(0, i - 7), i);
+      g.unshift({ day: chunk[0].day, end: chunk[chunk.length - 1].day, conv: chunk.reduce(function (a, b) { return a + b.conv; }, 0), leads: chunk.reduce(function (a, b) { return a + b.leads; }, 0) });
+    }
+    pts = g;
+  }
+  $('#ovChartTitle').textContent = weekly ? 'Conversations et leads par semaine' : 'Conversations et leads par jour';
+  var cmax = Math.max(1, ...pts.map(function (p) { return Math.max(p.conv, p.leads); }));
+  var every = pts.length > 16 ? Math.ceil(pts.length / 10) : 1;
+  $('#ovChart').innerHTML = pts.map(function (p, i) {
+    var lab = fmtDay(p.day);
+    var tip = (weekly ? 'Semaine du ' : '') + lab + ' : ' + plural(p.conv, 'conversation', 'conversations') + ', ' + plural(p.leads, 'lead', 'leads');
+    return '<div class="ovchart__col" title="' + esc(tip) + '"><div class="ovchart__bars">' +
+      '<i style="height:' + Math.round(p.conv / cmax * 100) + '%"></i><i class="l" style="height:' + Math.round(p.leads / cmax * 100) + '%"></i></div>' +
+      '<div class="ovchart__x">' + ((pts.length - 1 - i) % every === 0 ? lab : '') + '</div></div>';
+  }).join('');
+}
+if ($('#ovRange')) $('#ovRange').addEventListener('change', function (e) {
+  OV_RANGE = Number(e.target.value) || 30;
+  try { localStorage.setItem('ov-range', String(OV_RANGE)); } catch (er) {}
+  loadOverview();
+});
+
+async function loadStatsLegacy() {
   try {
     var res = await fetch(API + '/api/dashboard/stats', { credentials: 'include' });
     var s = await res.json();
