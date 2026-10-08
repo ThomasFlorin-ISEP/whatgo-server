@@ -166,6 +166,20 @@ async function initDb() {
   await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS unanswered BOOLEAN DEFAULT false`);
   await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`);
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS learned_answers TEXT`);
+  // Photos et fichiers envoyés par les visiteurs dans le chat.
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_attachments (
+      id              SERIAL PRIMARY KEY,
+      business_id     INTEGER NOT NULL REFERENCES businesses(id),
+      conversation_id INTEGER NOT NULL,
+      message_id      INTEGER,
+      mime            TEXT NOT NULL,
+      name            TEXT,
+      size            INTEGER,
+      data            TEXT NOT NULL,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
   // Base de connaissances : documents importés (PDF, Word, texte) et sites web lus.
   await query(`
     CREATE TABLE IF NOT EXISTS knowledge_docs (

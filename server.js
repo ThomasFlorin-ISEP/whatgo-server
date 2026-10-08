@@ -18,7 +18,7 @@ const {
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '7mb' })); // photos envoyées dans le chat
 app.use(express.static('public'));
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -423,7 +423,12 @@ const CHAT_UX_INSTRUCTION =
   `\n\nQUESTIONS DE SUITE : termine CHAQUE réponse par une dernière ligne, seule, au format exact ` +
   `[SUITES: question 1 | question 2 | question 3] avec 2 ou 3 questions très courtes (6 mots maximum) que le visiteur ` +
   `pourrait vouloir poser ensuite, écrites de son point de vue et dans la langue de la conversation. Ne les annonce pas ` +
-  `et ne les répète pas dans le texte.`;
+  `et ne les répète pas dans le texte.` +
+  `\n\nPHOTOS ET FICHIERS : le visiteur peut joindre une photo ou un PDF. Décris en une phrase ce que tu vois, puis aide-le ` +
+  `selon les règles de l'entreprise (retour, échange, réclamation, devis…). Ne promets jamais un remboursement, un échange ` +
+  `ou un geste commercial que les documents de l'entreprise ne prévoient pas : propose plutôt de transmettre la demande à ` +
+  `l'équipe avec la photo, et demande ses coordonnées (et le numéro de commande si utile). La photo est déjà enregistrée ` +
+  `et sera transmise : ne demande pas de la renvoyer par email.`;
 const CONTACT_FORM_INSTRUCTION =
   `\n\nFORMULAIRE DE COORDONNÉES : quand tu demandes au visiteur son email ou son téléphone, ajoute le marqueur ` +
   `[FORMULAIRE_CONTACT] juste avant la ligne [SUITES: ...] : un petit formulaire s'affichera sous ton message.`;
@@ -529,6 +534,13 @@ function computeLeadScore(message, isFirstUserMessage) {
 // réponse du chatbot si le webhook est lent, en panne, ou mal configuré.
 function sendLeadToWebhook(business, payload) {
   if (!business.webhook_url) return;
+  // Joint les liens des photos/fichiers envoyés dans la conversation.
+  if (payload && payload.conversationId && payload.attachments === undefined) {
+    attachmentUrlsFor(payload.conversationId).then((urls) => {
+      sendLeadToWebhook(business, { ...payload, attachments: urls.join(' ') });
+    });
+    return;
+  }
   fetch(business.webhook_url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1328,6 +1340,63 @@ app.delete('/api/dashboard/docs/:id', requireAuth, requireRole('admin'), async (
   }
 });
 
+// ------------------------------------------------------------
+// Photos et fichiers envoyés par le visiteur (ex. photo d'un produit abîmé).
+// L'IA les voit (Gemini lit images et PDF), ils sont enregistrés avec la
+// conversation, visibles dans le tableau de bord et envoyés vers le CRM.
+// ------------------------------------------------------------
+const ATTACH_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+const ATTACH_MAX_BYTES = 4.5 * 1024 * 1024;
+const ATTACH_MAX_PER_CONVO = 10;
+function parseChatAttachment(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const mime = String(raw.mime || '').toLowerCase();
+  const data = String(raw.data || '').replace(/^data:[^;]+;base64,/, '');
+  if (!ATTACH_MIMES.includes(mime) || !/^[A-Za-z0-9+/=]+$/.test(data)) return null;
+  const size = Math.floor(data.length * 3 / 4);
+  if (size > ATTACH_MAX_BYTES || size < 100) return null;
+  const name = String(raw.name || (mime === 'application/pdf' ? 'document.pdf' : 'photo.jpg')).replace(/[^\w.\- ()àâäéèêëîïôöùûüç]/gi, '_').slice(0, 80);
+  return { mime, data, size, name, isImage: mime.startsWith('image/') };
+}
+function attachmentToken(id) {
+  return require('crypto').createHmac('sha256', String(process.env.JWT_SECRET || 'whatgo')).update('att:' + id).digest('hex').slice(0, 24);
+}
+function attachmentPublicUrl(id) {
+  const base = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
+  return `${base}/api/attachments/${id}/${attachmentToken(id)}`;
+}
+async function attachmentUrlsFor(convoId) {
+  try {
+    const { rows } = await query('SELECT id FROM chat_attachments WHERE conversation_id = $1 ORDER BY id ASC LIMIT 10', [convoId]);
+    return rows.map((r) => attachmentPublicUrl(r.id));
+  } catch (e) { return []; }
+}
+function sendAttachment(res, row) {
+  res.setHeader('Content-Type', row.mime);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.setHeader('Content-Disposition', `inline; filename="${String(row.name || 'fichier').replace(/"/g, '')}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.end(Buffer.from(row.data, 'base64'));
+}
+// Lien signé (pour le CRM / Make) : pas besoin d'être connecté.
+app.get('/api/attachments/:id/:token', async (req, res) => {
+  try {
+    const id = Number(req.params.id) || 0;
+    if (req.params.token !== attachmentToken(id)) return res.status(404).json({ error: 'Introuvable.' });
+    const { rows } = await query('SELECT mime, name, data FROM chat_attachments WHERE id = $1', [id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Introuvable.' });
+    sendAttachment(res, rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+app.get('/api/dashboard/attachments/:id', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT mime, name, data FROM chat_attachments WHERE id = $1 AND business_id = $2',
+      [Number(req.params.id) || 0, req.user.businessId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Introuvable.' });
+    sendAttachment(res, rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
 app.post('/api/handoff', async (req, res) => {
   try {
     if (isRateLimited(`handoff:${clientIp(req)}`, 5, 10 * 60 * 1000)) {
@@ -1462,10 +1531,28 @@ app.post('/api/chat', async (req, res) => {
 
     // Enregistrer le dernier message du visiteur
     const lastUserMessage = messages[messages.length - 1];
-    await query(
-      'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-      [convoId, 'user', lastUserMessage.content]
+    // Photo ou fichier joint au message (facultatif).
+    let attachment = parseChatAttachment(req.body.attachment);
+    if (attachment) {
+      const { rows: cnt } = await query('SELECT COUNT(*)::int AS n FROM chat_attachments WHERE conversation_id = $1', [convoId]);
+      if (cnt[0] && cnt[0].n >= ATTACH_MAX_PER_CONVO) attachment = null;
+    }
+    if (attachment && !String(lastUserMessage.content || '').trim()) {
+      lastUserMessage.content = attachment.isImage ? 'Voici une photo.' : 'Voici un document.';
+    }
+    const storedUserText = attachment
+      ? `${lastUserMessage.content}\n[📎 ${attachment.isImage ? 'Photo jointe' : 'Fichier joint'} : ${attachment.name}]`
+      : lastUserMessage.content;
+    const { rows: userMsgRows } = await query(
+      'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3) RETURNING id',
+      [convoId, 'user', storedUserText]
     );
+    if (attachment) {
+      await query(
+        'INSERT INTO chat_attachments (business_id, conversation_id, message_id, mime, name, size, data) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [business.id, convoId, userMsgRows[0] ? userMsgRows[0].id : null, attachment.mime, attachment.name, attachment.size, attachment.data]
+      ).catch((e) => { console.error('Enregistrement pièce jointe:', e.message); });
+    }
 
     // Lead qualifié : le visiteur vient de laisser un email et/ou un
     // téléphone. Les deux arrivent souvent en 2 messages séparés (email
@@ -1552,6 +1639,10 @@ app.post('/api/chat', async (req, res) => {
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
+    // L'IA voit la photo / le PDF joint au dernier message.
+    if (attachment && contents.length) {
+      contents[contents.length - 1].parts.push({ inline_data: { mime_type: attachment.mime, data: attachment.data } });
+    }
 
     // A-t-on déjà un moyen de recontacter ce visiteur (email ou téléphone,
     // laissé maintenant ou lors d'un tour précédent) ? Sert à interdire au
@@ -1929,11 +2020,16 @@ app.get('/api/dashboard/conversations/:id', requireAuth, requireRole(['admin', '
     }
 
     const { rows: messages } = await query(
-      'SELECT role, content, created_at FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+      'SELECT id, role, content, created_at FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
       [req.params.id]
     );
+    let attachments = [];
+    try {
+      attachments = (await query('SELECT id, message_id, mime, name FROM chat_attachments WHERE conversation_id = $1 ORDER BY id ASC',
+        [req.params.id])).rows;
+    } catch (e) { attachments = []; }
 
-    res.json({ conversation: convo, messages });
+    res.json({ conversation: convo, messages, attachments });
   } catch (err) {
     console.error('Erreur /api/dashboard/conversations/:id:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
