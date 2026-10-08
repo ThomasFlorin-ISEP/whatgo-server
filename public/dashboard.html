@@ -1816,8 +1816,16 @@ async function openTranscript(id) {
   try {
     var res = await fetch(API + '/api/dashboard/conversations/' + id, { credentials: 'include' });
     var data = await res.json();
+    var atts = data.attachments || [];
     var body = '<div class="thread">' + data.messages.map(function (m) {
-      return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + esc(m.content) + '</div>';
+      var files = atts.filter(function (x) { return x.message_id === m.id; }).map(function (x) {
+        var url = API + '/api/dashboard/attachments/' + x.id;
+        return /^image\//.test(x.mime)
+          ? '<a href="' + url + '" target="_blank" rel="noopener"><img src="' + url + '" alt="' + esc(x.name || 'Photo') + '" style="display:block;max-width:220px;max-height:220px;border-radius:10px;margin-bottom:6px;object-fit:cover"></a>'
+          : '<a href="' + url + '" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:6px;font-weight:600">📄 ' + esc(x.name || 'Fichier') + '</a>';
+      }).join('');
+      var text = files ? String(m.content || '').replace(/\n?\[📎[^\]]*\]\s*$/, '') : m.content;
+      return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + files + esc(text) + '</div>';
     }).join('') + '</div>';
     openDrawer(
       data.conversation.visitor_label,

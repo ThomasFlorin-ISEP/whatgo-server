@@ -269,6 +269,23 @@
     .wgt-fb button.is-on { color: var(--wgt-color); }
     .wgt-fb svg { width: 14px; height: 14px; }
 
+    /* ---------- Photos et fichiers ---------- */
+    .wgt-clip { border: none; background: none; color: #7A858F; width: 34px; height: 40px; flex-shrink: 0; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; border-radius: 10px; }
+    .wgt-clip:hover { color: var(--wgt-color); background: #F2F4F7; }
+    .wgt-pending { display: flex; align-items: center; gap: 10px; margin: 0 14px; padding: 8px 10px; border: 1px solid #E3E7EC;
+      border-radius: 14px; background: #FAFBFC; flex-shrink: 0; }
+    .wgt-pending[hidden] { display: none; }
+    .wgt-pending img { width: 44px; height: 44px; object-fit: cover; border-radius: 9px; display: block; }
+    .wgt-pending .wgt-pdf { width: 44px; height: 44px; border-radius: 9px; background: #FDECEC; display: grid; place-items: center; font-size: 1.3rem; }
+    .wgt-pending span { flex: 1; min-width: 0; font-size: .8rem; color: #1B2321; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wgt-pending small { display: block; color: #8A939C; font-size: .7rem; }
+    .wgt-pending button { border: none; background: #EEF1F5; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; color: #5B6570; flex-shrink: 0; }
+    .wgt-msg.user.has-att { padding: 6px; }
+    .wgt-msg.user .wgt-att-img { display: block; max-width: 210px; max-height: 210px; border-radius: 11px; object-fit: cover; }
+    .wgt-msg.user .wgt-att-file { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255,255,255,.18); border-radius: 10px; font-size: .82rem; }
+    .wgt-msg.user .wgt-att-txt { display: block; padding: 6px 8px 3px; }
+
     /* ---------- Micro ---------- */
     .wgt-mic { border: none; background: #EEF1F5; color: #5B6570; width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .15s, color .15s; }
@@ -360,7 +377,12 @@
       <div class="wgt-log"></div>
       <div class="wgt-actions" hidden></div>
       <div class="wgt-powered">Propulsé par <b>WHATGO</b></div>
+      <div class="wgt-pending" hidden></div>
       <form class="wgt-form">
+        <button type="button" class="wgt-clip" aria-label="Joindre une photo ou un fichier" title="Joindre une photo ou un PDF">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 01-7.8-7.8l8.5-8.5a3.7 3.7 0 015.2 5.2l-8.5 8.5a1.8 1.8 0 01-2.6-2.6l7.8-7.8"/></svg>
+        </button>
+        <input type="file" class="wgt-file" accept="image/*,application/pdf" hidden />
         <input type="text" placeholder="Tapez votre message ici…" autocomplete="off" />
         <button type="button" class="wgt-mic" aria-label="Dicter un message" title="Dicter un message" hidden>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
@@ -379,7 +401,7 @@
   var closeBtn = root.querySelector('.wgt-close');
   var log = root.querySelector('.wgt-log');
   var form = root.querySelector('.wgt-form');
-  var input = root.querySelector('input');
+  var input = root.querySelector('.wgt-form input[type="text"]');
   var sendBtn = root.querySelector('.wgt-send');
 
   root.querySelector('.wgt-name').textContent = BOT_NAME;
@@ -561,7 +583,7 @@
   function addMessage(role, text, opts) {
     opts = opts || {};
     if (!opts.restore) {
-      transcript.push({ r: role, t: text, d: nowStr(), mid: opts.mid || null, f: 0 });
+      transcript.push({ r: role, t: text, d: nowStr(), mid: opts.mid || null, f: 0, a: opts.att ? { th: opts.att.thumb || '', n: opts.att.name, img: opts.att.isImage } : null });
       if (transcript.length > 80) transcript = transcript.slice(-80);
       saveStateSoon();
       if (role !== 'user' && !panel.classList.contains('wgt-open')) setUnread(unread + 1);
@@ -569,7 +591,22 @@
     if (role === 'user') {
       var u = document.createElement('div');
       u.className = 'wgt-msg user';
-      u.textContent = text;
+      var att = opts.att;
+      if (att) {
+        u.classList.add('has-att');
+        if (att.isImage && (att.thumb || att.preview)) {
+          var im = document.createElement('img');
+          im.className = 'wgt-att-img';
+          im.src = att.preview || att.thumb;
+          im.alt = att.name || 'Photo';
+          u.appendChild(im);
+        } else {
+          u.appendChild(el('div', 'wgt-att-file', (att.isImage ? '🖼️ ' : '📄 ') + (att.name || 'Fichier')));
+        }
+        if (text) u.appendChild(el('span', 'wgt-att-txt', text));
+      } else {
+        u.textContent = text;
+      }
       log.appendChild(u);
     } else {
       var row = document.createElement('div');
@@ -1519,7 +1556,9 @@
     welcomed = true;
     welcomeShown = true;
     renderHero();
-    transcript.forEach(function (m) { addMessage(m.r, m.t, { restore: true, time: m.d || '', mid: m.mid, f: m.f }); });
+    transcript.forEach(function (m) {
+      addMessage(m.r, m.t, { restore: true, time: m.d || '', mid: m.mid, f: m.f, att: m.a ? { thumb: m.a.th, name: m.a.n, isImage: m.a.img } : null });
+    });
     showQuickReplies();
     if (st.o && !isPhone()) openPanel(false);
     else setUnread(st.u || 0);
@@ -1548,12 +1587,74 @@
     }, NUDGE_DELAY);
   }
 
+  // --- Photos et fichiers : choisis, compressés, montrés en aperçu, envoyés avec le message ---
+  var clipBtn = root.querySelector('.wgt-clip');
+  var fileInput = root.querySelector('.wgt-file');
+  var pendingBox = root.querySelector('.wgt-pending');
+  var pendingAtt = null;
+  function clearPending() { pendingAtt = null; pendingBox.innerHTML = ''; pendingBox.hidden = true; }
+  function showPending(att) {
+    pendingAtt = att;
+    pendingBox.innerHTML = '';
+    if (att.isImage) { var im = document.createElement('img'); im.src = att.thumb; im.alt = ''; pendingBox.appendChild(im); }
+    else pendingBox.appendChild(el('div', 'wgt-pdf', '📄'));
+    var lab = el('span', null, att.name);
+    lab.appendChild(el('small', null, att.isImage ? 'Photo prête à envoyer' : 'PDF prêt à envoyer'));
+    pendingBox.appendChild(lab);
+    var x = el('button', null, '×'); x.type = 'button'; x.setAttribute('aria-label', 'Retirer');
+    x.addEventListener('click', clearPending);
+    pendingBox.appendChild(x);
+    pendingBox.hidden = false;
+    input.placeholder = 'Ajoutez un message (facultatif)…';
+    input.focus();
+  }
+  function shrinkImage(img, max, quality) {
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    var k = Math.min(1, max / Math.max(w, h));
+    var c = document.createElement('canvas');
+    c.width = Math.round(w * k); c.height = Math.round(h * k);
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', quality);
+  }
+  function fileError(t) { var old = input.placeholder; input.placeholder = t; setTimeout(function () { input.placeholder = old; }, 4000); }
+  clipBtn.addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function () {
+    var f = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    if (!f) return;
+    var name = (f.name || 'fichier').slice(0, 80);
+    var reader = new FileReader();
+    if (/^application\/pdf$/i.test(f.type) || /\.pdf$/i.test(name)) {
+      if (f.size > 4 * 1024 * 1024) { fileError('PDF trop lourd (4 Mo maximum).'); return; }
+      reader.onload = function () { showPending({ isImage: false, name: name, mime: 'application/pdf', data: String(reader.result).split(',')[1] }); };
+      reader.readAsDataURL(f);
+      return;
+    }
+    if (!/^image\//i.test(f.type)) { fileError('Envoyez une photo ou un PDF.'); return; }
+    if (f.size > 20 * 1024 * 1024) { fileError('Photo trop lourde.'); return; }
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var full = shrinkImage(img, 1280, 0.82);
+        showPending({ isImage: true, name: name, mime: 'image/jpeg', data: full.split(',')[1], preview: full, thumb: shrinkImage(img, 240, 0.7) });
+      };
+      img.onerror = function () { fileError('Format de photo non lu : essayez en JPG ou PNG.'); };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(f);
+  });
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var text = input.value.trim();
-    if (!text) return;
+    if (!text && !pendingAtt) return;
     input.value = '';
-    sendText(text);
+    var att = pendingAtt;
+    clearPending();
+    input.placeholder = 'Tapez votre message ici…';
+    sendText(text, att);
   });
 
   function clearFollowups() {
@@ -1602,7 +1703,7 @@
     });
   }
 
-  async function sendText(text) {
+  async function sendText(text, att) {
     sendBtn.disabled = true;
     hasInteracted = true;
     showQuickReplies();
@@ -1610,8 +1711,11 @@
     var oldContact = log.querySelector('.wgt-contact');
     if (oldContact) oldContact.remove();
 
-    addMessage('user', text);
-    history.push({ role: 'user', content: text });
+    addMessage('user', text, att ? { att: att } : null);
+    var histText = text || (att ? (att.isImage ? 'Voici une photo.' : 'Voici un document.') : '');
+    history.push({ role: 'user', content: histText + (att ? ' [' + (att.isImage ? 'photo jointe' : 'fichier joint') + ']' : '') });
+    var apiMessages = history.slice();
+    if (att) apiMessages[apiMessages.length - 1] = { role: 'user', content: histText };
 
     var typing = showTyping();
     var gen = convGen;
@@ -1620,7 +1724,10 @@
       var res = await fetch(SERVER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history, business: BUSINESS, conversationId: conversationId }),
+        body: JSON.stringify({
+          messages: apiMessages, business: BUSINESS, conversationId: conversationId,
+          attachment: att ? { mime: att.mime, data: att.data, name: att.name } : undefined,
+        }),
       });
       var data = await res.json();
       typing.remove();
