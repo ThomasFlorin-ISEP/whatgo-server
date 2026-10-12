@@ -523,7 +523,15 @@ function nextBusinessDayAt(businessDaysAhead, hour) {
 
 function formatFrenchDateTime(date) {
   const dayLabel = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  return `${dayLabel} à ${String(date.getHours()).padStart(2, '0')}h00`;
+  const mins = date.getMinutes();
+  return `${dayLabel} à ${String(date.getHours()).padStart(2, '0')}h${mins ? String(mins).padStart(2, '0') : '00'}`;
+}
+
+// Trois créneaux de démo proposés au visiteur, à 3 et 4 jours ouvrés
+// (le premier sert de date de référence enregistrée sur le lead).
+function appointmentOfferSlots() {
+  const at = (days, h, m) => { const d = nextBusinessDayAt(days, h); d.setMinutes(m); return d; };
+  return [at(3, 10, 0), at(3, 14, 30), at(4, 11, 0)];
 }
 
 // Instruction de langue, ajoutée systématiquement pour TOUTES les
@@ -634,11 +642,21 @@ function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentD
   }
 
   if (shouldOfferAppointment) {
+    const slots = String(appointmentDateLabel || '').split(' || ');
     prompt += `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
-      `Ce visiteur montre assez d'intérêt pour qu'on lui propose un rendez-vous. Propose-lui maintenant un rendez-vous, ` +
-      `avec cette date précise : ${appointmentDateLabel}. Demande-lui de confirmer avec son email ET son numéro de téléphone ` +
-      `pour que l'équipe puisse le recontacter et confirmer le créneau. Fais cette proposition dans la langue de la ` +
-      `conversation en cours.`;
+      `Ce visiteur montre assez d'intérêt pour qu'on lui propose un rendez-vous.\n` +
+      `1. Réponds D'ABORD complètement et normalement à sa question (prix, fonctionnement…), comme d'habitude.\n` +
+      `2. Puis, dans un paragraphe à part, propose-lui avec tact un rendez-vous adapté à l'activité de l'entreprise ` +
+      `(pour un logiciel ou un service : une démo pour lui montrer le produit ; sinon un rendez-vous ou un appel), sous ` +
+      `forme de question. Exemple de ton : "Souhaitez-vous organiser une démo pour que nous puissions vous montrer ` +
+      `notre produit ? Je peux vous proposer :" suivi de ces créneaux, en liste à tirets, exactement :\n` +
+      slots.map((x) => `- ${x}`).join('\n') + `\n` +
+      `   Termine par une courte phrase disant qu'il peut aussi indiquer un autre moment qui l'arrange.\n` +
+      `3. Ne demande PAS encore son email ni son téléphone dans ce message (et n'ajoute pas [FORMULAIRE_CONTACT]) : ` +
+      `tu les demanderas seulement quand il aura choisi un créneau.\n` +
+      `4. Pour la ligne [SUITES: ...] de ce message, mets ces créneaux sous forme très courte, du point de vue du ` +
+      `visiteur (ex : "Mardi 10h me va"), pour qu'il puisse choisir en un clic.\n` +
+      `Écris tout dans la langue de la conversation (traduis les dates si besoin).`;
   }
 
   if (appointmentInProgress) {
@@ -1891,10 +1909,9 @@ app.post('/api/chat', async (req, res) => {
     // pouvoir à la fois l'écrire dans le prompt ET l'enregistrer plus bas
     // sur la conversation/le lead — les deux doivent être exactement la
     // même date que celle que le bot vient d'annoncer au visiteur.
-    const appointmentDate = shouldOfferAppointment
-      ? nextBusinessDayAt(APPOINTMENT_OFFER_BUSINESS_DAYS_AHEAD, APPOINTMENT_OFFER_HOUR)
-      : null;
-    const appointmentDateLabel = appointmentDate ? formatFrenchDateTime(appointmentDate) : null;
+    const appointmentSlots = shouldOfferAppointment ? appointmentOfferSlots() : [];
+    const appointmentDate = appointmentSlots[0] || null;
+    const appointmentDateLabel = appointmentSlots.length ? appointmentSlots.map(formatFrenchDateTime).join(' || ') : null;
 
     // Tant qu'un rendez-vous a été proposé (ce tour-ci OU un tour précédent
     // pour cette conversation) et qu'aucune date n'a encore été confirmée
