@@ -527,11 +527,11 @@ function formatFrenchDateTime(date) {
   return `${dayLabel} à ${String(date.getHours()).padStart(2, '0')}h${mins ? String(mins).padStart(2, '0') : '00'}`;
 }
 
-// Trois créneaux de démo proposés au visiteur, à 3 et 4 jours ouvrés
+// Trois créneaux de démo, sur trois jours ouvrés différents (J+3 à J+5)
 // (le premier sert de date de référence enregistrée sur le lead).
 function appointmentOfferSlots() {
   const at = (days, h, m) => { const d = nextBusinessDayAt(days, h); d.setMinutes(m); return d; };
-  return [at(3, 10, 0), at(3, 14, 30), at(4, 11, 0)];
+  return [at(3, 10, 0), at(4, 14, 30), at(5, 11, 0)];
 }
 
 // Instruction de langue, ajoutée systématiquement pour TOUTES les
