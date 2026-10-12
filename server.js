@@ -680,9 +680,19 @@ function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentD
   return prompt;
 }
 
-// Mots-clés FR laissant penser à une intention d'achat/contact forte.
+// Mots-clés (FR + autres langues) laissant penser à une intention
+// d'achat/contact forte : prix, démo, essai, rendez-vous, fonctionnement.
 const LEAD_INTENT_KEYWORDS = [
-  'devis', 'tarif', 'prix', 'réserv', 'rendez-vous', 'rdv', 'disponibilité', 'urgent', 'contact',
+  // français
+  'devis', 'tarif', 'prix', 'combien', 'coût', 'cout', 'abonnement', 'offre', 'réserv', 'rendez-vous', 'rdv',
+  'disponibilité', 'urgent', 'contact', 'démo', 'demo', 'essai', 'essayer', 'tester', 'commencer', 'démarrer',
+  'comment ça marche', 'comment ca marche', 'comment fonctionne', 'comment marche',
+  // anglais
+  'price', 'pricing', 'cost', 'how much', 'quote', 'plans', 'which plan', 'trial', 'try it', 'book a', 'booking', 'appointment', 'meeting',
+  'a call', 'get started', 'how do we start', 'how does', 'how it works', 'sign up',
+  // espagnol, italien, allemand, portugais
+  'precio', 'cuánto', 'cuanto', 'prezzo', 'quanto', 'preis', 'kosten', 'wie funktioniert', 'preço', 'quanto custa',
+  'una cita', 'appuntamento', 'einen termin', 'prueba', 'prova gratuita',
 ];
 
 // Heuristique de score v1 (PAS de machine learning) : un premier tri simple
