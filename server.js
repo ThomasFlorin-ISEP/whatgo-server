@@ -1499,7 +1499,7 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     const wantsDemo = demoRaw === true || /^(true|oui|yes|vrai)$/i.test(String(demoRaw || ''));
     const email = emailRaw ? (extractEmail(String(emailRaw)) || null) : null;
     const phone = phoneRaw ? (extractPhone(String(phoneRaw)) || String(phoneRaw).replace(/[^\d+]/g, '').slice(0, 20) || null) : null;
-    const summary = String(analysis.transcript_summary || need || '').trim().slice(0, 2000);
+    let summary = String(analysis.transcript_summary || need || '').trim().slice(0, 2000);
     const startSecs = Number(meta.start_time_unix_secs) || Math.floor(Date.now() / 1000);
     const duration = Number(meta.call_duration_secs) || null;
     const callerNumber = meta.phone_call && (meta.phone_call.external_number || meta.phone_call.from_number);
@@ -1511,10 +1511,12 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
       [business.id, label.slice(0, 120), startSecs, externalId, duration]
     );
     const convoId = c[0].id;
+    const turns = [];
     for (const turn of (Array.isArray(data.transcript) ? data.transcript : [])) {
       const text = String((turn && turn.message) || '').trim();
       if (!text) continue;
       const role = turn.role === 'user' ? 'user' : 'assistant';
+      turns.push({ role, content: text });
       await query('INSERT INTO messages (conversation_id, role, content, created_at) VALUES ($1, $2, $3, to_timestamp($4))',
         [convoId, role, text.slice(0, 8000), startSecs + (Number(turn.time_in_call_secs) || 0)]);
     }
@@ -1534,6 +1536,13 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     res.json({ ok: true, conversationId: convoId, leadId });
 
     if (leadId) {
+      // Résumé en français (celui d'ElevenLabs est souvent en anglais).
+      let frSummary = null;
+      try { frSummary = turns.length ? await generateLeadSummary(turns) : null; } catch (e) { frSummary = null; }
+      if (frSummary) {
+        summary = frSummary;
+        await query('UPDATE leads SET summary = $1 WHERE id = $2', [frSummary, leadId]).catch(() => {});
+      }
       sendLeadToWebhook(business, {
         type: 'voice_call',
         attachments: '',
@@ -2235,6 +2244,7 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
   try {
     const { rows: leads } = await query(`
       SELECT id, email, phone, message, score, status, conversation_id, created_at, appointment_at,
+             (SELECT c.channel FROM conversations c WHERE c.id = leads.conversation_id) AS channel,
              name, summary, notes
       FROM leads
       WHERE business_id = $1
@@ -2254,6 +2264,7 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
       name: l.name || '',
       summary: l.summary || '',
       notes: l.notes || '',
+      channel: l.channel || 'chat', // 'voice' = appel de l'agent vocal
     })));
   } catch (err) {
     console.error('Erreur /api/dashboard/leads:', err);
