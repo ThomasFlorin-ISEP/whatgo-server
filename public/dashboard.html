@@ -902,6 +902,16 @@ table.tbl tbody tr:last-child td{border-bottom:none}
           <p class="help">Affichées en bas du chat : un clic envoie la question à l'assistant.</p></div>
         <button type="button" class="btn btn--primary" id="lookSave">Enregistrer</button>
       </div>
+      <div class="card" style="max-width:560px" id="voiceCard" hidden>
+        <div class="card__head"><div><h3>Agent vocal</h3>
+          <p class="card__sub">Relie votre agent téléphonique (ElevenLabs) : chaque appel apparaît dans Conversations et part dans votre CRM comme un lead.</p></div></div>
+        <div class="field"><label for="voice-agent">ID de l'agent ElevenLabs</label>
+          <input type="text" id="voice-agent" maxlength="120" placeholder="Ex. : agent_01k…" />
+          <p class="help">Dans ElevenLabs : page de l'agent → menu ⋯ ou Paramètres → « ID de l'agent ».</p></div>
+        <div class="field"><label>Adresse à coller dans ElevenLabs (webhook après appel)</label>
+          <input type="text" id="voice-url" readonly onclick="this.select()" /></div>
+        <button type="button" class="btn btn--primary" id="voiceSave">Enregistrer</button>
+      </div>
       <div class="card" style="max-width:420px">
         <div class="card__head"><div><h3>Changer mon mot de passe</h3></div></div>
         <form id="passwordForm" novalidate>
@@ -1079,7 +1089,7 @@ $$('.nav-item').forEach(function (el) {
 var diagnosticsNavItem = $('#diagnosticsNavItem');
 if (diagnosticsNavItem) diagnosticsNavItem.addEventListener('click', loadDiagnostics);
 function switchTab(tab) {
-  if (tab === 'settings') loadBotLook();
+  if (tab === 'settings') { loadBotLook(); loadVoiceAgent(); }
   if (tab === 'improve') loadImprove();
   if (tab === 'knowledge') loadDocs();
   $$('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
@@ -1339,6 +1349,32 @@ if ($('#lookSave')) $('#lookSave').addEventListener('click', async function () {
   } catch (e) { toast(e.message || "Impossible d'enregistrer.", true); }
 });
 
+async function loadVoiceAgent() {
+  var card = $('#voiceCard');
+  if (!card) return;
+  try {
+    var res = await fetch(API + '/api/dashboard/voice-agent', { credentials: 'include' });
+    if (!res.ok) { card.hidden = true; return; }
+    var d = await res.json();
+    card.hidden = false;
+    $('#voice-agent').value = d.agentId || '';
+    $('#voice-url').value = d.webhookUrl || '';
+    var admin = ME && ME.role === 'admin';
+    $('#voice-agent').disabled = !admin; $('#voiceSave').hidden = !admin;
+  } catch (e) { card.hidden = true; }
+}
+if ($('#voiceSave')) $('#voiceSave').addEventListener('click', async function () {
+  try {
+    var res = await fetch(API + '/api/dashboard/voice-agent', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ agentId: $('#voice-agent').value }),
+    });
+    var d = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(d.error || '');
+    toast('Agent vocal relié');
+  } catch (e) { toast(e.message || "Impossible d'enregistrer.", true); }
+});
+
 var burger = $('#burger');
 if (burger) burger.addEventListener('click', function () { $('#sidebar').classList.toggle('open'); });
 
@@ -1546,7 +1582,7 @@ async function loadConversations() {
       '<thead><tr><th>Visiteur</th><th>Messages</th><th class="right">Date</th></tr></thead><tbody>' +
       (CONVS.length ? CONVS.map(function (c) {
         return '<tr class="clickable" data-id="' + esc(c.id) + '">' +
-          '<td class="cell-main">' + esc(c.visitor_label) + '</td>' +
+          '<td class="cell-main">' + esc(c.visitor_label) + (c.channel === 'voice' ? ' <span class="tag">Appel' + (c.duration_secs ? ' · ' + Math.max(1, Math.round(c.duration_secs / 60)) + ' min' : '') + '</span>' : '') + '</td>' +
           '<td class="num">' + c.message_count + '</td>' +
           '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td></tr>';
       }).join('') : emptyRow(3, 'Aucune conversation pour le moment', 'Dès qu\'un visiteur écrit à l\'assistant, la conversation apparaît ici.')) +
