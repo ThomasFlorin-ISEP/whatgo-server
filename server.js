@@ -19,7 +19,11 @@ const {
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
-app.use(express.json({ limit: '7mb' })); // photos envoyées dans le chat
+app.use(express.json({
+  limit: '7mb', // photos envoyées dans le chat
+  // Corps brut gardé pour vérifier la signature des appels ElevenLabs.
+  verify: (req, res, buf) => { if (String(req.originalUrl || req.url || '').startsWith('/api/voice/')) req.rawBody = buf; },
+}));
 app.use(express.static('public'));
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -1617,6 +1621,167 @@ app.get('/api/dashboard/attachments/:id', requireAuth, requireRole(['admin', 'le
   } catch (err) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
+// ------------------------------------------------------------
+// AGENT VOCAL (ElevenLabs) : à la fin de chaque appel, ElevenLabs envoie
+// la transcription + les données collectées ici (« webhook après appel »).
+// On range l'appel comme une conversation (canal 'voice'), on crée le lead
+// et on l'envoie au CRM du client via son webhook Make, comme le chat.
+// Client retrouvé par l'ID de l'agent (Paramètres → Agent vocal), sinon
+// par ?business=slug dans l'adresse du webhook.
+// ------------------------------------------------------------
+function verifyElevenLabsSignature(req) {
+  const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
+  if (!secret) return true; // pas encore configuré : accepté (phase de test)
+  const header = String(req.headers['elevenlabs-signature'] || '');
+  const t = (header.match(/t=(\d+)/) || [])[1];
+  const v0 = (header.match(/v0=([a-f0-9]+)/) || [])[1];
+  if (!t || !v0 || !req.rawBody) return false;
+  if (Math.abs(Date.now() / 1000 - Number(t)) > 30 * 60) return false;
+  const crypto = require('crypto');
+  const expected = crypto.createHmac('sha256', secret).update(`${t}.${req.rawBody.toString('utf8')}`).digest('hex');
+  try { return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v0)); } catch (e) { return false; }
+}
+
+function voiceField(results, regex) {
+  for (const [key, item] of Object.entries(results || {})) {
+    if (!regex.test(key)) continue;
+    const v = item && typeof item === 'object' && 'value' in item ? item.value : item;
+    if (v === null || v === undefined || v === '' || /^(none|null|n\/a|inconnu|unknown)$/i.test(String(v).trim())) continue;
+    return v;
+  }
+  return null;
+}
+
+app.post('/api/voice/elevenlabs', async (req, res) => {
+  try {
+    if (!verifyElevenLabsSignature(req)) {
+      console.warn('Webhook ElevenLabs refusé : signature invalide.');
+      return res.status(401).json({ error: 'Signature invalide.' });
+    }
+    const body = req.body || {};
+    if (body.type && body.type !== 'post_call_transcription') return res.json({ ok: true, ignored: body.type });
+    const data = body.data || {};
+    const agentId = String(data.agent_id || '');
+    const externalId = String(data.conversation_id || '');
+    if (!externalId) return res.status(400).json({ error: 'conversation_id manquant.' });
+
+    let business = null;
+    if (agentId) business = (await query('SELECT * FROM businesses WHERE voice_agent_id = $1 LIMIT 1', [agentId])).rows[0] || null;
+    if (!business && req.query.business) {
+      business = (await query('SELECT * FROM businesses WHERE slug = $1', [String(req.query.business)])).rows[0] || null;
+    }
+    if (!business) {
+      console.warn(`Appel ElevenLabs reçu pour un agent non relié à un client (agent_id ${agentId}).`);
+      return res.json({ ok: true, ignored: 'agent inconnu' });
+    }
+
+    const dup = await query('SELECT id FROM conversations WHERE external_id = $1', [externalId]);
+    if (dup.rows[0]) return res.json({ ok: true, duplicate: true, conversationId: dup.rows[0].id });
+
+    const analysis = data.analysis || {};
+    const results = analysis.data_collection_results || {};
+    const meta = data.metadata || {};
+    const firstName = voiceField(results, /first_?name|pr[ée]nom/i);
+    const company = voiceField(results, /company|entreprise|soci[ée]t[ée]/i);
+    const emailRaw = voiceField(results, /e-?mail/i);
+    const phoneRaw = voiceField(results, /phone|t[ée]l[ée]phone/i);
+    const need = voiceField(results, /summary|besoin|activity|activit/i);
+    const offer = voiceField(results, /offer|offre/i);
+    const demoRaw = voiceField(results, /d[ée]mo/i);
+    const wantsDemo = demoRaw === true || /^(true|oui|yes|vrai)$/i.test(String(demoRaw || ''));
+    const email = emailRaw ? (extractEmail(String(emailRaw)) || null) : null;
+    const phone = phoneRaw ? (extractPhone(String(phoneRaw)) || String(phoneRaw).replace(/[^\d+]/g, '').slice(0, 20) || null) : null;
+    const summary = String(analysis.transcript_summary || need || '').trim().slice(0, 2000);
+    const startSecs = Number(meta.start_time_unix_secs) || Math.floor(Date.now() / 1000);
+    const duration = Number(meta.call_duration_secs) || null;
+    const callerNumber = meta.phone_call && (meta.phone_call.external_number || meta.phone_call.from_number);
+    const label = '📞 ' + ([firstName, company].filter(Boolean).join(' — ') || callerNumber || 'Appel téléphonique');
+
+    const { rows: c } = await query(
+      `INSERT INTO conversations (business_id, visitor_label, started_at, channel, external_id, duration_secs)
+       VALUES ($1, $2, to_timestamp($3), 'voice', $4, $5) RETURNING id`,
+      [business.id, label.slice(0, 120), startSecs, externalId, duration]
+    );
+    const convoId = c[0].id;
+    for (const turn of (Array.isArray(data.transcript) ? data.transcript : [])) {
+      const text = String((turn && turn.message) || '').trim();
+      if (!text) continue;
+      const role = turn.role === 'user' ? 'user' : 'assistant';
+      await query('INSERT INTO messages (conversation_id, role, content, created_at) VALUES ($1, $2, $3, to_timestamp($4))',
+        [convoId, role, text.slice(0, 8000), startSecs + (Number(turn.time_in_call_secs) || 0)]);
+    }
+
+    let leadId = null;
+    const score = wantsDemo ? 85 : 60;
+    if (email || phone) {
+      const message = [company && `Entreprise : ${company}`, need && `Besoin : ${need}`, offer && `Offre conseillée : ${offer}`,
+        wantsDemo && 'Souhaite une démo'].filter(Boolean).join(' · ') || 'Appel téléphonique';
+      const { rows: ins } = await query(
+        `INSERT INTO leads (business_id, conversation_id, email, phone, name, message, summary, score, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'nouveau') RETURNING id`,
+        [business.id, convoId, email, phone, firstName ? String(firstName).slice(0, 120) : null, message.slice(0, 1000), summary || message, score]
+      );
+      leadId = ins[0].id;
+    }
+    res.json({ ok: true, conversationId: convoId, leadId });
+
+    if (leadId) {
+      sendLeadToWebhook(business, {
+        type: 'voice_call',
+        attachments: '',
+        business: business.name,
+        slug: business.slug,
+        conversationId: convoId,
+        email: email || '',
+        phone: phone || '',
+        message: summary,
+        date: new Date(startSecs * 1000).toISOString(),
+        name: firstName || '',
+        firstName: firstName || '',
+        lastName: company || firstName || 'Appel téléphonique',
+        company: company || '',
+        summary,
+        offer: offer || '',
+        wantsDemo,
+        durationSecs: duration,
+        score,
+        status: 'nouveau',
+        leadId,
+      });
+    }
+  } catch (err) {
+    console.error('Erreur /api/voice/elevenlabs:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// Paramètres → Agent vocal : ID de l'agent ElevenLabs relié à ce client.
+app.get('/api/dashboard/voice-agent', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT voice_agent_id, slug FROM businesses WHERE id = $1', [req.user.businessId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Entreprise introuvable.' });
+    res.json({ agentId: rows[0].voice_agent_id || '', webhookUrl: `${APP_URL}/api/voice/elevenlabs` });
+  } catch (err) {
+    console.error('Erreur /api/dashboard/voice-agent:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+app.put('/api/dashboard/voice-agent', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const agentId = String((req.body && req.body.agentId) || '').trim().slice(0, 120);
+    if (agentId && !/^[\w-]+$/.test(agentId)) return res.status(400).json({ error: "Cet identifiant d'agent n'est pas valide." });
+    if (agentId) {
+      const { rows } = await query('SELECT id FROM businesses WHERE voice_agent_id = $1 AND id <> $2', [agentId, req.user.businessId]);
+      if (rows[0]) return res.status(409).json({ error: 'Cet agent est déjà relié à un autre client.' });
+    }
+    await query('UPDATE businesses SET voice_agent_id = $1 WHERE id = $2', [agentId || null, req.user.businessId]);
+    res.json({ ok: true, agentId });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/voice-agent:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
 app.post('/api/handoff', async (req, res) => {
   try {
     if (isRateLimited(`handoff:${clientIp(req)}`, 5, 10 * 60 * 1000)) {
@@ -2766,7 +2931,7 @@ app.get('/api/dashboard/me', requireAuth, async (req, res) => {
 app.get('/api/dashboard/conversations', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
     const { rows: conversations } = await query(`
-      SELECT c.id, c.visitor_label, c.started_at,
+      SELECT c.id, c.visitor_label, c.started_at, c.channel, c.duration_secs,
              COUNT(m.id) as message_count
       FROM conversations c
       LEFT JOIN messages m ON m.conversation_id = c.id

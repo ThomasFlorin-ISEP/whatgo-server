@@ -293,6 +293,14 @@ async function initDb() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS chat_events_business_idx ON chat_events (business_id, created_at)`);
 
+  // Appels de l'agent vocal (ElevenLabs) : rangés comme des conversations,
+  // avec le canal 'voice' et l'identifiant ElevenLabs (pas de doublon).
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'chat'`);
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS external_id TEXT`);
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS duration_secs INTEGER`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS conversations_external_id_idx ON conversations (external_id) WHERE external_id IS NOT NULL`);
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS voice_agent_id TEXT`);
+
   console.log('✅ Schéma PostgreSQL prêt.');
 }
 
