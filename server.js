@@ -998,6 +998,7 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
   try {
     const bid = req.user.businessId;
     const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+    const channel = ['chat', 'voice'].includes(req.query.channel) ? req.query.channel : 'all';
     const safe = async (sql, params, fallback) => {
       try { return (await query(sql, params)).rows; } catch (e) { return fallback; }
     };
@@ -1006,65 +1007,108 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
     const CUR = (col) => `${D(col)} > ${TODAY} - $2::int`;
     const PREV = (col) => `${D(col)} <= ${TODAY} - $2::int AND ${D(col)} > ${TODAY} - 2 * $2::int`;
     const P = [bid, days];
-    const pair = (r) => ({ cur: Number((r && r.cur) || 0), prev: Number((r && r.prev) || 0) });
+    const n = (v) => Number(v || 0);
+    // Canal : 'voice' = appel (téléphone ou site), sinon chat écrit.
+    const IS_VOICE = (a) => `COALESCE(${a}.channel, 'chat') = 'voice'`;
+    const CH = (a) => channel === 'all' ? 'TRUE' : channel === 'voice' ? IS_VOICE(a) : `NOT ${IS_VOICE(a)}`;
+    const LJ = 'FROM leads l LEFT JOIN conversations c ON c.id = l.conversation_id';
+    const RDV = `(l.appointment_at IS NOT NULL OR l.status = 'rdv_pris')`;
+    const pair = (r) => ({ cur: n(r && r.cur), prev: n(r && r.prev), voice: n(r && r.vcur) });
 
-    const [conv] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('started_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('started_at')}) AS prev
-      FROM conversations WHERE business_id = $1`, P, [{}]);
-    const [leads] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('created_at')}) AS prev
-      FROM leads WHERE business_id = $1`, P, [{}]);
-    const [rdv] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('created_at')}) AS prev
-      FROM leads WHERE business_id = $1 AND (appointment_at IS NOT NULL OR status = 'rdv_pris')`, P, [{}]);
-    const [opens] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('created_at')}) AS prev
+    const [biz] = await safe('SELECT slug, voice_agent_id, voice_minutes_quota FROM businesses WHERE id = $1', [bid], [{}]);
+    const [conv] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('c.started_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('c.started_at')}) AS prev,
+        COUNT(*) FILTER (WHERE ${CUR('c.started_at')} AND ${IS_VOICE('c')}) AS vcur
+      FROM conversations c WHERE c.business_id = $1 AND ${CH('c')}`, P, [{}]);
+    const [leads] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('l.created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('l.created_at')}) AS prev,
+        COUNT(*) FILTER (WHERE ${CUR('l.created_at')} AND ${IS_VOICE('c')}) AS vcur
+      ${LJ} WHERE l.business_id = $1 AND ${CH('c')}`, P, [{}]);
+    const [rdv] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('l.created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('l.created_at')}) AS prev,
+        COUNT(*) FILTER (WHERE ${CUR('l.created_at')} AND ${IS_VOICE('c')}) AS vcur
+      ${LJ} WHERE l.business_id = $1 AND ${RDV} AND ${CH('c')}`, P, [{}]);
+    const [opens] = channel === 'voice' ? [{}] : await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('created_at')}) AS prev
       FROM chat_events WHERE business_id = $1 AND type = 'open'`, P, [{}]);
     const [fb] = await safe(`SELECT COUNT(*) FILTER (WHERE m.feedback = 1 AND ${CUR('m.created_at')}) AS up,
         COUNT(*) FILTER (WHERE m.feedback = -1 AND ${CUR('m.created_at')}) AS down,
         COUNT(*) FILTER (WHERE m.feedback = 1 AND ${PREV('m.created_at')}) AS pup,
         COUNT(*) FILTER (WHERE m.feedback = -1 AND ${PREV('m.created_at')}) AS pdown
-      FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = $1 AND m.role = 'assistant'`, P, [{}]);
+      FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = $1 AND m.role = 'assistant' AND ${CH('c')}`, P, [{}]);
 
     // À faire
-    const hot = await safe(`SELECT id, name, email, phone, score, conversation_id FROM leads
-      WHERE business_id = $1 AND status = 'nouveau' ORDER BY score DESC NULLS LAST, created_at DESC LIMIT 200`, [bid], []);
+    const hot = await safe(`SELECT l.id, l.name, l.email, l.phone, l.score, l.conversation_id, COALESCE(c.channel, 'chat') AS channel, c.voice_source
+      ${LJ} WHERE l.business_id = $1 AND l.status = 'nouveau' AND ${CH('c')}
+      ORDER BY l.score DESC NULLS LAST, l.created_at DESC LIMIT 200`, [bid], []);
     const hotLeads = hot.filter((l) => Number(l.score) >= 70);
-    const [today] = await safe(`SELECT COUNT(*) AS n FROM leads WHERE business_id = $1 AND ${D('appointment_at')} = ${TODAY}`, [bid], [{}]);
+    const [today] = await safe(`SELECT COUNT(*) AS n ${LJ} WHERE l.business_id = $1 AND ${D('l.appointment_at')} = ${TODAY} AND ${CH('c')}`, [bid], [{}]);
     const [impr] = await safe(`SELECT COUNT(*) AS n FROM messages m JOIN conversations c ON c.id = m.conversation_id
       WHERE c.business_id = $1 AND m.role = 'assistant' AND m.reviewed_at IS NULL AND (m.feedback = -1 OR m.unanswered = true)`, [bid], [{}]);
 
-    // Courbe par jour (heure de Paris, jours sans activité à 0)
+    // Courbe par jour (heure de Paris, jours sans activité à 0), leads séparés chat / voix
     const series = await safe(`WITH d AS (
         SELECT generate_series(${TODAY} - ($2::int - 1), ${TODAY}, interval '1 day')::date AS day)
       SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
-        (SELECT COUNT(*) FROM conversations c WHERE c.business_id = $1 AND ${D('c.started_at')} = d.day) AS conv,
-        (SELECT COUNT(*) FROM leads l WHERE l.business_id = $1 AND ${D('l.created_at')} = d.day) AS leads
+        (SELECT COUNT(*) FROM conversations c WHERE c.business_id = $1 AND ${D('c.started_at')} = d.day AND ${CH('c')}) AS conv,
+        (SELECT COUNT(*) ${LJ} WHERE l.business_id = $1 AND ${D('l.created_at')} = d.day AND ${CH('c')} AND NOT ${IS_VOICE('c')}) AS lchat,
+        (SELECT COUNT(*) ${LJ} WHERE l.business_id = $1 AND ${D('l.created_at')} = d.day AND ${CH('c')} AND ${IS_VOICE('c')}) AS lvoice
       FROM d ORDER BY d.day`, P, []);
 
     // Sujets les plus demandés (une conversation compte une fois par sujet)
     const texts = await safe(`SELECT m.conversation_id, string_agg(m.content, ' ') AS t
       FROM messages m JOIN conversations c ON c.id = m.conversation_id
-      WHERE c.business_id = $1 AND m.role = 'user' AND ${CUR('m.created_at')}
+      WHERE c.business_id = $1 AND m.role = 'user' AND ${CUR('m.created_at')} AND ${CH('c')}
       GROUP BY m.conversation_id LIMIT 3000`, P, []);
     const topicCounts = OVERVIEW_TOPICS.map(([label, re]) => ({
       label, count: texts.filter((r) => re.test((typeof r === 'string' ? r : r.t) || '')).length,
     })).filter((t) => t.count > 0).sort((a, b) => b.count - a.count).slice(0, 6);
 
+    // Entonnoir par canal et agent vocal (toujours sur la période, quel que soit le filtre)
+    const [fc] = await safe(`SELECT COUNT(*) FILTER (WHERE NOT ${IS_VOICE('c')}) AS chat, COUNT(*) FILTER (WHERE ${IS_VOICE('c')}) AS voice
+      FROM conversations c WHERE c.business_id = $1 AND ${CUR('c.started_at')}`, P, [{}]);
+    const [fl] = await safe(`SELECT COUNT(*) FILTER (WHERE NOT ${IS_VOICE('c')}) AS chat, COUNT(*) FILTER (WHERE ${IS_VOICE('c')}) AS voice,
+        COUNT(*) FILTER (WHERE NOT ${IS_VOICE('c')} AND ${RDV}) AS rchat, COUNT(*) FILTER (WHERE ${IS_VOICE('c')} AND ${RDV}) AS rvoice
+      ${LJ} WHERE l.business_id = $1 AND ${CUR('l.created_at')}`, P, [{}]);
+    const [v] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('started_at')}) AS calls,
+        COUNT(*) FILTER (WHERE ${CUR('started_at')} AND voice_source = 'phone') AS phone,
+        COUNT(*) FILTER (WHERE ${CUR('started_at')} AND COALESCE(voice_source, 'web') <> 'phone') AS web,
+        AVG(duration_secs) FILTER (WHERE ${CUR('started_at')} AND duration_secs > 0) AS avg,
+        MAX(duration_secs) FILTER (WHERE ${CUR('started_at')}) AS max,
+        SUM(duration_secs) FILTER (WHERE date_trunc('month', started_at AT TIME ZONE 'Europe/Paris') = date_trunc('month', NOW() AT TIME ZONE 'Europe/Paris')) AS month_secs,
+        COUNT(*) AS total
+      FROM conversations WHERE business_id = $1 AND channel = 'voice'`, P, [{}]);
+    const funnel = {
+      chat: { conv: n(fc.chat), leads: n(fl.chat), rdv: n(fl.rchat) },
+      voice: { conv: n(fc.voice), leads: n(fl.voice), rdv: n(fl.rvoice) },
+    };
+    const rate = (a, b) => (b ? Math.round(a / b * 100) : null);
+
     res.json({
-      days,
+      days, channel,
+      hasVoice: Boolean(voiceAgentIdOf(biz) || n(v.total) > 0),
       kpis: {
         conversations: pair(conv), leads: pair(leads), rdv: pair(rdv), opens: pair(opens),
         satisfaction: {
-          up: Number(fb.up || 0), down: Number(fb.down || 0), prevUp: Number(fb.pup || 0), prevDown: Number(fb.pdown || 0),
+          up: n(fb.up), down: n(fb.down), prevUp: n(fb.pup), prevDown: n(fb.pdown),
         },
       },
       todo: {
         newLeads: hot.length,
         hotLeads: hotLeads.length,
         hotNames: hotLeads.slice(0, 3).map((l) => l.name || l.email || l.phone || 'Visiteur'),
-        rdvToday: Number(today.n || 0),
-        improve: Number(impr.n || 0),
+        hotList: hotLeads.slice(0, 3).map((l) => ({ name: l.name || l.email || l.phone || 'Visiteur', channel: l.channel, source: l.voice_source || null })),
+        rdvToday: n(today.n),
+        improve: n(impr.n),
       },
-      series: series.map((r) => ({ day: r.day, conv: Number(r.conv), leads: Number(r.leads) })),
+      series: series.map((r) => ({ day: r.day, conv: n(r.conv), leads: n(r.lchat) + n(r.lvoice), leadsChat: n(r.lchat), leadsVoice: n(r.lvoice) })),
       topics: topicCounts,
       topicsTotal: texts.length,
+      funnel,
+      voice: {
+        calls: n(v.calls), phone: n(v.phone), web: n(v.web),
+        avgSecs: Math.round(n(v.avg)), maxSecs: n(v.max),
+        monthMinutes: Math.ceil(n(v.month_secs) / 60),
+        quota: (biz && biz.voice_minutes_quota) || null,
+        leadRate: rate(funnel.voice.leads, funnel.voice.conv),
+        chatLeadRate: rate(funnel.chat.leads, funnel.chat.conv),
+      },
     });
   } catch (err) {
     console.error('Erreur GET /api/dashboard/overview:', err);
@@ -1558,17 +1602,21 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     const demoRaw = voiceField(results, /d[ée]mo/i);
     const wantsDemo = demoRaw === true || /^(true|oui|yes|vrai)$/i.test(String(demoRaw || ''));
     const email = emailRaw ? (extractEmail(String(emailRaw)) || null) : null;
-    const phone = phoneRaw ? (extractPhone(String(phoneRaw)) || String(phoneRaw).replace(/[^\d+]/g, '').slice(0, 20) || null) : null;
+    const callerNumber = meta.phone_call && (meta.phone_call.external_number || meta.phone_call.from_number);
+    const phone = (phoneRaw ? (extractPhone(String(phoneRaw)) || String(phoneRaw).replace(/[^\d+]/g, '').slice(0, 20) || null) : null) || (callerNumber ? String(callerNumber).slice(0, 20) : null);
     let summary = String(analysis.transcript_summary || need || '').trim().slice(0, 2000);
     const startSecs = Number(meta.start_time_unix_secs) || Math.floor(Date.now() / 1000);
     const duration = Number(meta.call_duration_secs) || null;
-    const callerNumber = meta.phone_call && (meta.phone_call.external_number || meta.phone_call.from_number);
-    const label = '📞 ' + ([firstName, company].filter(Boolean).join(' — ') || callerNumber || (meta.phone_call ? 'Appel téléphonique' : 'Appel depuis le site'));
+    const label = (meta.phone_call ? '📞 ' : '🎙️ ') + ([firstName, company].filter(Boolean).join(' — ') || callerNumber || (meta.phone_call ? 'Appel téléphonique' : 'Appel depuis le site'));
 
+    const voiceSource = meta.phone_call ? 'phone' : 'web';
+    const callData = { firstName: firstName || '', company: company || '', email: email || '', phone: phone || '',
+      need: need ? String(need).slice(0, 500) : '', offer: offer ? String(offer).slice(0, 120) : '', wantsDemo, summary };
     const { rows: c } = await query(
-      `INSERT INTO conversations (business_id, visitor_label, started_at, channel, external_id, duration_secs)
-       VALUES ($1, $2, to_timestamp($3), 'voice', $4, $5) RETURNING id`,
-      [business.id, label.slice(0, 120), startSecs, externalId, duration]
+      `INSERT INTO conversations (business_id, visitor_label, started_at, channel, external_id, duration_secs, voice_source, caller_number, call_data)
+       VALUES ($1, $2, to_timestamp($3), 'voice', $4, $5, $6, $7, $8) RETURNING id`,
+      [business.id, label.slice(0, 120), startSecs, externalId, duration, voiceSource,
+        callerNumber ? String(callerNumber).slice(0, 40) : null, JSON.stringify(callData)]
     );
     const convoId = c[0].id;
     const turns = [];
@@ -1587,22 +1635,25 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
       const message = [company && `Entreprise : ${company}`, need && `Besoin : ${need}`, offer && `Offre conseillée : ${offer}`,
         wantsDemo && 'Souhaite une démo'].filter(Boolean).join(' · ') || 'Appel téléphonique';
       const { rows: ins } = await query(
-        `INSERT INTO leads (business_id, conversation_id, email, phone, name, message, summary, score, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'nouveau') RETURNING id`,
-        [business.id, convoId, email, phone, firstName ? String(firstName).slice(0, 120) : null, message.slice(0, 1000), summary || message, score]
+        `INSERT INTO leads (business_id, conversation_id, email, phone, name, message, summary, score, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'nouveau', to_timestamp($9), to_timestamp($9)) RETURNING id`,
+        [business.id, convoId, email, phone, (firstName || company) ? String(firstName || company).slice(0, 120) : null,
+          message.slice(0, 1000), summary || message, score, startSecs + (duration || 0)]
       );
       leadId = ins[0].id;
     }
     res.json({ ok: true, conversationId: convoId, leadId });
 
+    // Résumé en français (celui d'ElevenLabs est souvent en anglais).
+    let frSummary = null;
+    try { frSummary = turns.length ? await generateLeadSummary(turns) : null; } catch (e) { frSummary = null; }
+    if (frSummary) {
+      summary = frSummary;
+      callData.summary = frSummary;
+      await query('UPDATE conversations SET call_data = $1 WHERE id = $2', [JSON.stringify(callData), convoId]).catch(() => {});
+      if (leadId) await query('UPDATE leads SET summary = $1 WHERE id = $2', [frSummary, leadId]).catch(() => {});
+    }
     if (leadId) {
-      // Résumé en français (celui d'ElevenLabs est souvent en anglais).
-      let frSummary = null;
-      try { frSummary = turns.length ? await generateLeadSummary(turns) : null; } catch (e) { frSummary = null; }
-      if (frSummary) {
-        summary = frSummary;
-        await query('UPDATE leads SET summary = $1 WHERE id = $2', [frSummary, leadId]).catch(() => {});
-      }
       sendLeadToWebhook(business, {
         type: 'voice_call',
         attachments: '',
@@ -1621,6 +1672,8 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
         offer: offer || '',
         wantsDemo,
         durationSecs: duration,
+        voiceSource,
+        callerNumber: callerNumber || '',
         score,
         status: 'nouveau',
         leadId,
@@ -1635,9 +1688,9 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
 // Paramètres → Agent vocal : ID de l'agent ElevenLabs relié à ce client.
 app.get('/api/dashboard/voice-agent', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
-    const { rows } = await query('SELECT voice_agent_id, slug FROM businesses WHERE id = $1', [req.user.businessId]);
+    const { rows } = await query('SELECT voice_agent_id, slug, voice_minutes_quota FROM businesses WHERE id = $1', [req.user.businessId]);
     if (!rows[0]) return res.status(404).json({ error: 'Entreprise introuvable.' });
-    res.json({ agentId: rows[0].voice_agent_id || '', webhookUrl: `${APP_URL}/api/voice/elevenlabs` });
+    res.json({ agentId: rows[0].voice_agent_id || '', minutesQuota: rows[0].voice_minutes_quota || null, webhookUrl: `${APP_URL}/api/voice/elevenlabs` });
   } catch (err) {
     console.error('Erreur /api/dashboard/voice-agent:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
@@ -1651,8 +1704,10 @@ app.put('/api/dashboard/voice-agent', requireAuth, requireRole(['admin']), async
       const { rows } = await query('SELECT id FROM businesses WHERE voice_agent_id = $1 AND id <> $2', [agentId, req.user.businessId]);
       if (rows[0]) return res.status(409).json({ error: 'Cet agent est déjà relié à un autre client.' });
     }
-    await query('UPDATE businesses SET voice_agent_id = $1 WHERE id = $2', [agentId || null, req.user.businessId]);
-    res.json({ ok: true, agentId });
+    const q = Number(req.body && req.body.minutesQuota);
+    const quota = Number.isFinite(q) && q > 0 ? Math.min(Math.round(q), 1000000) : null;
+    await query('UPDATE businesses SET voice_agent_id = $1, voice_minutes_quota = $2 WHERE id = $3', [agentId || null, quota, req.user.businessId]);
+    res.json({ ok: true, agentId, minutesQuota: quota });
   } catch (err) {
     console.error('Erreur PUT /api/dashboard/voice-agent:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
@@ -2254,7 +2309,7 @@ app.get('/api/dashboard/me', requireAuth, async (req, res) => {
 app.get('/api/dashboard/conversations', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
     const { rows: conversations } = await query(`
-      SELECT c.id, c.visitor_label, c.started_at, c.channel, c.duration_secs,
+      SELECT c.id, c.visitor_label, c.started_at, c.channel, c.duration_secs, c.voice_source,
              COUNT(m.id) as message_count
       FROM conversations c
       LEFT JOIN messages m ON m.conversation_id = c.id
@@ -2290,7 +2345,13 @@ app.get('/api/dashboard/conversations/:id', requireAuth, requireRole(['admin', '
         [req.params.id])).rows;
     } catch (e) { attachments = []; }
 
-    res.json({ conversation: convo, messages, attachments });
+    let lead = null, callData = null;
+    try {
+      lead = (await query('SELECT id, name, email, phone, summary, score, status FROM leads WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1',
+        [req.params.id])).rows[0] || null;
+    } catch (e) { lead = null; }
+    try { callData = convo.call_data ? JSON.parse(convo.call_data) : null; } catch (e) { callData = null; }
+    res.json({ conversation: convo, messages, attachments, lead, callData });
   } catch (err) {
     console.error('Erreur /api/dashboard/conversations/:id:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
@@ -2305,6 +2366,8 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
     const { rows: leads } = await query(`
       SELECT id, email, phone, message, score, status, conversation_id, created_at, appointment_at,
              (SELECT c.channel FROM conversations c WHERE c.id = leads.conversation_id) AS channel,
+             (SELECT c.voice_source FROM conversations c WHERE c.id = leads.conversation_id) AS voice_source,
+             (SELECT c.duration_secs FROM conversations c WHERE c.id = leads.conversation_id) AS duration_secs,
              name, summary, notes
       FROM leads
       WHERE business_id = $1
@@ -2325,6 +2388,8 @@ app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), 
       summary: l.summary || '',
       notes: l.notes || '',
       channel: l.channel || 'chat', // 'voice' = appel de l'agent vocal
+      voiceSource: l.voice_source || null, // 'phone' | 'web'
+      durationSecs: l.duration_secs || null,
     })));
   } catch (err) {
     console.error('Erreur /api/dashboard/leads:', err);
