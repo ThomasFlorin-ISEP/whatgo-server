@@ -896,6 +896,24 @@
     closeMenu();
     if (!panel.classList.contains('wgt-open')) openPanel(true);
     openCallUi();
+    voiceDiag = { status: [], agentSpoke: false, t0: Date.now() };
+    // Pendant le clic : on débloque le son (Safari bloque l'audio lancé plus
+    // tard) et on demande le micro tout de suite.
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) { var ac = new AC(); ac.resume && ac.resume(); var o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.05); setTimeout(function () { try { ac.close(); } catch (e) {} }, 400); }
+    } catch (e) {}
+    var micP = navigator.mediaDevices.getUserMedia({ audio: true });
+    try {
+      var preStream = await micP;
+      preStream.getTracks().forEach(function (t) { t.stop(); });
+    } catch (micErr) {
+      voiceStarting = false;
+      closeCallUi();
+      addMessage('bot', voiceErrorText(micErr));
+      reportVoice('mic', String(micErr && (micErr.name + ' ' + micErr.message)));
+      return;
+    }
     try {
       var sessionP = fetch(API_BASE + '/api/widget/' + encodeURIComponent(BUSINESS) + '/voice-session').then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (d) {
@@ -915,27 +933,41 @@
           addNote('📞 Appel vocal avec ' + BOT_NAME);
         },
         onModeChange: function (ev) { voiceMode = (ev && ev.mode) || 'listening'; setCallStatus(); },
+        onStatusChange: function (ev) { if (voiceDiag) voiceDiag.status.push((ev && ev.status) + '@' + Math.round((Date.now() - voiceDiag.t0) / 1000) + 's'); },
         onMessage: function (msg) {
           var text = String((msg && msg.message) || '').trim();
           if (!text) return;
           var who = msg.source === 'user' || msg.role === 'user' ? 'user' : 'bot';
+          if (who === 'bot' && voiceDiag) voiceDiag.agentSpoke = true;
           callCap.textContent = (who === 'user' ? 'Vous : ' : '') + text;
           addMessage(who, text);
           history.push({ role: who === 'user' ? 'user' : 'assistant', content: text });
           hasInteracted = true;
         },
-        onError: function (message) { console.warn('[WHATGO] appel vocal :', message); },
+        onError: function (message, ctx) {
+          console.warn('[WHATGO] appel vocal :', message, ctx || '');
+          if (voiceDiag) voiceDiag.lastError = String(message || '').slice(0, 300);
+        },
         onDisconnect: function (details) {
           var dur = voiceStartAt ? Date.now() - voiceStartAt : 0;
+          var d = voiceDiag || {};
           voiceConv = null; voiceStartAt = 0;
           closeCallUi();
+          var reason = (details && details.reason) || '?';
+          var why = [details && details.message, details && details.closeReason, details && details.closeCode, d.lastError].filter(Boolean).join(' · ');
+          var failed = reason === 'error' || (!d.agentSpoke && reason !== 'user');
           if (dur) addNote('Appel terminé · ' + fmtDur(dur));
-          if (details && details.reason === 'error' && !dur) addMessage('bot', voiceErrorText(details.message || ''));
+          if (failed) {
+            addMessage('bot', "Désolée, l'appel a été coupé avant que je puisse vous répondre. Réessayez dans un instant, ou écrivez-moi ici." +
+              (why ? '\n\n(Détail technique : ' + why + ')' : ''));
+          }
+          reportVoice(failed ? 'fail' : 'end', 'raison=' + reason + (why ? ' | ' + why : '') + ' | statuts=' + (d.status || []).join(',') +
+            ' | agent_a_parle=' + !!d.agentSpoke + ' | duree=' + Math.round(dur / 1000) + 's | conn=' + (voiceConnType || '?'));
           showQuickReplies();
         },
       };
-      if (sess.conversationToken) { opts.conversationToken = sess.conversationToken; opts.connectionType = 'webrtc'; }
-      else { opts.agentId = sess.agentId; }
+      if (sess.conversationToken) { opts.conversationToken = sess.conversationToken; opts.connectionType = 'webrtc'; voiceConnType = 'webrtc'; }
+      else { opts.agentId = sess.agentId; opts.connectionType = 'websocket'; voiceConnType = 'websocket'; }
       voiceConv = await sdk.Conversation.startSession(opts);
       voiceStarting = false;
       voiceRaf = requestAnimationFrame(animateRings);
@@ -951,7 +983,18 @@
       voiceConv = null;
       closeCallUi();
       addMessage('bot', voiceErrorText(err));
+      reportVoice('start', String((err && (err.name + ' ' + (err.userMessage || err.message))) || err));
     }
+  }
+  var voiceDiag = null, voiceConnType = '';
+  // Envoie le déroulé de l'appel dans les logs du serveur (diagnostic).
+  function reportVoice(kind, detail) {
+    try {
+      fetch(API_BASE + '/api/widget/' + encodeURIComponent(BUSINESS) + '/voice-log', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: kind, detail: String(detail || '').slice(0, 600), ua: navigator.userAgent.slice(0, 160) }),
+      }).catch(function () {});
+    } catch (e) {}
   }
   function endVoiceCall() {
     if (voiceConv) { try { voiceConv.endSession(); } catch (e) {} }
