@@ -300,6 +300,12 @@ async function initDb() {
   await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS duration_secs INTEGER`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS conversations_external_id_idx ON conversations (external_id) WHERE external_id IS NOT NULL`);
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS voice_agent_id TEXT`);
+  // Appels : téléphone ou voix sur le site, numéro de l'appelant, infos collectées (JSON).
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS voice_source TEXT`);
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS caller_number TEXT`);
+  await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS call_data TEXT`);
+  // Minutes de voix incluses dans le forfait du client (affichage de la jauge).
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS voice_minutes_quota INTEGER`);
 
   console.log('✅ Schéma PostgreSQL prêt.');
 }

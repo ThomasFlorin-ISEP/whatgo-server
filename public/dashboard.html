@@ -238,6 +238,48 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .ovchart__bars i{display:block;width:42%;max-width:16px;border-radius:4px 4px 0 0;background:#9FDDB9;min-height:2px}
 .ovchart__bars i.l{background:var(--green-deep)}
 .ovchart__x{font-size:.66rem;color:var(--ink-faint);margin-top:6px;height:12px;white-space:nowrap}
+/* ---------- Canaux : chat (vert) / voix (violet) ---------- */
+:root{--vox:#6B5BD6;--vox-soft:#EEEBFC}
+.seg{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.seg[hidden]{display:none}
+.seg button{border:0;background:none;font:inherit;font-size:.8rem;font-weight:600;padding:7px 13px;border-radius:9px;color:var(--ink-soft);cursor:pointer;white-space:nowrap}
+.seg button.on{background:#0E1F17;color:#fff}
+.chips{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+.chips[hidden]{display:none}
+.chips button{border:1px solid #DCE3DF;background:#fff;border-radius:999px;padding:7px 14px;font:inherit;font-size:.8rem;font-weight:600;color:#33403A;cursor:pointer}
+.chips button b{margin-left:6px;color:#8A948F;font-weight:700}
+.chips button.on{background:#0E1F17;color:#fff;border-color:#0E1F17}.chips button.on b{color:#B8C7BF}
+.split2{display:flex;height:6px;border-radius:99px;overflow:hidden;margin:10px 0 6px;background:#EEF2F0}
+.split2 i{display:block;background:var(--green)}.split2 i.v{background:var(--vox)}
+.kpi__s{font-size:.74rem;color:var(--ink-soft);display:flex;gap:10px}
+.kpi__s span::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:var(--green);vertical-align:1px}
+.kpi__s span.v::before{background:var(--vox)}
+.vcard{background:linear-gradient(135deg,#F4F2FE,#fff 60%);border:1px solid #E4E0FA}
+.vcard[hidden]{display:none}
+.vgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:6px}
+.vgrid .l{font-size:.76rem;color:var(--ink-soft)}.vgrid .n{font-size:1.65rem;font-weight:700;color:var(--ink);margin:4px 0 2px}.vgrid .n small{font-size:.95rem;color:#8A948F;font-weight:600}.vgrid .s{font-size:.74rem;color:var(--ink-soft)}
+.mbar{height:8px;border-radius:99px;background:#E6E2FA;overflow:hidden;margin:8px 0 4px}.mbar i{display:block;height:100%;background:var(--vox);border-radius:99px}
+.mbar.is-over i{background:#E5383B}
+.vhead{display:flex;align-items:center;gap:10px}.vhead .ic{width:34px;height:34px;border-radius:10px;background:var(--vox-soft);display:grid;place-items:center;font-size:1.05rem;flex-shrink:0}
+@media (max-width:900px){.vgrid{grid-template-columns:repeat(2,1fr)}}
+.fun2{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.fun2 h4{margin:0 0 10px;font-size:.82rem;display:flex;align-items:center;gap:6px;color:#33403A}
+.fun2 .vox .funnel__bar i{background:var(--vox)}
+.chanb{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.chanb.c{background:#E7F0FB;color:#28518F}.chanb.w{background:var(--vox-soft);color:#4A3AA8}.chanb.p{background:#E9E4FF;color:#3B2C9A}
+.chans{font-size:.7rem;color:#8A948F;margin-top:4px}
+.ovstack{display:flex;flex-direction:column;width:42%;max-width:16px;border-radius:4px 4px 0 0;overflow:hidden;min-height:2px;background:var(--green-deep)}
+.ovchart__bars .ovstack i{width:100%;max-width:none;border-radius:0;min-height:0;background:var(--green-deep)}
+.ovchart__bars .ovstack i.v{background:var(--vox)}
+.ovlegend i.v{background:var(--vox)}
+.ovchart__bars i.lv{background:var(--vox)}
+.callbtn{display:inline-flex;align-items:center;gap:6px;background:#0E1F17;color:#fff;border-radius:10px;padding:9px 14px;font-weight:700;font-size:.82rem;border:0;text-decoration:none;cursor:pointer}
+.callbtn.ghost{background:#fff;color:#0E1F17;border:1px solid #DCE3DF}
+.ffacts{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;background:#F7F9F8;border-radius:14px;padding:14px 16px;margin:14px 0}
+.ffacts div{font-size:.78rem;color:var(--ink-soft)}.ffacts b{display:block;color:var(--ink);font-size:.86rem;margin-top:2px;word-break:break-word}
+.sumbox{background:#F4F2FE;border-radius:14px;padding:12px 14px;font-size:.86rem;color:#26302B;line-height:1.45}
+.sumbox small{display:block;font-size:.7rem;font-weight:700;color:#4A3AA8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.secttl{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8A948F;margin:16px 0 8px}
 @media (max-width:900px){.ovtodo{grid-template-columns:1fr}}
 .kpi{background:linear-gradient(170deg,rgba(255,255,255,.92),rgba(255,255,255,.66));
   -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
@@ -604,19 +646,21 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     <section class="tab-page active" id="page-overview">
       <div class="topbar">
         <div><h2>Vue d'ensemble</h2><p>Ce que votre assistant a fait pour vous, à partir des vraies conversations enregistrées.</p></div>
-        <div class="topbar__act" style="display:flex;gap:10px;align-items:center">
+        <div class="topbar__act" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+          <div class="seg" id="ovChan" hidden><button type="button" data-ch="all">Tous les canaux</button><button type="button" data-ch="chat">💬 Chat</button><button type="button" data-ch="voice">🎙️📞 Voix</button></div>
           <select id="ovRange" class="rangepick"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select>
           <span class="tag tag--dot" id="statusBadge">—</span></div>
       </div>
       <div class="ovtodo" id="ovTodo"></div>
       <div class="kpis" id="ovKpis4" style="grid-template-columns:repeat(4,1fr)"></div>
+      <div class="card vcard" id="ovVoice" hidden></div>
       <div class="split split--even" style="align-items:stretch">
         <div class="card"><div class="card__head"><div><h3>De la visite au rendez-vous</h3><p class="card__sub" id="ovFunnelSub"></p></div></div><div id="ovFunnel"></div></div>
         <div class="card"><div class="card__head"><div><h3>Sujets les plus demandés</h3><p class="card__sub" id="ovTopicsSub"></p></div></div><div id="ovTopics"></div></div>
       </div>
       <div class="card card--chart">
         <div class="card__head"><div><h3 id="ovChartTitle">Conversations et leads par jour</h3></div>
-          <div class="ovlegend"><span><i class="light"></i>Conversations</span><span><i></i>Leads</span></div></div>
+          <div class="ovlegend" id="ovLegend"><span><i class="light"></i>Conversations</span><span><i></i>Leads</span></div></div>
         <div class="ovchart" id="ovChart"></div>
       </div>
       <div class="card card--flush" id="ovLeadsCard">
@@ -631,10 +675,11 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     <!-- ============================== LEADS (réel) -->
     <section class="tab-page" id="page-leads">
       <div class="topbar">
-        <div><h2>Leads</h2><p>Les visiteurs qui ont laissé leur email dans le chat.</p></div>
+        <div><h2>Leads</h2><p>Les contacts captés par votre assistante, par écrit et à la voix.</p></div>
         <div class="topbar__act"><a class="btn btn--ghost" href="/api/dashboard/leads/export.csv" download>Exporter en CSV</a></div>
       </div>
       <div class="kpis" id="leadKpis" style="grid-template-columns:repeat(2,1fr)"></div>
+      <div class="chips" id="leadChips" hidden></div>
       <div class="card card--flush">
         <div class="tablewrap"><table class="tbl" id="leadsTable"></table></div>
       </div>
@@ -643,6 +688,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
     <!-- ============================== CONVERSATIONS (réel) -->
     <section class="tab-page" id="page-conversations">
       <div class="topbar"><div><h2>Conversations</h2><p>Tous les échanges enregistrés par votre assistant.</p></div></div>
+      <div class="chips" id="convChips" hidden></div>
       <div class="card card--flush">
         <div class="tablewrap"><table class="tbl" id="convTable"></table></div>
       </div>
@@ -1107,6 +1153,9 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <div class="field"><label for="voice-agent">ID de l'agent ElevenLabs</label>
           <input type="text" id="voice-agent" maxlength="120" placeholder="Ex. : agent_01k…" />
           <p class="help">Dans ElevenLabs : page de l'agent → menu ⋯ ou Paramètres → « ID de l'agent ».</p></div>
+        <div class="field"><label for="voice-quota">Minutes de voix incluses par mois</label>
+          <input type="number" id="voice-quota" min="0" step="1" placeholder="Ex. : 275" />
+          <p class="help">Affiche une jauge de consommation dans la Vue d'ensemble. Laissez vide pour ne pas l'afficher.</p></div>
         <div class="field"><label>Adresse à coller dans ElevenLabs (webhook après appel)</label>
           <input type="text" id="voice-url" readonly onclick="this.select()" /></div>
         <button type="button" class="btn btn--primary" id="voiceSave">Enregistrer</button>
@@ -1614,6 +1663,7 @@ async function loadVoiceAgent() {
     var d = await res.json();
     card.hidden = false;
     $('#voice-agent').value = d.agentId || '';
+    if ($('#voice-quota')) { $('#voice-quota').value = d.minutesQuota || ''; $('#voice-quota').disabled = !(ME && ME.role === 'admin'); }
     $('#voice-url').value = d.webhookUrl || '';
     var admin = ME && ME.role === 'admin';
     $('#voice-agent').disabled = !admin; $('#voiceSave').hidden = !admin;
@@ -1623,7 +1673,7 @@ if ($('#voiceSave')) $('#voiceSave').addEventListener('click', async function ()
   try {
     var res = await fetch(API + '/api/dashboard/voice-agent', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ agentId: $('#voice-agent').value }),
+      body: JSON.stringify({ agentId: $('#voice-agent').value, minutesQuota: $('#voice-quota') ? $('#voice-quota').value : '' }),
     });
     var d = await res.json().catch(function () { return {}; });
     if (!res.ok) throw new Error(d.error || '');
@@ -1704,6 +1754,24 @@ async function loadStats() { return loadOverview(); }
 
 /* ---- Nouvelle Vue d'ensemble ---- */
 var OV_RANGE = 30;
+var OV_CHANNEL = 'all';      // 'all' | 'chat' | 'voice'
+var OV_HAS_VOICE = false;    // le client a l'agent vocal (ou des appels)
+try { var savedCh = localStorage.getItem('ov-chan'); if (savedCh === 'chat' || savedCh === 'voice') OV_CHANNEL = savedCh; } catch (e) {}
+function fmtDur(secs) {
+  secs = Math.round(Number(secs) || 0);
+  if (secs < 60) return secs + ' s';
+  var m = Math.floor(secs / 60), r = secs % 60;
+  return m + ' min' + (r ? ' ' + (r < 10 ? '0' : '') + r : '');
+}
+function isVoiceLead(l) { return l && l.channel === 'voice'; }
+// Badge du canal : 💬 Chat, 🎙️ Voix (site) ou 📞 Téléphone, avec la durée de l'appel.
+function chanBadge(l) {
+  if (!isVoiceLead(l)) return '<span class="chanb c">💬 Chat</span>';
+  var phone = l.voiceSource === 'phone';
+  return '<span class="chanb ' + (phone ? 'p' : 'w') + '">' + (phone ? '📞 Téléphone' : '🎙️ Voix · site') + '</span>' +
+    (l.durationSecs ? '<div class="chans">' + fmtDur(l.durationSecs) + '</div>' : '');
+}
+function chanIcon(ch, src) { return ch === 'voice' ? (src === 'phone' ? '📞 ' : '🎙️ ') : '💬 '; }
 try { OV_RANGE = [7, 30, 90].indexOf(Number(localStorage.getItem('ov-range'))) >= 0 ? Number(localStorage.getItem('ov-range')) : 30; } catch (e) {}
 function plural(n, one, many) { return n + ' ' + (n > 1 ? many : one); }
 function deltaHtml(cur, prev, days) {
@@ -1717,13 +1785,20 @@ async function loadOverview() {
   var sel = $('#ovRange');
   if (sel) sel.value = String(OV_RANGE);
   try {
-    var res = await fetch(API + '/api/dashboard/overview?days=' + OV_RANGE, { credentials: 'include' });
+    var res = await fetch(API + '/api/dashboard/overview?days=' + OV_RANGE + '&channel=' + OV_CHANNEL, { credentials: 'include' });
     if (!res.ok) throw new Error();
     renderOverview(await res.json());
   } catch (e) { toast('Impossible de charger la vue d\'ensemble.', true); }
 }
 function renderOverview(o) {
   var k = o.kpis, t = o.todo, days = o.days;
+  OV_HAS_VOICE = !!o.hasVoice;
+  var both = OV_HAS_VOICE && o.channel === 'all';
+  var segEl = $('#ovChan');
+  if (segEl) {
+    segEl.hidden = !OV_HAS_VOICE;
+    $$('button', segEl).forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-ch') === o.channel); });
+  }
   // 1) À faire
   var todo = $('#ovTodo');
   if (todo) {
@@ -1731,7 +1806,12 @@ function renderOverview(o) {
     var hotLabel = t.hotLeads ? (t.hotLeads > 1 ? 'leads chauds à rappeler' : 'lead chaud à rappeler')
       : (t.newLeads > 1 ? 'nouveaux leads à contacter' : 'nouveau lead à contacter');
     var uniq = (t.hotNames || []).filter(function (n, i, a) { return a.indexOf(n) === i; });
-    var hotSub = uniq.length ? uniq.join(', ') : (t.newLeads ? 'Statut « Nouveau » dans Leads' : 'Tous vos leads sont pris en charge');
+    if (OV_HAS_VOICE && t.hotList && t.hotList.length) {
+      var seenN = {};
+      uniq = t.hotList.filter(function (h) { if (seenN[h.name]) return false; seenN[h.name] = 1; return true; })
+        .map(function (h) { return chanIcon(h.channel, h.source) + h.name; });
+    }
+    var hotSub = uniq.length ? uniq.join(' · ') : (t.newLeads ? 'Statut « Nouveau » dans Leads' : 'Tous vos leads sont pris en charge');
     var items = [
       ['hot', '🔥', hotN, hotLabel, hotSub, 'leads'],
       ['rdv', '📅', t.rdvToday, t.rdvToday > 1 ? 'rendez-vous aujourd\'hui' : 'rendez-vous aujourd\'hui', t.rdvToday ? 'Voir l\'agenda' : 'Aucun rendez-vous prévu', 'appointments'],
@@ -1754,12 +1834,52 @@ function renderOverview(o) {
   var satDelta = sat === null ? '<div class="kpi__d">Pas encore d\'avis</div>'
     : psat === null ? '<div class="kpi__d">' + plural(votes, 'avis', 'avis') + ' 👍/👎</div>'
     : '<div class="kpi__d ' + (sat > psat ? 'up' : sat < psat ? 'down' : '') + '">' + (sat >= psat ? '+' : '') + (sat - psat) + ' pts vs ' + days + ' j précédents</div>';
+  // Avec la voix : barre chat / voix et détail sous chaque chiffre.
+  function splitHtml(x) {
+    if (!both) return deltaHtml(x.cur, x.prev, days);
+    var c = Math.max(0, x.cur - x.voice), v = x.voice, tot = c + v;
+    return '<div class="split2">' + (tot ? '<i style="width:' + (c / tot * 100) + '%"></i><i class="v" style="width:' + (v / tot * 100) + '%"></i>' : '') + '</div>' +
+      '<div class="kpi__s"><span>' + c + ' chat</span><span class="v">' + v + ' voix</span></div>';
+  }
   $('#ovKpis4').innerHTML =
-    '<div class="kpi kpi--hero"><div class="kpi__l">Conversations</div><div class="kpi__v">' + k.conversations.cur + '</div>' + deltaHtml(k.conversations.cur, k.conversations.prev, days) + '</div>' +
-    '<div class="kpi"><div class="kpi__l">Leads captés</div><div class="kpi__v">' + k.leads.cur + '</div>' + deltaHtml(k.leads.cur, k.leads.prev, days) + '</div>' +
-    '<div class="kpi"><div class="kpi__l">Rendez-vous pris</div><div class="kpi__v">' + k.rdv.cur + '</div>' + deltaHtml(k.rdv.cur, k.rdv.prev, days) + '</div>' +
+    '<div class="kpi kpi--hero"><div class="kpi__l">' + (o.channel === 'voice' ? 'Appels' : 'Conversations') + '</div><div class="kpi__v">' + k.conversations.cur + '</div>' + splitHtml(k.conversations) + '</div>' +
+    '<div class="kpi"><div class="kpi__l">Leads captés</div><div class="kpi__v">' + k.leads.cur + '</div>' + splitHtml(k.leads) + '</div>' +
+    '<div class="kpi"><div class="kpi__l">Rendez-vous pris</div><div class="kpi__v">' + k.rdv.cur + '</div>' + splitHtml(k.rdv) + '</div>' +
     '<div class="kpi"><div class="kpi__l">Satisfaction</div><div class="kpi__v">' + (sat === null ? '—' : sat + ' %') + '</div>' + satDelta + '</div>';
+  // 2 bis) Agent vocal
+  var vbox = $('#ovVoice');
+  if (vbox) {
+    var vv = o.voice || {};
+    vbox.hidden = !OV_HAS_VOICE || o.channel === 'chat';
+    if (!vbox.hidden) {
+      var q = vv.quota, used = vv.monthMinutes || 0, pctQ = q ? Math.round(used / q * 100) : 0;
+      vbox.innerHTML = '<div class="card__head"><div class="vhead"><span class="ic">🎙️</span><div><h3>Agent vocal</h3>' +
+        '<p class="card__sub">Appels reçus par votre assistante au téléphone et sur votre site · ' + days + ' derniers jours</p></div></div></div>' +
+        '<div class="vgrid">' +
+        '<div><div class="l">Appels reçus</div><div class="n">' + (vv.calls || 0) + '</div><div class="s">📞 ' + (vv.phone || 0) + ' téléphone · 🎙️ ' + (vv.web || 0) + ' site</div></div>' +
+        '<div><div class="l">Minutes utilisées ce mois</div><div class="n">' + used + (q ? ' <small>/ ' + q + ' min</small>' : ' <small>min</small>') + '</div>' +
+          (q ? '<div class="mbar' + (pctQ > 100 ? ' is-over' : '') + '"><i style="width:' + Math.min(100, Math.max(used ? 2 : 0, pctQ)) + '%"></i></div><div class="s">' + pctQ + ' % de votre forfait · renouvelé le 1er</div>'
+             : '<div class="s">Indiquez votre forfait dans Paramètres → Agent vocal</div>') + '</div>' +
+        '<div><div class="l">Durée moyenne</div><div class="n">' + (vv.calls ? fmtDur(vv.avgSecs) : '—') + '</div><div class="s">' + (vv.maxSecs ? 'Appel le plus long : ' + fmtDur(vv.maxSecs) : 'Aucun appel sur la période') + '</div></div>' +
+        '<div><div class="l">Appels → lead</div><div class="n">' + (vv.leadRate === null || vv.leadRate === undefined ? '—' : vv.leadRate + ' %') + '</div><div class="s">' +
+          (vv.chatLeadRate === null || vv.chatLeadRate === undefined ? 'Part des appels qui laissent un contact' : 'vs ' + vv.chatLeadRate + ' % pour le chat') + '</div></div>' +
+        '</div>';
+    }
+  }
   // 3) Entonnoir
+  if ((both || (OV_HAS_VOICE && o.channel === 'voice')) && o.funnel) {
+    var funCol = function (cls, ttl, f) {
+      var top2 = Math.max(1, f.conv);
+      var bar = function (lab, val) { return '<div class="funnel__row"><div class="funnel__top"><span>' + lab + '</span><b>' + val + '</b></div><div class="funnel__bar"><i style="width:' + Math.max(val ? 3 : 0, Math.round(val / top2 * 100)) + '%"></i></div></div>'; };
+      var rt = function (a, b, txt) { return b ? '<div class="funnel__rate">↳ ' + Math.round(a / b * 100) + ' % ' + txt + '</div>' : ''; };
+      return '<div class="' + cls + '"><h4>' + ttl + '</h4>' + bar(cls === 'vox' ? 'Appels' : 'Conversations', f.conv) + rt(f.leads, f.conv, 'deviennent un lead') +
+        bar('Leads', f.leads) + rt(f.rdv, f.leads, 'prennent rendez-vous') + bar('Rendez-vous', f.rdv) + '</div>';
+    };
+    $('#ovFunnel').innerHTML = both
+      ? '<div class="fun2">' + funCol('', '💬 Chat', o.funnel.chat) + funCol('vox', '🎙️📞 Voix', o.funnel.voice) + '</div>'
+      : '<div class="fun2" style="grid-template-columns:1fr">' + funCol('vox', '🎙️📞 Appels de votre assistante', o.funnel.voice) + '</div>';
+    $('#ovFunnelSub').textContent = days + ' derniers jours' + (both ? ' · par canal' : '');
+  } else {
   var steps = [];
   var opensTracked = k.opens.cur >= k.conversations.cur && k.opens.cur > 0;
   if (opensTracked) steps.push(['Chats ouverts', k.opens.cur]);
@@ -1771,9 +1891,10 @@ function renderOverview(o) {
     return rate + '<div class="funnel__row"><div class="funnel__top"><span>' + st[0] + '</span><b>' + st[1] + '</b></div><div class="funnel__bar"><i style="width:' + w + '%"></i></div></div>';
   }).join('');
   $('#ovFunnelSub').textContent = days + ' derniers jours' + (opensTracked ? '' : ' · les ouvertures du chat seront comptées à partir de maintenant');
+  }
   // 4) Sujets
   var tmax = Math.max(1, ...(o.topics.length ? o.topics.map(function (x) { return x.count; }) : [1]));
-  $('#ovTopicsSub').textContent = o.topicsTotal ? 'Sur ' + plural(o.topicsTotal, 'conversation', 'conversations') + ' · ' + days + ' derniers jours' : days + ' derniers jours';
+  $('#ovTopicsSub').textContent = (o.topicsTotal ? 'Sur ' + plural(o.topicsTotal, 'conversation', 'conversations') + (both ? ' (chat et voix)' : '') + ' · ' : '') + days + ' derniers jours';
   $('#ovTopics').innerHTML = o.topics.length ? o.topics.map(function (x) {
     return '<div class="topic"><span>' + esc(x.label) + '</span><b>' + x.count + '</b><div class="funnel__bar"><i style="width:' + Math.round(x.count / tmax * 100) + '%"></i></div></div>';
   }).join('') : '<p class="card__sub">Pas encore assez de conversations sur cette période.</p>';
@@ -1784,21 +1905,37 @@ function renderOverview(o) {
     var g = [];
     for (var i = pts.length; i > 0; i -= 7) {
       var chunk = pts.slice(Math.max(0, i - 7), i);
-      g.unshift({ day: chunk[0].day, end: chunk[chunk.length - 1].day, conv: chunk.reduce(function (a, b) { return a + b.conv; }, 0), leads: chunk.reduce(function (a, b) { return a + b.leads; }, 0) });
+      g.unshift({ day: chunk[0].day, end: chunk[chunk.length - 1].day, conv: chunk.reduce(function (a, b) { return a + b.conv; }, 0), leads: chunk.reduce(function (a, b) { return a + b.leads; }, 0),
+        leadsChat: chunk.reduce(function (a, b) { return a + (b.leadsChat || 0); }, 0), leadsVoice: chunk.reduce(function (a, b) { return a + (b.leadsVoice || 0); }, 0) });
     }
     pts = g;
   }
   $('#ovChartTitle').textContent = weekly ? 'Conversations et leads par semaine' : 'Conversations et leads par jour';
+  try { if (typeof LEADS_CACHE !== 'undefined' && LEADS_CACHE && LEADS_CACHE.length) renderOverviewLeads(LEADS_CACHE); } catch (e) {}
+  if ($('#ovLegend')) $('#ovLegend').innerHTML = both
+    ? '<span><i class="light"></i>Conversations</span><span><i></i>Leads chat</span><span><i class="v"></i>Leads voix</span>'
+    : '<span><i class="light"></i>' + (o.channel === 'voice' ? 'Appels' : 'Conversations') + '</span><span><i' + (o.channel === 'voice' ? ' class="v"' : '') + '></i>Leads</span>';
   var cmax = Math.max(1, ...pts.map(function (p) { return Math.max(p.conv, p.leads); }));
   var every = pts.length > 16 ? Math.ceil(pts.length / 10) : 1;
   $('#ovChart').innerHTML = pts.map(function (p, i) {
     var lab = fmtDay(p.day);
-    var tip = (weekly ? 'Semaine du ' : '') + lab + ' : ' + plural(p.conv, 'conversation', 'conversations') + ', ' + plural(p.leads, 'lead', 'leads');
+    var tip = (weekly ? 'Semaine du ' : '') + lab + ' : ' + plural(p.conv, 'conversation', 'conversations') + ', ' + plural(p.leads, 'lead', 'leads') +
+      (both ? ' (' + (p.leadsChat || 0) + ' chat, ' + (p.leadsVoice || 0) + ' voix)' : '');
+    var leadBar = both && p.leads
+      ? '<span class="ovstack" style="height:' + Math.round(p.leads / cmax * 100) + '%"><i class="v" style="flex:' + (p.leadsVoice || 0) + '"></i><i style="flex:' + (p.leadsChat || 0) + '"></i></span>'
+      : '<i class="l' + (o.channel === 'voice' ? ' lv' : '') + '" style="height:' + Math.round(p.leads / cmax * 100) + '%"></i>';
     return '<div class="ovchart__col" title="' + esc(tip) + '"><div class="ovchart__bars">' +
-      '<i style="height:' + Math.round(p.conv / cmax * 100) + '%"></i><i class="l" style="height:' + Math.round(p.leads / cmax * 100) + '%"></i></div>' +
+      '<i style="height:' + Math.round(p.conv / cmax * 100) + '%"></i>' + leadBar + '</div>' +
       '<div class="ovchart__x">' + ((pts.length - 1 - i) % every === 0 ? lab : '') + '</div></div>';
   }).join('');
 }
+if ($('#ovChan')) $$('#ovChan button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    OV_CHANNEL = b.getAttribute('data-ch') || 'all';
+    try { localStorage.setItem('ov-chan', OV_CHANNEL); } catch (er) {}
+    loadOverview();
+  });
+});
 if ($('#ovRange')) $('#ovRange').addEventListener('change', function (e) {
   OV_RANGE = Number(e.target.value) || 30;
   try { localStorage.setItem('ov-range', String(OV_RANGE)); } catch (er) {}
@@ -1833,12 +1970,31 @@ async function loadConversations() {
   try {
     var res = await fetch(API + '/api/dashboard/conversations', { credentials: 'include' });
     CONVS = await res.json();
+    renderConversations();
+  } catch (e) { toast('Impossible de charger les conversations.', true); }
+}
+var CONV_FILTER = 'all';
+function renderConversations() {
+  try {
     var body = $('#convTable');
+    var chipsC = $('#convChips');
+    var isV = function (c) { return c.channel === 'voice'; };
+    var withVoice = OV_HAS_VOICE || CONVS.some(isV);
+    var matchC = function (c, f) { return f === 'all' || (f === 'chat' ? !isV(c) : f === 'phone' ? isV(c) && c.voice_source === 'phone' : isV(c) && c.voice_source !== 'phone'); };
+    if (chipsC) {
+      chipsC.hidden = !withVoice;
+      if (withVoice) {
+        var cntC = function (f) { return CONVS.filter(function (c) { return matchC(c, f); }).length; };
+        renderChips(chipsC, [['all', 'Toutes', CONVS.length], ['chat', '💬 Chat', cntC('chat')], ['web', '🎙️ Voix · site', cntC('web')], ['phone', '📞 Téléphone', cntC('phone')]],
+          CONV_FILTER, function (f) { CONV_FILTER = f; renderConversations(); });
+      } else { CONV_FILTER = 'all'; }
+    }
+    var list = CONVS.filter(function (c) { return matchC(c, CONV_FILTER); });
     body.innerHTML =
       '<thead><tr><th>Visiteur</th><th>Messages</th><th class="right">Date</th></tr></thead><tbody>' +
-      (CONVS.length ? CONVS.map(function (c) {
+      (list.length ? list.map(function (c) {
         return '<tr class="clickable" data-id="' + esc(c.id) + '">' +
-          '<td class="cell-main">' + esc(c.visitor_label) + (c.channel === 'voice' ? ' <span class="tag">Appel' + (c.duration_secs ? ' · ' + Math.max(1, Math.round(c.duration_secs / 60)) + ' min' : '') + '</span>' : '') + '</td>' +
+          '<td class="cell-main">' + esc(c.visitor_label) + (c.channel === 'voice' ? ' <span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + (c.duration_secs ? ' · ' + fmtDur(c.duration_secs) : '') + '</span>' : '') + '</td>' +
           '<td class="num">' + c.message_count + '</td>' +
           '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td></tr>';
       }).join('') : emptyRow(3, 'Aucune conversation pour le moment', 'Dès qu\'un visiteur écrit à l\'assistant, la conversation apparaît ici.')) +
@@ -1846,7 +2002,37 @@ async function loadConversations() {
     $$('tr[data-id]', body).forEach(function (row) {
       row.addEventListener('click', function () { openTranscript(row.dataset.id); });
     });
-  } catch (e) { toast('Impossible de charger les conversations.', true); }
+  } catch (e) { console.error('renderConversations:', e); }
+}
+
+function telHref(n) { return 'tel:' + String(n || '').replace(/[^\d+]/g, ''); }
+function openCallDrawer(data) {
+  var c = data.conversation, cd = data.callData || {}, lead = data.lead || {};
+  var phoneNum = lead.phone || cd.phone || c.caller_number || '';
+  var email = lead.email || cd.email || '';
+  var src = c.voice_source === 'phone' ? 'Appel téléphonique' : 'Appel vocal depuis le site';
+  var who = [lead.name || cd.firstName, cd.company].filter(Boolean).join(' — ') || c.visitor_label.replace(/^\S+\s/, '') || 'Appel';
+  var summary = lead.summary || cd.summary || '';
+  var facts = [['Entreprise', cd.company], ['Téléphone', phoneNum], ['Email', email], ['Offre conseillée', cd.offer],
+    ['Démo souhaitée', cd.wantsDemo === undefined ? '' : (cd.wantsDemo ? '✅ Oui' : 'Non')], ['Besoin', cd.need]]
+    .filter(function (f) { return f[1]; });
+  var body =
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">' +
+      (phoneNum ? '<a class="callbtn" href="' + esc(telHref(phoneNum)) + '">📞 Rappeler · ' + esc(phoneNum) + '</a>' : '') +
+      (email ? '<a class="callbtn ghost" href="mailto:' + esc(email) + '">✉️ Envoyer un email</a>' : '') +
+    '</div>' +
+    (summary ? '<div class="sumbox"><small>Résumé de l\'appel</small>' + esc(summary) + '</div>' : '') +
+    (facts.length ? '<div class="ffacts">' + facts.map(function (f) { return '<div>' + f[0] + '<b>' + esc(f[1]) + '</b></div>'; }).join('') + '</div>' : '') +
+    '<div class="secttl">Transcription</div>' +
+    (data.messages.length ? '<div class="thread">' + data.messages.map(function (m) {
+      return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + esc(m.content) + '</div>';
+    }).join('') + '</div>' : '<p class="cell-sub">Aucune parole n\'a été enregistrée pendant cet appel.</p>');
+  openDrawer(
+    (c.voice_source === 'phone' ? '📞 ' : '🎙️ ') + who,
+    src + ' · ' + new Date(c.started_at).toLocaleString('fr-FR') + (c.duration_secs ? ' · ' + fmtDur(c.duration_secs) : '') +
+      (c.caller_number ? ' · depuis le ' + c.caller_number : ''),
+    body
+  );
 }
 
 async function openTranscript(id) {
@@ -1854,6 +2040,7 @@ async function openTranscript(id) {
     var res = await fetch(API + '/api/dashboard/conversations/' + id, { credentials: 'include' });
     var data = await res.json();
     var atts = data.attachments || [];
+    if (data.conversation.channel === 'voice') { openCallDrawer(data); return; }
     var body = '<div class="thread">' + data.messages.map(function (m) {
       var files = atts.filter(function (x) { return x.message_id === m.id; }).map(function (x) {
         var url = API + '/api/dashboard/attachments/' + x.id;
@@ -2242,13 +2429,15 @@ function renderOverviewLeads(leads) {
 
   var table = $('#ovLeadsTable');
   if (!table) return;
-  var recent = leads.slice(0, 5);
+  var showChan = OV_HAS_VOICE || leads.some(isVoiceLead);
+  var recent = leads.filter(function (l) { return OV_CHANNEL === 'all' || (OV_CHANNEL === 'voice' ? isVoiceLead(l) : !isVoiceLead(l)); }).slice(0, 5);
   table.innerHTML =
-    '<thead><tr><th>Contact</th><th>Sujet</th><th>Score</th><th>Statut</th><th class="right">Reçu</th></tr></thead><tbody>' +
+    '<thead><tr><th>Contact</th><th>Sujet</th>' + (showChan ? '<th>Canal</th>' : '') + '<th>Score</th><th>Statut</th><th class="right">Reçu</th></tr></thead><tbody>' +
     (recent.length ? recent.map(function (l) {
       return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
         '<td>' + leadContactHtml(l) + '</td>' +
-        '<td class="cell-sub">' + esc(truncate(l.summary || l.message, 40)) + '</td>' +
+        '<td class="cell-sub">' + esc(truncate(l.summary || l.message, showChan ? 70 : 40)) + '</td>' +
+        (showChan ? '<td>' + chanBadge(l) + '</td>' : '') +
         '<td>' + scoreBarHtml(l.score) + '</td>' +
         '<td><span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span></td>' +
         '<td class="right cell-sub">' + new Date(l.createdAt).toLocaleString('fr-FR') + '</td></tr>';
@@ -2264,14 +2453,55 @@ function renderLeadKpis(leads) {
   var box = $('#leadKpis');
   if (!box) return;
   var contactes = leads.filter(function (l) { return l.status !== 'nouveau'; }).length;
+  if (OV_HAS_VOICE || leads.some(isVoiceLead)) {
+    var nv = leads.filter(isVoiceLead).length, nc = leads.length - nv;
+    var toCall = leads.filter(function (l) { return l.status === 'nouveau' && l.phone; });
+    var toCallPhone = toCall.filter(function (l) { return isVoiceLead(l) && l.voiceSource === 'phone'; }).length;
+    box.style.gridTemplateColumns = 'repeat(3,1fr)';
+    box.innerHTML =
+      '<div class="kpi kpi--hero"><div class="kpi__l">Leads captés</div><div class="kpi__v">' + leads.length + '</div>' +
+        '<div class="split2">' + (leads.length ? '<i style="width:' + (nc / leads.length * 100) + '%"></i><i class="v" style="width:' + (nv / leads.length * 100) + '%"></i>' : '') + '</div>' +
+        '<div class="kpi__s"><span>' + nc + ' chat</span><span class="v">' + nv + ' voix</span></div></div>' +
+      '<div class="kpi"><div class="kpi__l">À rappeler</div><div class="kpi__v">' + toCall.length + '</div><div class="kpi__d">' +
+        (toCallPhone ? 'dont ' + plural(toCallPhone, 'appel téléphonique', 'appels téléphoniques') : 'Nouveaux leads avec un numéro') + '</div></div>' +
+      '<div class="kpi"><div class="kpi__l">Déjà pris en charge</div><div class="kpi__v">' + contactes + '</div><div class="kpi__d' + (contactes ? ' up' : '') + '">' +
+        (leads.length ? Math.round(contactes / leads.length * 100) + ' % des leads' : '—') + '</div></div>';
+    return;
+  }
+  box.style.gridTemplateColumns = 'repeat(2,1fr)';
   box.innerHTML =
     '<div class="kpi kpi--hero"><div class="kpi__l">Leads captés</div><div class="kpi__v">' + leads.length + '</div></div>' +
     '<div class="kpi"><div class="kpi__l">Déjà pris en charge</div><div class="kpi__v">' + contactes + '</div></div>';
 }
 
-function renderLeads(leads) {
+var LEAD_FILTER = 'all'; // 'all' | 'chat' | 'web' | 'phone'
+function leadMatches(l, f) {
+  if (f === 'all') return true;
+  if (f === 'chat') return !isVoiceLead(l);
+  if (f === 'phone') return isVoiceLead(l) && l.voiceSource === 'phone';
+  return isVoiceLead(l) && l.voiceSource !== 'phone';
+}
+function renderChips(box, items, current, onPick) {
+  box.innerHTML = items.map(function (it) {
+    return '<button type="button" data-f="' + it[0] + '" class="' + (it[0] === current ? 'on' : '') + '">' + it[1] + '<b>' + it[2] + '</b></button>';
+  }).join('');
+  $$('button', box).forEach(function (b) { b.addEventListener('click', function () { onPick(b.getAttribute('data-f')); }); });
+}
+function renderLeads(allLeads) {
   var isAdmin = ME.role === 'admin';
   var body = $('#leadsTable');
+  var chips = $('#leadChips');
+  var leads = allLeads;
+  if (chips) {
+    var withVoice = OV_HAS_VOICE || allLeads.some(isVoiceLead);
+    chips.hidden = !withVoice;
+    if (withVoice) {
+      var cnt = function (f) { return allLeads.filter(function (l) { return leadMatches(l, f); }).length; };
+      renderChips(chips, [['all', 'Tous', allLeads.length], ['chat', '💬 Chat', cnt('chat')], ['web', '🎙️ Voix · site', cnt('web')], ['phone', '📞 Téléphone', cnt('phone')]],
+        LEAD_FILTER, function (f) { LEAD_FILTER = f; renderLeads(LEADS_CACHE); });
+      leads = allLeads.filter(function (l) { return leadMatches(l, LEAD_FILTER); });
+    } else { LEAD_FILTER = 'all'; }
+  }
   body.innerHTML =
     '<thead><tr><th>Contact</th><th>Sujet</th><th>Canal</th><th>Score</th><th>Statut</th><th class="right">Reçu</th></tr></thead><tbody>' +
     (leads.length ? leads.map(function (l) {
@@ -2286,9 +2516,7 @@ function renderLeads(leads) {
       return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
         '<td>' + leadContactHtml(l) + '<button type="button" class="leadcard-btn" data-lead="' + esc(l.id) + '">Fiche →</button></td>' +
         '<td class="cell-sub">' + esc(leadNeedText(l)) + '</td>' +
-        '<td>' + (l.channel === 'voice'
-          ? '<span class="chan chan--voice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" stroke-linejoin="round"/></svg>IA vocale</span>'
-          : '<span class="chan chan--web"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="14" rx="3"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/></svg>Site web</span>') + '</td>' +
+        '<td>' + chanBadge(l) + '</td>' +
         '<td>' + scoreBarHtml(l.score) + '</td>' +
         '<td class="lead-status-cell">' + statusCell + '</td>' +
         '<td class="right cell-sub">' + new Date(l.createdAt).toLocaleString('fr-FR') + '</td></tr>';
