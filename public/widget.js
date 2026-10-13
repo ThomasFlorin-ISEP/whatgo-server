@@ -319,6 +319,43 @@
     .wgt-card:hover { border-color: var(--wgt-color); transform: translateY(-1px); }
     .wgt-card i { font-style: normal; color: var(--wgt-color); font-size: 1.1rem; line-height: 1; }
 
+    /* ---------- Appel vocal avec l'assistante ---------- */
+    .wgt-call { background: none; border: none; color: #fff; cursor: pointer; opacity: .85; width: 30px; height: 30px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; }
+    .wgt-call[hidden] { display: none; }
+    .wgt-call:hover { opacity: 1; background: rgba(255,255,255,.16); }
+    .wgt-call svg { width: 18px; height: 18px; }
+    .wgt-callui { position: absolute; left: 0; right: 0; bottom: 0; top: 0; z-index: 6; display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-start; gap: 6px; padding: max(44px, calc(env(safe-area-inset-top) + 30px)) 24px max(22px, env(safe-area-inset-bottom)); text-align: center;
+      color: #fff; background: radial-gradient(120% 80% at 50% 18%, color-mix(in srgb, var(--wgt-color) 78%, #fff 0%), color-mix(in srgb, var(--wgt-color) 55%, #0b0f14) 75%);
+      background-color: var(--wgt-color); animation: wgt-fadein .25s ease-out; }
+    .wgt-callui[hidden] { display: none; }
+    @keyframes wgt-fadein { from { opacity: 0; } to { opacity: 1; } }
+    .wgt-call-av { position: relative; width: 112px; height: 112px; margin: auto 0 14px; flex-shrink: 0; }
+    .wgt-call-av .wgt-av { width: 112px; height: 112px; position: relative; z-index: 1; box-shadow: 0 10px 30px rgba(0,0,0,.25); border: 3px solid rgba(255,255,255,.9); }
+    .wgt-call-ring { position: absolute; inset: -10px; border-radius: 50%; background: rgba(255,255,255,.22); transform: scale(1); transition: transform .08s linear; }
+    .wgt-call-ring.r2 { inset: -22px; background: rgba(255,255,255,.1); }
+    .wgt-callui.is-connecting .wgt-call-ring { animation: wgt-breathe 1.6s ease-in-out infinite; }
+    @keyframes wgt-breathe { 0%,100% { transform: scale(.94); opacity: .6; } 50% { transform: scale(1.06); opacity: 1; } }
+    .wgt-call-name { font-size: 1.35rem; font-weight: 700; }
+    .wgt-call-status { font-size: .86rem; opacity: .92; min-height: 1.2em; }
+    .wgt-call-time { font-size: .78rem; opacity: .75; font-variant-numeric: tabular-nums; }
+    .wgt-callui .wgt-call-cap { margin: 14px 0 0; min-height: 3.6em; max-width: 290px; font-size: .86rem; line-height: 1.4; color: #fff; opacity: .95;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .wgt-call-btns { display: flex; gap: 22px; margin-top: auto; padding-top: 18px; }
+    .wgt-call-btns button { width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer; display: grid; place-items: center;
+      transition: transform .15s, background .15s; }
+    .wgt-call-btns button:hover { transform: scale(1.06); }
+    .wgt-call-btns svg { width: 24px; height: 24px; }
+    .wgt-call-mute { background: rgba(255,255,255,.2); color: #fff; }
+    .wgt-call-mute.is-on { background: #fff; color: #1B2321; }
+    .wgt-call-end { background: #E5383B; color: #fff; box-shadow: 0 8px 22px rgba(229,56,59,.45); }
+    .wgt-call-lbls { display: flex; gap: 2px; font-size: .7rem; opacity: .85; }
+    .wgt-call-lbls span { width: 78px; }
+    .wgt-call-note { font-size: .68rem; opacity: .7; margin-top: 10px; }
+    .wgt-note { align-self: center; font-size: .72rem; color: #7A858F; background: #F2F4F7; border-radius: 999px; padding: 4px 11px; }
+    .wgt-card.wgt-card-call { border-color: var(--wgt-color); color: var(--wgt-color); }
+
     @media (max-width: 480px) {
       .wgt-root .wgt-panel { left: 16px; right: 16px; width: auto; }
       .wgt-root.wgt-center .wgt-panel { left: 16px; }
@@ -356,6 +393,9 @@
       <div class="wgt-head">
         <div class="wgt-head-txt"><div class="wgt-title"><b class="wgt-name"></b><span class="wgt-ia">IA</span></div><span class="wgt-sub"></span></div>
         <div class="wgt-head-btns">
+          <button class="wgt-call" type="button" aria-label="Appeler l'assistante" title="Appel vocal" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+          </button>
           <button class="wgt-more" type="button" aria-label="Options" aria-haspopup="true" aria-expanded="false">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
           </button>
@@ -373,6 +413,19 @@
         </div>
         <div class="wgt-sep"></div>
         <button type="button" role="menuitem" data-act="human"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="wgt-grow">Parler à un humain</span></button>
+      </div>
+      <div class="wgt-callui" hidden aria-live="polite">
+        <div class="wgt-call-av"><span class="wgt-call-ring r2"></span><span class="wgt-call-ring r1"></span></div>
+        <b class="wgt-call-name"></b>
+        <span class="wgt-call-status"></span>
+        <span class="wgt-call-time">00:00</span>
+        <p class="wgt-call-cap"></p>
+        <div class="wgt-call-btns">
+          <button type="button" class="wgt-call-mute" aria-label="Couper le micro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+          <button type="button" class="wgt-call-end" aria-label="Raccrocher"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-3.2 0-6.2.8-8.9 2.3-.7.4-1.1 1.1-1.1 1.9v2.3c0 .9.8 1.6 1.7 1.5l3.4-.5c.7-.1 1.3-.7 1.4-1.4l.3-1.9c1.1-.4 2.1-.5 3.2-.5s2.1.1 3.2.5l.3 1.9c.1.7.7 1.3 1.4 1.4l3.4.5c.9.1 1.7-.6 1.7-1.5v-2.3c0-.8-.4-1.5-1.1-1.9C18.2 9.8 15.2 9 12 9z"/></svg></button>
+        </div>
+        <div class="wgt-call-lbls"><span class="wgt-lbl-mute">Micro</span><span>Raccrocher</span></div>
+        <span class="wgt-call-note">Vous parlez à une IA. L'appel est transcrit pour l'équipe.</span>
       </div>
       <div class="wgt-log"></div>
       <div class="wgt-actions" hidden></div>
@@ -467,6 +520,7 @@
         });
       }
       if (data.mic) setupMic();
+      if (data.voice) setupVoice();
       if (data.suggestions) {
         // Soit une liste, soit { fr: [...], en: [...] } selon la langue de la page.
         var list = data.suggestions;
@@ -744,6 +798,166 @@
   // --- Conversation gardée pendant toute la visite, même en changeant de page ---
   var STATE_KEY = 'wgt-state-' + (BUSINESS || '');
   var saveTimer = null;
+  // --- Appel vocal avec l'assistante (agent ElevenLabs du client) ---
+  // Le navigateur parle directement à ElevenLabs ; à la fin, l'appel arrive
+  // dans le tableau de bord et le CRM via le webhook après appel.
+  var VOICE_SDK_URL = 'https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.25.0/dist/lib.iife.js';
+  var voiceEnabled = false, voiceSdkPromise = null, voiceConv = null, voiceStarting = false;
+  var voiceTimer = null, voiceStartAt = 0, voiceRaf = 0, voiceMuted = false, voiceMode = 'listening';
+  var callBtn = root.querySelector('.wgt-call');
+  var callUi = root.querySelector('.wgt-callui');
+  var callStatus = callUi.querySelector('.wgt-call-status');
+  var callTime = callUi.querySelector('.wgt-call-time');
+  var callCap = callUi.querySelector('.wgt-call-cap');
+  var callMute = callUi.querySelector('.wgt-call-mute');
+  var callRings = callUi.querySelectorAll('.wgt-call-ring');
+  function loadVoiceSdk() {
+    if (window.ElevenLabsClient && window.ElevenLabsClient.Conversation) return Promise.resolve(window.ElevenLabsClient);
+    if (voiceSdkPromise) return voiceSdkPromise;
+    voiceSdkPromise = new Promise(function (ok, ko) {
+      var sc = document.createElement('script');
+      sc.src = VOICE_SDK_URL; sc.async = true; sc.crossOrigin = 'anonymous';
+      sc.onload = function () { window.ElevenLabsClient ? ok(window.ElevenLabsClient) : ko(new Error('sdk')); };
+      sc.onerror = function () { voiceSdkPromise = null; ko(new Error('sdk')); };
+      document.head.appendChild(sc);
+    });
+    return voiceSdkPromise;
+  }
+  function setupVoice() {
+    if (voiceEnabled) return;
+    voiceEnabled = true;
+    callBtn.hidden = false;
+    if (welcomeShown) showQuickReplies();
+    if (panel.classList.contains('wgt-open')) loadVoiceSdk().catch(function () {});
+  }
+  callBtn.addEventListener('click', function () { startVoiceCall(); });
+  callUi.querySelector('.wgt-call-end').addEventListener('click', function () { endVoiceCall(); });
+  callMute.addEventListener('click', function () {
+    voiceMuted = !voiceMuted;
+    callMute.classList.toggle('is-on', voiceMuted);
+    callMute.setAttribute('aria-label', voiceMuted ? 'Réactiver le micro' : 'Couper le micro');
+    callUi.querySelector('.wgt-lbl-mute').textContent = voiceMuted ? 'Micro coupé' : 'Micro';
+    try { if (voiceConv) voiceConv.setMicMuted(voiceMuted); } catch (e) {}
+    setCallStatus();
+  });
+  function fmtDur(ms) { var t = Math.max(0, Math.round(ms / 1000)); return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60); }
+  function setCallStatus(text) {
+    if (text) { callStatus.textContent = text; return; }
+    if (voiceMuted) { callStatus.textContent = 'Micro coupé'; return; }
+    callStatus.textContent = voiceMode === 'speaking' ? BOT_NAME + ' parle…' : BOT_NAME + ' vous écoute…';
+  }
+  function openCallUi() {
+    var avBox = callUi.querySelector('.wgt-call-av');
+    var oldAv = avBox.querySelector('.wgt-av'); if (oldAv) oldAv.remove();
+    avBox.appendChild(makeAvatar());
+    callUi.querySelector('.wgt-call-name').textContent = BOT_NAME;
+    callCap.textContent = '';
+    callTime.textContent = '00:00';
+    voiceMuted = false; callMute.classList.remove('is-on');
+    callUi.querySelector('.wgt-lbl-mute').textContent = 'Micro';
+    callUi.classList.add('is-connecting');
+    callUi.hidden = false;
+    setCallStatus('Connexion…');
+  }
+  function closeCallUi() {
+    callUi.hidden = true;
+    callUi.classList.remove('is-connecting');
+    clearInterval(voiceTimer); voiceTimer = null;
+    cancelAnimationFrame(voiceRaf); voiceRaf = 0;
+  }
+  function animateRings() {
+    if (!voiceConv) return;
+    var v = 0;
+    try { v = voiceMode === 'speaking' ? voiceConv.getOutputVolume() : (voiceMuted ? 0 : voiceConv.getInputVolume()); } catch (e) { v = 0; }
+    v = Math.min(1, Math.max(0, v || 0));
+    if (callRings[1]) callRings[1].style.transform = 'scale(' + (1 + v * 0.35).toFixed(3) + ')';
+    if (callRings[0]) callRings[0].style.transform = 'scale(' + (1 + v * 0.6).toFixed(3) + ')';
+    voiceRaf = requestAnimationFrame(animateRings);
+  }
+  function addNote(text) {
+    var n = el('div', 'wgt-note', text);
+    log.appendChild(n);
+    log.scrollTop = log.scrollHeight;
+  }
+  function voiceErrorText(err) {
+    var m = String((err && (err.name + ' ' + err.message)) || err || '');
+    if (/NotAllowed|Permission|denied|refus/i.test(m)) return "Je n'ai pas accès à votre micro. Autorisez-le dans votre navigateur (icône à gauche de l'adresse du site), puis réessayez.";
+    if (/NotFound|no.*device|Requested device/i.test(m)) return "Aucun micro n'a été trouvé sur cet appareil. Vous pouvez continuer à m'écrire ici.";
+    if (/sdk/i.test(m)) return "L'appel vocal n'a pas pu se charger. Vérifiez votre connexion, ou continuez à m'écrire ici.";
+    return (err && err.userMessage) || "L'appel n'a pas pu démarrer. Réessayez dans un instant, ou continuez à m'écrire ici.";
+  }
+  async function startVoiceCall() {
+    if (voiceConv || voiceStarting || !BUSINESS) return;
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      addMessage('bot', "L'appel vocal n'est pas disponible sur ce navigateur. Vous pouvez continuer à m'écrire ici.");
+      return;
+    }
+    voiceStarting = true;
+    closeMenu();
+    if (!panel.classList.contains('wgt-open')) openPanel(true);
+    openCallUi();
+    try {
+      var sessionP = fetch(API_BASE + '/api/widget/' + encodeURIComponent(BUSINESS) + '/voice-session').then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) {
+          if (!r.ok) { var e = new Error('session'); e.userMessage = d.error; throw e; }
+          return d;
+        });
+      });
+      var sdk = await loadVoiceSdk();
+      var sess = await sessionP;
+      var opts = {
+        onConnect: function () {
+          callUi.classList.remove('is-connecting');
+          voiceStartAt = Date.now();
+          clearInterval(voiceTimer);
+          voiceTimer = setInterval(function () { callTime.textContent = fmtDur(Date.now() - voiceStartAt); }, 500);
+          setCallStatus();
+          addNote('📞 Appel vocal avec ' + BOT_NAME);
+        },
+        onModeChange: function (ev) { voiceMode = (ev && ev.mode) || 'listening'; setCallStatus(); },
+        onMessage: function (msg) {
+          var text = String((msg && msg.message) || '').trim();
+          if (!text) return;
+          var who = msg.source === 'user' || msg.role === 'user' ? 'user' : 'bot';
+          callCap.textContent = (who === 'user' ? 'Vous : ' : '') + text;
+          addMessage(who, text);
+          history.push({ role: who === 'user' ? 'user' : 'assistant', content: text });
+          hasInteracted = true;
+        },
+        onError: function (message) { console.warn('[WHATGO] appel vocal :', message); },
+        onDisconnect: function (details) {
+          var dur = voiceStartAt ? Date.now() - voiceStartAt : 0;
+          voiceConv = null; voiceStartAt = 0;
+          closeCallUi();
+          if (dur) addNote('Appel terminé · ' + fmtDur(dur));
+          if (details && details.reason === 'error' && !dur) addMessage('bot', voiceErrorText(details.message || ''));
+          showQuickReplies();
+        },
+      };
+      if (sess.conversationToken) { opts.conversationToken = sess.conversationToken; opts.connectionType = 'webrtc'; }
+      else { opts.agentId = sess.agentId; }
+      voiceConv = await sdk.Conversation.startSession(opts);
+      voiceStarting = false;
+      voiceRaf = requestAnimationFrame(animateRings);
+      // Ce qui a déjà été écrit dans le chat sert de contexte à l'appel.
+      var recent = history.filter(function (h) { return h.content; }).slice(-8).map(function (h) {
+        return (h.role === 'user' ? 'Visiteur' : BOT_NAME) + ' : ' + String(h.content).slice(0, 300);
+      }).join('\n');
+      if (recent && voiceConv.sendContextualUpdate) {
+        try { voiceConv.sendContextualUpdate("Le visiteur discutait par écrit juste avant cet appel. Échange précédent :\n" + recent.slice(0, 2000)); } catch (e) {}
+      }
+    } catch (err) {
+      voiceStarting = false;
+      voiceConv = null;
+      closeCallUi();
+      addMessage('bot', voiceErrorText(err));
+    }
+  }
+  function endVoiceCall() {
+    if (voiceConv) { try { voiceConv.endSession(); } catch (e) {} }
+    else closeCallUi();
+  }
+
   function saveStateSoon() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveState, 0);
@@ -829,6 +1043,7 @@
   // Ils restent affichés en permanence au-dessus du champ de saisie.
   function showQuickReplies() {
     var chips = [];
+    if (voiceEnabled) chips.push(['📞 Parler à ' + BOT_NAME, function () { startVoiceCall(); }, 'call']);
     if (bookingServices) {
       chips.push(['📅 Prendre rendez-vous', function () {
         addMessage('user', 'Je souhaite prendre rendez-vous');
@@ -872,7 +1087,7 @@
       // Avant le premier message : les questions en cartes sous l'accueil.
       cardsBox = el('div', 'wgt-cards');
       chips.forEach(function (c) {
-        var b = el('button', 'wgt-card');
+        var b = el('button', 'wgt-card' + (c[2] === 'call' ? ' wgt-card-call' : ''));
         b.type = 'button';
         b.appendChild(el('span', null, c[0]));
         b.appendChild(el('i', null, '›'));
@@ -1342,6 +1557,7 @@
     showWelcome();
     saveStateSoon();
     if (byUser && !isPhone()) setTimeout(function () { input.focus(); }, 50);
+    if (voiceEnabled) loadVoiceSdk().catch(function () {});
   }
 
   function closePanel() {
@@ -1491,7 +1707,7 @@
     var item = e.target.closest ? e.target.closest('[data-act]') : null;
     if (!item) return;
     var act = item.getAttribute('data-act');
-    if (act === 'new') { closeMenu(); resetConversation(); }
+    if (act === 'new') { closeMenu(); if (voiceConv) endVoiceCall(); resetConversation(); }
     else if (act === 'pos') { applyPosition(item.getAttribute('data-pos')); lsSet('wgt-pos', currentPos); syncMenu(); }
     else if (act === 'expand') { panel.classList.toggle('wgt-expanded'); syncMenu(); log.scrollTop = log.scrollHeight; }
     else if (act === 'sound') { soundOn = !soundOn; lsSet('wgt-sound', soundOn ? 'on' : 'off'); syncMenu(); if (soundOn) { unlockAudio(); ding(); } }
