@@ -1678,6 +1678,14 @@ app.get('/api/widget/:slug/voice-session', async (req, res) => {
   }
 });
 
+// Déroulé d'un appel vocal du chat (fin, échec), écrit dans les logs Render.
+app.post('/api/widget/:slug/voice-log', (req, res) => {
+  if (isRateLimited(`voicelog:${clientIp(req)}`, 20, 15 * 60 * 1000)) return res.status(429).end();
+  const b = req.body || {};
+  console.log(`📞 Appel vocal (${String(req.params.slug).slice(0, 40)}) [${String(b.kind || '').slice(0, 10)}] ${String(b.detail || '').slice(0, 600)} — ${String(b.ua || '').slice(0, 160)}`);
+  res.json({ ok: true });
+});
+
 function verifyElevenLabsSignature(req) {
   const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
   if (!secret) return true; // pas encore configuré : accepté (phase de test)
