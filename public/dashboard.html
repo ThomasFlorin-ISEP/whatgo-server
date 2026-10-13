@@ -668,14 +668,15 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 
     <!-- ============================== RENDEZ-VOUS (réel, version simple) -->
     <section class="tab-page" id="page-appointments">
-      <div class="topbar"><div><h2>Rendez-vous</h2><p>Les rendez-vous de votre agenda connecté, et les leads marqués « RDV pris » (changez le statut d'un lead dans l'onglet Leads).</p></div></div>
+      <div class="topbar"><div><h2>Rendez-vous</h2><p>Les rendez-vous de votre agenda connecté, dont les démos réservées depuis le chat.</p></div></div>
 
       <div class="card" id="calCard">
         <div class="card__head"><div><h3>📅 Votre agenda</h3><p class="card__sub" id="calSub">Les rendez-vous de votre agenda (Google, Outlook, Apple), y compris les démos réservées depuis le chat.</p></div>
           <div id="calActs" style="display:flex;gap:8px"></div></div>
         <div id="calBody"><p class="cell-sub">Chargement…</p></div>
       </div>
-      <div class="card card--flush">
+      <!-- Ancien tableau des leads « RDV pris » : retiré, l'agenda connecté le remplace. -->
+      <div class="card card--flush" hidden>
         <div class="tablewrap"><table class="tbl" id="appointmentsTable"></table></div>
       </div>
     </section>
