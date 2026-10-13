@@ -763,12 +763,12 @@ function slugify(name) {
 // permet de la changer sans toucher au code installé sur le site du client.
 app.get('/api/widget/:slug/look', async (req, res) => {
   try {
-    const { rows } = await query('SELECT bot_name, bot_avatar, bot_suggestions FROM businesses WHERE slug = $1', [req.params.slug]);
+    const { rows } = await query('SELECT slug, bot_name, bot_avatar, bot_suggestions, voice_agent_id FROM businesses WHERE slug = $1', [req.params.slug]);
     if (!rows[0]) return res.status(404).json({ error: 'Entreprise inconnue.' });
     let suggestions = null;
     try { suggestions = rows[0].bot_suggestions ? JSON.parse(rows[0].bot_suggestions) : null; } catch (e) { suggestions = null; }
     res.setHeader('Cache-Control', 'public, max-age=60');
-    res.json({ name: botNameOf(rows[0]), avatar: botAvatarOf(rows[0]), suggestions, mic: Boolean(GROQ_API_KEY) });
+    res.json({ name: botNameOf(rows[0]), avatar: botAvatarOf(rows[0]), suggestions, mic: Boolean(GROQ_API_KEY), voice: Boolean(voiceAgentIdOf(rows[0])) });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
@@ -1437,6 +1437,55 @@ app.get('/api/dashboard/attachments/:id', requireAuth, requireRole(['admin', 'le
 // Client retrouvé par l'ID de l'agent (Paramètres → Agent vocal), sinon
 // par ?business=slug dans l'adresse du webhook.
 // ------------------------------------------------------------
+// Agent vocal d'un client : réglé dans Paramètres → Agent vocal ; pour le
+// chat de WHATGO lui-même, la variable Render WHATGO_VOICE_AGENT_ID suffit.
+function voiceAgentIdOf(b) {
+  if (!b) return null;
+  return b.voice_agent_id || (b.slug === 'whatgo' && process.env.WHATGO_VOICE_AGENT_ID) || null;
+}
+
+// « Parler à Victoria » dans le chat : le navigateur du visiteur se connecte
+// directement à ElevenLabs. Avec ELEVENLABS_API_KEY, on remet un jeton
+// temporaire (agent privé) ; sinon l'ID de l'agent (agent public).
+// Garde-fous anti-abus : chaque minute de voix consomme des crédits.
+const VOICE_DAILY_CAP = Number(process.env.VOICE_DAILY_CAP) || 40;
+const voiceDailyCounts = new Map(); // "AAAA-MM-JJ:businessId" -> nombre d'appels
+app.get('/api/widget/:slug/voice-session', async (req, res) => {
+  try {
+    const { rows } = await query('SELECT id, slug, voice_agent_id FROM businesses WHERE slug = $1', [req.params.slug]);
+    const business = rows[0];
+    const agentId = voiceAgentIdOf(business);
+    if (!agentId) return res.status(404).json({ error: "L'appel vocal n'est pas disponible." });
+    if (isRateLimited(`voice:${clientIp(req)}`, 4, 15 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop d’appels rapprochés. Réessayez dans quelques minutes ou écrivez-nous ici.' });
+    }
+    const dayKey = new Date().toISOString().slice(0, 10) + ':' + business.id;
+    const used = voiceDailyCounts.get(dayKey) || 0;
+    if (used >= VOICE_DAILY_CAP) {
+      return res.status(429).json({ error: "L'appel vocal est très demandé aujourd'hui. Écrivez-nous ici, on vous répond tout de suite." });
+    }
+    voiceDailyCounts.set(dayKey, used + 1);
+    if (voiceDailyCounts.size > 500) voiceDailyCounts.clear();
+
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    if (apiKey) {
+      try {
+        const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`,
+          { headers: { 'xi-api-key': apiKey } });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.token) return res.json({ conversationToken: d.token });
+        console.error('Jeton ElevenLabs refusé :', r.status, JSON.stringify(d).slice(0, 200));
+      } catch (e) {
+        console.error('Jeton ElevenLabs indisponible :', e.message);
+      }
+    }
+    res.json({ agentId });
+  } catch (err) {
+    console.error('Erreur /api/widget/:slug/voice-session:', err);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 function verifyElevenLabsSignature(req) {
   const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
   if (!secret) return true; // pas encore configuré : accepté (phase de test)
@@ -1475,6 +1524,9 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
 
     let business = null;
     if (agentId) business = (await query('SELECT * FROM businesses WHERE voice_agent_id = $1 LIMIT 1', [agentId])).rows[0] || null;
+    if (!business && agentId && agentId === process.env.WHATGO_VOICE_AGENT_ID) {
+      business = (await query("SELECT * FROM businesses WHERE slug = 'whatgo'")).rows[0] || null;
+    }
     if (!business && req.query.business) {
       business = (await query('SELECT * FROM businesses WHERE slug = $1', [String(req.query.business)])).rows[0] || null;
     }
@@ -1503,7 +1555,7 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     const startSecs = Number(meta.start_time_unix_secs) || Math.floor(Date.now() / 1000);
     const duration = Number(meta.call_duration_secs) || null;
     const callerNumber = meta.phone_call && (meta.phone_call.external_number || meta.phone_call.from_number);
-    const label = '📞 ' + ([firstName, company].filter(Boolean).join(' — ') || callerNumber || 'Appel téléphonique');
+    const label = '📞 ' + ([firstName, company].filter(Boolean).join(' — ') || callerNumber || (meta.phone_call ? 'Appel téléphonique' : 'Appel depuis le site'));
 
     const { rows: c } = await query(
       `INSERT INTO conversations (business_id, visitor_label, started_at, channel, external_id, duration_secs)
