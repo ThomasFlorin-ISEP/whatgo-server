@@ -585,6 +585,7 @@ function parseAppointmentConfirmation(replyText) {
 // ------------------------------------------------------------
 const FOLLOWUPS_MARKER_REGEX = /\[\s*SUITES?\s*:\s*([^\]]*)\]/gi;
 const CONTACT_FORM_MARKER = '[FORMULAIRE_CONTACT]';
+const DEMO_LINK_MARKER_REGEX = /\[\s*LIEN_DEMO\s*\]/gi;
 const CONTACT_ASK_REGEX = /\b(votre|vos|ton|tes|your)\s+(adresse\s+)?(e-?mail|mail|num[ée]ro|t[ée]l[ée]phone|portable|coordonn[ée]es|phone|contact details)/i;
 const CHAT_UX_INSTRUCTION =
   `\n\nMISE EN FORME : réponses courtes et aérées. Tu peux mettre en **gras** les points clés et faire des listes ` +
@@ -616,10 +617,12 @@ function extractChatExtras(reply, hasContactInfo) {
     }
     return '';
   });
+  const demoLink = /\[\s*LIEN_DEMO\s*\]/i.test(text);
+  text = text.replace(DEMO_LINK_MARKER_REGEX, '');
   const hadMarker = text.includes(CONTACT_FORM_MARKER);
   text = text.split(CONTACT_FORM_MARKER).join('').trim();
   const contactForm = !hasContactInfo && (hadMarker || CONTACT_ASK_REGEX.test(text));
-  return { text, followups, contactForm };
+  return { text, followups, contactForm, demoLink };
 }
 
 // Réponse où l'IA reconnaît ne pas savoir : remontée dans « Questions à améliorer ».
@@ -645,7 +648,25 @@ function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentD
       `si on te demande si tu es un humain, réponds que tu es une IA et propose de mettre le visiteur en relation avec l'équipe.`;
   }
 
-  if (shouldOfferAppointment) {
+  const demoUrl = business.demo_booking_url;
+  if (demoUrl) {
+    prompt += `\n\nRÉSERVATION D'UNE DÉMO / D'UN RENDEZ-VOUS : le visiteur choisit lui-même son créneau sur notre agenda en ligne. ` +
+      `Dès qu'il souhaite une démo, un rendez-vous ou un appel, ou qu'il accepte ta proposition, réponds en une phrase courte ` +
+      `(ex : "Avec plaisir ! Choisissez le créneau qui vous convient ici :") puis ajoute le marqueur [LIEN_DEMO], seul sur sa ligne, ` +
+      `juste avant la ligne [SUITES: ...] : un bouton vers l'agenda s'affichera. Ne propose jamais toi-même de date ni d'heure, ` +
+      `n'écris jamais l'adresse du lien et ne confirme jamais un rendez-vous toi-même. Tu peux proposer de laisser son email ` +
+      `si le visiteur préfère être recontacté.`;
+  }
+  if (shouldOfferAppointment && demoUrl) {
+    prompt += `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
+      `Ce visiteur montre assez d'intérêt pour qu'on lui propose une démo.\n` +
+      `1. Réponds D'ABORD complètement à sa question, comme d'habitude.\n` +
+      `2. Puis, dans un paragraphe à part, propose-lui avec tact une démo adaptée à l'activité de l'entreprise, sous forme de ` +
+      `question, par exemple : "Souhaitez-vous organiser une démo pour que nous puissions vous montrer notre produit ? Vous ` +
+      `pouvez choisir votre créneau directement ici :" puis ajoute le marqueur [LIEN_DEMO].\n` +
+      `3. Ne demande pas ses coordonnées dans ce message.\n` +
+      `Écris tout dans la langue de la conversation.`;
+  } else if (shouldOfferAppointment) {
     const slots = String(appointmentDateLabel || '').split(' || ');
     prompt += `\n\nINSTRUCTION POUR CETTE RÉPONSE UNIQUEMENT :\n` +
       `Ce visiteur montre assez d'intérêt pour qu'on lui propose un rendez-vous.\n` +
@@ -663,7 +684,7 @@ function buildSystemPromptForCall(business, shouldOfferAppointment, appointmentD
       `Écris tout dans la langue de la conversation (traduis les dates si besoin).`;
   }
 
-  if (appointmentInProgress) {
+  if (appointmentInProgress && !business.demo_booking_url) {
     if (hasContactInfo) {
       prompt += `\n\nINSTRUCTION DE CONFIRMATION DE RENDEZ-VOUS (permanente pour cette conversation) :\n` +
         `Si le visiteur accepte une date de rendez-vous, ou en propose/confirme une autre précise (même différente de celle ` +
@@ -973,7 +994,7 @@ function parseSuggestions(raw) {
 }
 app.get('/api/dashboard/bot-look', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
-    const { rows } = await query('SELECT bot_name, bot_avatar, bot_suggestions FROM businesses WHERE id = $1', [req.user.businessId]);
+    const { rows } = await query('SELECT bot_name, bot_avatar, bot_suggestions, demo_booking_url FROM businesses WHERE id = $1', [req.user.businessId]);
     const b = rows[0] || {};
     const sugg = parseSuggestions(b.bot_suggestions);
     const list = Array.isArray(sugg) ? sugg : (sugg && (sugg.fr || sugg.en)) || [];
@@ -981,6 +1002,7 @@ app.get('/api/dashboard/bot-look', requireAuth, requireRole(['admin', 'lecture']
       name: botNameOf(b),
       avatar: botAvatarOf(b),
       suggestions: list.map((q) => (typeof q === 'string' ? q : q.text || q.label)).filter(Boolean),
+      demoUrl: b.demo_booking_url || '',
     });
   } catch (err) {
     console.error('Erreur GET /api/dashboard/bot-look:', err);
@@ -997,6 +1019,8 @@ app.put('/api/dashboard/bot-look', requireAuth, requireRole('admin'), async (req
       /^\/avatars\/[a-z0-9-]+\.(jpg|png|svg)$/.test(avatar) ||
       /^https:\/\/[^\s"'<>]+$/.test(avatar) && avatar.length < 500;
     if (!okAvatar) return res.status(400).json({ error: 'Photo invalide (JPG ou PNG, 100 Ko maximum).' });
+    const demoUrl = String(body.demoUrl || '').trim().slice(0, 500);
+    if (demoUrl && !/^https:\/\/[^\s"'<>]+$/.test(demoUrl)) return res.status(400).json({ error: 'Le lien de réservation doit commencer par https://' });
     const list = (Array.isArray(body.suggestions) ? body.suggestions : [])
       .map((q) => String(q || '').trim().slice(0, 80)).filter(Boolean).slice(0, 6);
 
@@ -1011,9 +1035,9 @@ app.put('/api/dashboard/bot-look', requireAuth, requireRole('admin'), async (req
     } else {
       stored = list;
     }
-    await query('UPDATE businesses SET bot_name = $1, bot_avatar = $2, bot_suggestions = $3 WHERE id = $4',
+    await query('UPDATE businesses SET bot_name = $1, bot_avatar = $2, bot_suggestions = $3, demo_booking_url = $4 WHERE id = $5',
       // Chaînes vides (pas NULL) : un réglage vidé volontairement n'est jamais re-rempli au redémarrage.
-      [name, avatar, JSON.stringify(stored), req.user.businessId]);
+      [name, avatar, JSON.stringify(stored), demoUrl, req.user.businessId]);
     res.json({ ok: true });
   } catch (err) {
     console.error('Erreur PUT /api/dashboard/bot-look:', err);
@@ -2333,7 +2357,9 @@ app.post('/api/chat', async (req, res) => {
     // avec la date exacte annoncée au visiteur. Si un lead existe déjà pour
     // cette conversation, on la reporte aussi dessus, pour qu'elle
     // s'affiche dans l'onglet "Rendez-vous" du dashboard.
-    if (shouldOfferAppointment) {
+    if (shouldOfferAppointment && business.demo_booking_url) {
+      await query('UPDATE conversations SET rdv_offered = true WHERE id = $1', [convoId]);
+    } else if (shouldOfferAppointment) {
       await query(
         'UPDATE conversations SET rdv_offered = true, appointment_at = $1 WHERE id = $2',
         [appointmentDate, convoId]
@@ -2401,6 +2427,7 @@ app.post('/api/chat', async (req, res) => {
       followups: chatExtras.followups,
       // Pas de formulaire si un autre module (réservation, séjour…) s'affiche déjà.
       contactForm: chatExtras.contactForm && !ui,
+      demoLink: chatExtras.demoLink && !ui ? (business.demo_booking_url || null) : null,
     });
 
     productItems.forEach((p) => logChatEvent(business.id, convoId, 'recommend', p.id, p.name));

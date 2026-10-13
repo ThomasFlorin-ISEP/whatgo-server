@@ -1160,6 +1160,21 @@
     return bookingLink ? 'Avec plaisir ! Voici notre page de réservation :' : 'Avec plaisir ! Choisissez votre prestation :';
   }
 
+  // Lien de réservation de démo (Google Agenda, Calendly…) donné par l'assistante.
+  function showDemoLink(url) {
+    if (!/^https:\/\//i.test(String(url || ''))) return;
+    var card = el('div', 'wgt-bk');
+    card.appendChild(el('h4', null, 'Réservez votre créneau'));
+    card.appendChild(el('p', 'wgt-bk-muted', 'Choisissez le moment qui vous arrange : la confirmation arrive par email.'));
+    var a = el('a', 'wgt-cta', '📅 Choisir un créneau');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    a.style.display = 'block'; a.style.textAlign = 'center'; a.style.textDecoration = 'none'; a.style.marginTop = '10px';
+    a.addEventListener('click', function () { history.push({ role: 'user', content: '📅 A ouvert la page de réservation' }); });
+    card.appendChild(a);
+    log.appendChild(card);
+    scrollDown();
+  }
+
   // Mode "lien" : une carte avec un bouton vers la page de réservation du client.
   function showBookingLink() {
     var card = el('div', 'wgt-bk');
@@ -2008,7 +2023,8 @@
           if (data.ui && data.ui.type === 'products' && data.ui.items && data.ui.items.length) showProducts(data.ui.items);
           if (data.ui && data.ui.type === 'order') showOrderForm();
           if (data.ui && data.ui.type === 'stay' && hotelEnabled) showStayForm();
-          if (data.contactForm) showContactForm();
+          if (data.demoLink) showDemoLink(data.demoLink);
+          else if (data.contactForm) showContactForm();
           showFollowups(data.followups);
           saveStateSoon();
         } });
