@@ -2113,7 +2113,9 @@ app.get('/api/dashboard/voice-agent', requireAuth, requireRole(['admin', 'lectur
   try {
     const { rows } = await query('SELECT voice_agent_id, slug, voice_minutes_quota FROM businesses WHERE id = $1', [req.user.businessId]);
     if (!rows[0]) return res.status(404).json({ error: 'Entreprise introuvable.' });
-    res.json({ agentId: rows[0].voice_agent_id || '', minutesQuota: rows[0].voice_minutes_quota || null, webhookUrl: `${APP_URL}/api/voice/elevenlabs` });
+    const effective = voiceAgentIdOf(rows[0]);
+    res.json({ agentId: rows[0].voice_agent_id || '', effectiveAgentId: effective || '', managedBySetting: !rows[0].voice_agent_id && !!effective,
+      minutesQuota: rows[0].voice_minutes_quota || null, webhookUrl: `${APP_URL}/api/voice/elevenlabs` });
   } catch (err) {
     console.error('Erreur /api/dashboard/voice-agent:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
