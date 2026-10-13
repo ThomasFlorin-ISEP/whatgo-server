@@ -1264,6 +1264,7 @@ function parseIcs(text) {
     else if (name === 'LOCATION') ev.location = icsUnescape(value).slice(0, 300);
     else if (name === 'STATUS') ev.status = value.trim().toUpperCase();
     else if (name === 'UID') ev.uid = value.trim().slice(0, 200);
+    else if (name === 'CREATED') { const d = parseIcsDate(value, params); if (d) ev.created = d.ts; }
     else if (name === 'RRULE') ev.recurring = true;
     else if (name === 'X-GOOGLE-CONFERENCE') ev.meet = value.trim();
     else if (name === 'ATTENDEE') {
@@ -1278,6 +1279,10 @@ function parseIcs(text) {
     return {
       uid: e.uid || '', title: e.title || '(Sans titre)', start: e.start.ts, end: e.end ? e.end.ts : null, allDay: !!e.start.allDay,
       location: e.location && !/^https?:\/\//i.test(e.location) ? e.location : '', meet, recurring: !!e.recurring,
+      created: e.created || null,
+      // Réservation : créneau pris via une page de réservation (Google, Calendly…), ou démo / RDV avec un invité.
+      booked: /r[ée]serv[ée]e? par|booked by|calendar\.app\.google|calendly\.com|prise de rendez-vous|appointment/i.test(`${e.description || ''}`) ||
+        (e.attendees.length > 0 && /d[ée]mo|rendez[- ]?vous|\brdv\b|appointment|booking/i.test(e.title || '')),
       attendees: e.attendees.slice(0, 10),
     };
   });
@@ -1480,6 +1485,20 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
         const dayKey = (ts) => new Date(ts).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
         const todayKey = dayKey(Date.now());
         calToday = cal.events.filter((e) => !e.allDay && dayKey(e.start) === todayKey).length;
+        // Réservations faites dans l'agenda (date de création) : comptées dans « Rendez-vous pris »
+        // côté chat, sans double compte avec les leads déjà marqués « RDV pris ».
+        if (channel !== 'voice') {
+          const dayMs = 86400000;
+          const t0 = new Date(todayKey + 'T00:00:00').getTime();
+          const curFrom = t0 - (days - 1) * dayMs, prevFrom = curFrom - days * dayMs;
+          const booked = cal.events.filter((e) => e.booked && e.created);
+          const calCur = booked.filter((e) => e.created >= curFrom).length;
+          const calPrev = booked.filter((e) => e.created >= prevFrom && e.created < curFrom).length;
+          const chatRdv = Math.max(0, n(rdv.cur) - n(rdv.vcur));
+          if (calCur > chatRdv) rdv.cur = n(rdv.vcur) + calCur;
+          if (calPrev > n(rdv.prev)) rdv.prev = calPrev;
+          if (calCur > funnel.chat.rdv) funnel.chat.rdv = calCur;
+        }
       } catch (e) { calToday = null; }
     }
 
