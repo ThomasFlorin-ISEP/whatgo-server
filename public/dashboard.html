@@ -1801,7 +1801,7 @@ async function loadVoicePage() {
   us.innerHTML = '<div class="card__head"><div><h3>Consommation du mois</h3><p class="card__sub">Minutes de voix utilisées depuis le 1er (téléphone + site).</p></div></div>' +
     '<div class="vpbig">' + used + ' <small>' + (q ? '/ ' + q + ' min' : 'min') + '</small></div>' +
     (q ? '<div class="mbar' + (pct > 100 ? ' is-over' : '') + '" style="height:10px"><i style="width:' + Math.min(100, Math.max(used ? 2 : 0, pct)) + '%"></i></div>' +
-      '<p class="cell-sub" style="margin-top:6px">' + pct + ' % du forfait' + (pct >= 80 ? ' · ⚠️ pensez à passer au forfait supérieur' : '') + '</p>'
+      '<p class="cell-sub" style="margin-top:6px"><b style="color:var(--ink)">' + (used >= q ? 'Forfait épuisé' : 'Il reste ' + (q - used) + ' min') + '</b> · ' + pct + ' % utilisés' + (pct >= 80 ? ' · ⚠️ pensez au forfait supérieur' : '') + '</p>'
       : '<p class="cell-sub" style="margin-top:6px">Indiquez les minutes de votre forfait dans « Réglages » pour suivre la jauge.</p>') +
     '<div class="vpmini"><div><b>' + (v.calls || 0) + '</b><span>appels (30 j)</span></div><div><b>' + (v.calls ? fmtDur(v.avgSecs) : '—') + '</b><span>durée moyenne</span></div>' +
     '<div><b>' + (v.leadRate === null || v.leadRate === undefined ? '—' : v.leadRate + ' %') + '</b><span>deviennent un lead</span></div></div>';
