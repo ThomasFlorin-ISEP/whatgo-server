@@ -1368,7 +1368,7 @@ function applyBusinessType(type) {
   ['#bkAgendaCard', '#bkSettingsForm'].forEach(function (sel) { var n = $(sel); if (n) n.hidden = !isRdv; });
   if (isRdv && $('#bkAgendaCard') && currentBookingMode() === 'link' && bkSettings) $('#bkAgendaCard').hidden = true;
   var addBtn = $('#bkAddToggle'); if (addBtn && !isRdv) addBtn.hidden = true;
-  var legacy = $('#legacyRdvCard'); if (legacy && !isRdv) legacy.hidden = false;
+  // Ancien tableau des leads « RDV pris » : retiré (l'agenda connecté le remplace).
   var intro = $('#rdvIntro');
   if (intro) intro.textContent = isRdv
     ? 'Votre agenda : les rendez-vous réservés par vos visiteurs directement dans le chat, et ceux que vous ajoutez vous-même (pris par téléphone, au comptoir…).'
@@ -2253,7 +2253,7 @@ function renderAppointments(leads) {
   var legacyCard = $('#legacyRdvCard');
   // Activité sur rendez-vous : l'agenda suffit, ce tableau n'apparaît que s'il
   // y a des RDV captés dans la conversation. Sinon, c'est la seule vue RDV.
-  if (legacyCard) legacyCard.hidden = ME.businessType === 'rdv' ? !rdv.length : false;
+  if (legacyCard) legacyCard.hidden = true; // retiré : l'agenda connecté le remplace
   body.innerHTML =
     '<thead><tr><th>Contact</th><th>Date du RDV</th><th>Message</th><th class="right">Enregistré</th></tr></thead><tbody>' +
     (rdv.length ? rdv.map(function (l) {
