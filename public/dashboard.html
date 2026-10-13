@@ -947,6 +947,9 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <div class="field"><label for="look-sugg">Questions fréquentes cliquables</label>
           <textarea id="look-sugg" rows="4" placeholder="Une question par ligne (6 maximum), ex. :&#10;Je souhaite obtenir une démo&#10;Quels sont vos tarifs ?"></textarea>
           <p class="help">Affichées en bas du chat : un clic envoie la question à l'assistant.</p></div>
+        <div class="field"><label for="look-demo">Lien de réservation (démo ou rendez-vous)</label>
+          <input type="url" id="look-demo" placeholder="https://calendar.app.google/… ou https://calendly.com/…" />
+          <p class="help">Quand un visiteur veut une démo ou un rendez-vous, l'assistante affiche un bouton « Choisir un créneau » vers ce lien. Laissez vide pour ne pas l'utiliser.</p></div>
         <button type="button" class="btn btn--primary" id="lookSave">Enregistrer</button>
       </div>
       <div class="card" style="max-width:560px" id="voiceCard" hidden>
@@ -1359,9 +1362,10 @@ async function loadBotLook() {
     $('#look-name').value = d.name || '';
     lookAvatar = d.avatar || '';
     $('#look-sugg').value = (d.suggestions || []).join('\n');
+    if ($('#look-demo')) $('#look-demo').value = d.demoUrl || '';
     renderLookPreview();
     var admin = ME && ME.role === 'admin';
-    ['#look-name', '#look-sugg', '#look-file', '#look-remove', '#lookSave'].forEach(function (s) { var n = $(s); if (n) n.disabled = !admin; });
+    ['#look-name', '#look-sugg', '#look-demo', '#look-file', '#look-remove', '#lookSave'].forEach(function (s) { var n = $(s); if (n) n.disabled = !admin; });
   } catch (e) { card.hidden = true; }
 }
 if ($('#look-file')) $('#look-file').addEventListener('change', function (e) {
@@ -1391,7 +1395,7 @@ if ($('#lookSave')) $('#lookSave').addEventListener('click', async function () {
   try {
     var res = await fetch(API + '/api/dashboard/bot-look', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ name: $('#look-name').value, avatar: lookAvatar, suggestions: suggestions }),
+      body: JSON.stringify({ name: $('#look-name').value, avatar: lookAvatar, suggestions: suggestions, demoUrl: $('#look-demo') ? $('#look-demo').value.trim() : '' }),
     });
     var d = await res.json().catch(function () { return {}; });
     if (!res.ok) throw new Error(d.error || '');

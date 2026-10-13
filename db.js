@@ -227,6 +227,9 @@ async function initDb() {
   await query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS call_data TEXT`);
   // Minutes de voix incluses dans le forfait du client (affichage de la jauge).
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS voice_minutes_quota INTEGER`);
+  // Lien de réservation de démo / rendez-vous (Google Agenda, Calendly…) donné par l'assistante.
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS demo_booking_url TEXT`);
+  await query(`UPDATE businesses SET demo_booking_url = 'https://calendar.app.google/vBGUnYEvtwq5uHbw9' WHERE slug = 'whatgo' AND demo_booking_url IS NULL`);
 
   console.log('✅ Schéma PostgreSQL prêt.');
 }
