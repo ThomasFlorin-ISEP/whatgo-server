@@ -172,7 +172,7 @@ button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit
 .field:last-child{margin-bottom:0}
 .field label,.lbl{display:block;font-size:.78rem;font-weight:600;color:var(--ink-soft);margin-bottom:6px}
 .field .help{font-size:.76rem;color:var(--ink-faint);margin-top:6px;line-height:1.45}
-input[type=text],input[type=email],input[type=password],input[type=url],input[type=tel],
+input[type=text],input[type=email],input[type=password],input[type=url],input[type=tel],input[type=number],
 textarea,select{
   width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-s);background:#fff;
   font-size:.88rem;transition:border-color .14s,box-shadow .14s}
@@ -237,6 +237,15 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .ovchart__bars i{display:block;width:42%;max-width:16px;border-radius:4px 4px 0 0;background:#9FDDB9;min-height:2px}
 .ovchart__bars i.l{background:var(--green-deep)}
 .ovchart__x{font-size:.66rem;color:var(--ink-faint);margin-top:6px;height:12px;white-space:nowrap}
+/* ---------- Page IA vocale ---------- */
+.vpgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:4px}
+.vpstat{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #E4E0FA;border-radius:14px;padding:12px}
+.vpstat b{display:block;font-size:.86rem;color:var(--ink)}.vpstat span{font-size:.76rem;color:var(--ink-soft);word-break:break-all}
+.vpdot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex-shrink:0;background:#C9CFCB}.vpdot.ok{background:var(--green);box-shadow:0 0 0 3px rgba(31,170,89,.18)}
+.vpbig{font-size:2.2rem;font-weight:700;color:var(--ink);margin:4px 0 10px}.vpbig small{font-size:1rem;color:#8A948F;font-weight:600}
+.vpmini{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.vpmini b{display:block;font-size:1.15rem;color:var(--ink)}.vpmini span{font-size:.74rem;color:var(--ink-soft)}
+@media (max-width:900px){.vpgrid{grid-template-columns:repeat(2,1fr)}}
 /* ---------- Agenda connecté ---------- */
 .calday{margin:14px 0 6px;font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8A948F}
 .calday.today{color:var(--green-deep)}
@@ -575,7 +584,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
         <span>WhatsApp</span><span class="pill-soon">Bientôt</span></button>
       <button class="nav-item" data-tab="voice" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.8 2.1z" stroke-linejoin="round"/></svg>
-        <span>IA vocale</span><span class="pill-soon">Bientôt</span></button>
+        <span>IA vocale</span></button>
 
       <div class="navgroup" data-grp="client">Connexions</div>
       <button class="nav-item" data-tab="integrations" data-grp="client" type="button">
@@ -846,20 +855,31 @@ table.tbl tbody tr:last-child td{border-bottom:none}
       </div>
     </section>
 
-    <!-- ============================== IA VOCALE (pas encore développé) -->
+    <!-- ============================== IA VOCALE -->
     <section class="tab-page" id="page-voice">
-      <div class="topbar"><div><h2>IA vocale</h2><p>Les appels que personne ne décroche, pris par le même assistant.</p></div></div>
-      <div class="betahero">
-        <div class="betahero__in">
-          <span class="betahero__ic" style="background:linear-gradient(160deg,#7F7BF0,#3E7BD6)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.8 2.1z" stroke-linejoin="round"/></svg>
-          </span>
-          <div class="betahero__t">
-            <span class="soonbadge">Bientôt disponible</span>
-            <h3>Standard téléphonique IA</h3>
-            <p>Bientôt disponible — cette fonctionnalité n'est pas encore développée.</p>
-          </div>
+      <div class="topbar"><div><h2>IA vocale</h2><p>Votre assistante répond à la voix : au téléphone et directement sur votre site.</p></div>
+        <div class="topbar__act"><button type="button" class="btn btn--ghost btn--sm" id="vpRefresh">↻ Actualiser</button></div></div>
+      <div class="card vcard" id="vpStatus"><p class="cell-sub">Chargement…</p></div>
+      <div class="split split--even" style="align-items:stretch">
+        <div class="card" id="vpUsage"></div>
+      <div class="card" id="voiceCard" hidden>
+          <div class="card__head"><div><h3>Réglages</h3>
+            <p class="card__sub">Relie votre agent téléphonique (ElevenLabs) : chaque appel apparaît dans Conversations et part dans votre CRM comme un lead.</p></div></div>
+          <div class="field"><label for="voice-agent">ID de l'agent ElevenLabs</label>
+            <input type="text" id="voice-agent" maxlength="120" placeholder="Ex. : agent_01k…" />
+            <p class="help">Dans ElevenLabs : page de l'agent → menu ⋯ ou Paramètres → « ID de l'agent ».</p></div>
+          <div class="field"><label for="voice-quota">Minutes de voix incluses par mois</label>
+            <input type="number" id="voice-quota" min="0" step="1" placeholder="Ex. : 275" />
+            <p class="help">Affiche la jauge de consommation ici et dans la Vue d'ensemble. Laissez vide pour ne pas l'afficher.</p></div>
+          <div class="field"><label>Adresse à coller dans ElevenLabs (webhook après appel)</label>
+            <input type="text" id="voice-url" readonly onclick="this.select()" /></div>
+          <button type="button" class="btn btn--primary" id="voiceSave">Enregistrer</button>
         </div>
+      </div>
+      <div class="card card--flush">
+        <div class="card__head card__head--pad"><div><h3>Derniers appels</h3><p class="card__sub">Cliquez sur un appel pour voir le résumé, les infos collectées et la transcription.</p></div>
+          <button class="btn btn--ghost btn--sm" type="button" onclick="switchTab('conversations')">Voir dans Conversations</button></div>
+        <div class="tablewrap"><table class="tbl" id="vpCalls"></table></div>
       </div>
     </section>
 
@@ -969,19 +989,6 @@ table.tbl tbody tr:last-child td{border-bottom:none}
           <input type="url" id="look-demo" placeholder="https://calendar.app.google/… ou https://calendly.com/…" />
           <p class="help">Quand un visiteur veut une démo ou un rendez-vous, l'assistante affiche un bouton « Choisir un créneau » vers ce lien. Laissez vide pour ne pas l'utiliser.</p></div>
         <button type="button" class="btn btn--primary" id="lookSave">Enregistrer</button>
-      </div>
-      <div class="card" style="max-width:560px" id="voiceCard" hidden>
-        <div class="card__head"><div><h3>Agent vocal</h3>
-          <p class="card__sub">Relie votre agent téléphonique (ElevenLabs) : chaque appel apparaît dans Conversations et part dans votre CRM comme un lead.</p></div></div>
-        <div class="field"><label for="voice-agent">ID de l'agent ElevenLabs</label>
-          <input type="text" id="voice-agent" maxlength="120" placeholder="Ex. : agent_01k…" />
-          <p class="help">Dans ElevenLabs : page de l'agent → menu ⋯ ou Paramètres → « ID de l'agent ».</p></div>
-        <div class="field"><label for="voice-quota">Minutes de voix incluses par mois</label>
-          <input type="number" id="voice-quota" min="0" step="1" placeholder="Ex. : 275" />
-          <p class="help">Affiche une jauge de consommation dans la Vue d'ensemble. Laissez vide pour ne pas l'afficher.</p></div>
-        <div class="field"><label>Adresse à coller dans ElevenLabs (webhook après appel)</label>
-          <input type="text" id="voice-url" readonly onclick="this.select()" /></div>
-        <button type="button" class="btn btn--primary" id="voiceSave">Enregistrer</button>
       </div>
       <div class="card" style="max-width:420px">
         <div class="card__head"><div><h3>Changer mon mot de passe</h3></div></div>
@@ -1160,7 +1167,8 @@ $$('.nav-item').forEach(function (el) {
 var diagnosticsNavItem = $('#diagnosticsNavItem');
 if (diagnosticsNavItem) diagnosticsNavItem.addEventListener('click', loadDiagnostics);
 function switchTab(tab) {
-  if (tab === 'settings') { loadBotLook(); loadVoiceAgent(); }
+  if (tab === 'settings') { loadBotLook(); }
+  if (tab === 'voice') loadVoicePage();
   if (tab === 'appointments') loadCalendar();
   if (tab === 'improve') loadImprove();
   if (tab === 'knowledge') loadDocs();
@@ -1511,6 +1519,48 @@ if ($('#lookSave')) $('#lookSave').addEventListener('click', async function () {
   } catch (e) { toast(e.message || "Impossible d'enregistrer.", true); }
 });
 
+var VOICE_INFO = null;
+async function loadVoicePage() {
+  var st = $('#vpStatus'), us = $('#vpUsage'), tb = $('#vpCalls');
+  if (!st) return;
+  await loadVoiceAgent();
+  var d = VOICE_INFO || {};
+  var ov = null, convs = [];
+  try { ov = await (await fetch(API + '/api/dashboard/overview?days=30&channel=all', { credentials: 'include' })).json(); } catch (e) {}
+  try { convs = await (await fetch(API + '/api/dashboard/conversations', { credentials: 'include' })).json(); } catch (e) {}
+  var calls = (Array.isArray(convs) ? convs : []).filter(function (c) { return c.channel === 'voice'; });
+  var v = (ov && ov.voice) || {};
+  var on = !!d.effectiveAgentId;
+  var phoneCalls = calls.filter(function (c) { return c.voice_source === 'phone'; }).length;
+  var pill = function (ok, label, sub) {
+    return '<div class="vpstat"><span class="vpdot ' + (ok ? 'ok' : 'off') + '"></span><div><b>' + label + '</b><span>' + sub + '</span></div></div>';
+  };
+  st.innerHTML = '<div class="card__head"><div class="vhead"><span class="ic">🎙️</span><div><h3>' + (on ? 'Votre assistante vocale est active' : 'Assistante vocale pas encore reliée') + '</h3>' +
+    '<p class="card__sub">' + (on ? 'Chaque appel arrive dans Conversations et Leads, puis dans votre CRM.' : 'Contactez l\'équipe WHATGO pour la mettre en place (voix, numéro, scénario).') + '</p></div></div></div>' +
+    '<div class="vpgrid">' +
+    pill(on, 'Agent vocal', on ? 'Relié · ' + esc(d.effectiveAgentId) : 'Non relié') +
+    pill(on, 'Sur votre site', on ? 'Bouton « Parler à » dans le chat' : 'Inactif') +
+    pill(phoneCalls > 0, 'Au téléphone', phoneCalls > 0 ? plural(phoneCalls, 'appel reçu', 'appels reçus') : 'Numéro à brancher (Twilio)') +
+    pill(calls.length > 0, 'Dernier appel', calls.length ? new Date(calls[0].started_at).toLocaleString('fr-FR') : 'Aucun pour l\'instant') +
+    '</div>';
+  var q = v.quota, used = v.monthMinutes || 0, pct = q ? Math.round(used / q * 100) : 0;
+  us.innerHTML = '<div class="card__head"><div><h3>Consommation du mois</h3><p class="card__sub">Minutes de voix utilisées depuis le 1er (téléphone + site).</p></div></div>' +
+    '<div class="vpbig">' + used + ' <small>' + (q ? '/ ' + q + ' min' : 'min') + '</small></div>' +
+    (q ? '<div class="mbar' + (pct > 100 ? ' is-over' : '') + '" style="height:10px"><i style="width:' + Math.min(100, Math.max(used ? 2 : 0, pct)) + '%"></i></div>' +
+      '<p class="cell-sub" style="margin-top:6px">' + pct + ' % du forfait' + (pct >= 80 ? ' · ⚠️ pensez à passer au forfait supérieur' : '') + '</p>'
+      : '<p class="cell-sub" style="margin-top:6px">Indiquez les minutes de votre forfait dans « Réglages » pour suivre la jauge.</p>') +
+    '<div class="vpmini"><div><b>' + (v.calls || 0) + '</b><span>appels (30 j)</span></div><div><b>' + (v.calls ? fmtDur(v.avgSecs) : '—') + '</b><span>durée moyenne</span></div>' +
+    '<div><b>' + (v.leadRate === null || v.leadRate === undefined ? '—' : v.leadRate + ' %') + '</b><span>deviennent un lead</span></div></div>';
+  tb.innerHTML = '<thead><tr><th>Appelant</th><th>Canal</th><th>Durée</th><th class="right">Date</th></tr></thead><tbody>' +
+    (calls.length ? calls.slice(0, 10).map(function (c) {
+      return '<tr class="clickable" data-id="' + esc(c.id) + '"><td class="cell-main">' + esc(c.visitor_label) + '</td>' +
+        '<td><span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + '</span></td>' +
+        '<td class="cell-sub">' + (c.duration_secs ? fmtDur(c.duration_secs) : '—') + '</td>' +
+        '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td></tr>';
+    }).join('') : emptyRow(4, 'Aucun appel pour l\'instant', 'Les appels passés à votre assistante (téléphone ou site) apparaîtront ici.')) + '</tbody>';
+  $$('tr[data-id]', tb).forEach(function (r) { r.addEventListener('click', function () { openTranscript(r.dataset.id); }); });
+}
+if ($('#vpRefresh')) $('#vpRefresh').addEventListener('click', function () { loadVoicePage(); });
 async function loadVoiceAgent() {
   var card = $('#voiceCard');
   if (!card) return;
@@ -1520,6 +1570,8 @@ async function loadVoiceAgent() {
     var d = await res.json();
     card.hidden = false;
     $('#voice-agent').value = d.agentId || '';
+    $('#voice-agent').placeholder = d.managedBySetting ? 'Réglé par l\'équipe WHATGO (' + d.effectiveAgentId + ')' : 'Ex. : agent_01k…';
+    VOICE_INFO = d;
     if ($('#voice-quota')) { $('#voice-quota').value = d.minutesQuota || ''; $('#voice-quota').disabled = !(ME && ME.role === 'admin'); }
     $('#voice-url').value = d.webhookUrl || '';
     var admin = ME && ME.role === 'admin';
@@ -1534,7 +1586,8 @@ if ($('#voiceSave')) $('#voiceSave').addEventListener('click', async function ()
     });
     var d = await res.json().catch(function () { return {}; });
     if (!res.ok) throw new Error(d.error || '');
-    toast('Agent vocal relié');
+    toast('Réglages de l\'IA vocale enregistrés');
+    if ($('#page-voice') && $('#page-voice').classList.contains('active')) loadVoicePage();
   } catch (e) { toast(e.message || "Impossible d'enregistrer.", true); }
 });
 
