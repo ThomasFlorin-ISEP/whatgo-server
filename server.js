@@ -1101,13 +1101,23 @@ async function safeFetchIcs(rawUrl) {
       const addrs = await dns.lookup(u.hostname, { all: true }).catch(() => []);
       if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) throw new Error('Agenda introuvable');
     }
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 10000);
     let r;
-    try {
-      r = await fetch(u.toString(), { redirect: 'manual', signal: ctrl.signal, headers: { 'User-Agent': 'WHATGO-Bot/1.0 (+https://whatgo.ai)', Accept: 'text/calendar,*/*' } });
-    } finally { clearTimeout(timer); }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      try {
+        r = await fetch(u.toString(), { redirect: 'manual', signal: ctrl.signal, headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+          Accept: 'text/calendar,text/plain;q=0.9,*/*;q=0.8', 'Accept-Language': 'fr-FR,fr;q=0.9' } });
+      } finally { clearTimeout(timer); }
+      if ((r.status === 429 || r.status === 503) && attempt === 0) { await new Promise((ok) => setTimeout(ok, 1500)); continue; }
+      break;
+    }
     if (r.status >= 300 && r.status < 400 && r.headers.get('location')) { current = new URL(r.headers.get('location'), u).toString(); continue; }
+    if (r.status === 429 || r.status === 503) {
+      const e = new Error('Google limite temporairement la lecture de l’agenda. Nouvel essai automatique dans quelques minutes.');
+      e.rateLimited = true; throw e;
+    }
     if (!r.ok) throw new Error(r.status === 404 ? 'Agenda introuvable : vérifiez que vous avez copié l’adresse secrète au format iCal' : 'Agenda inaccessible (' + r.status + ')');
     const text = (await r.text()).slice(0, 5 * 1024 * 1024);
     if (!/BEGIN:VCALENDAR/.test(text)) throw new Error('Ce lien n’est pas un agenda iCal');
@@ -1118,11 +1128,13 @@ async function safeFetchIcs(rawUrl) {
 async function calendarEventsFor(businessId, url, force) {
   if (!url) return { connected: false, events: [] };
   const c = calendarCache.get(businessId);
-  if (!force && c && c.url === url && Date.now() - c.at < 3 * 60 * 1000) return c;
-  let events = [], error = null;
-  try { events = parseIcs(await safeFetchIcs(url)); } catch (e) { error = e.message || 'Agenda inaccessible'; }
+  // Après un refus « trop de demandes » de Google : on attend 10 min avant de réessayer.
+  const ttl = c && c.rateLimited ? 10 * 60 * 1000 : 3 * 60 * 1000;
+  if (c && c.url === url && Date.now() - c.at < (force && !c.rateLimited ? 0 : ttl)) return c;
+  let events = [], error = null, rateLimited = false;
+  try { events = parseIcs(await safeFetchIcs(url)); } catch (e) { error = e.message || 'Agenda inaccessible'; rateLimited = !!e.rateLimited; }
   if (error && c && c.url === url && c.events.length) { events = c.events; }
-  const entry = { at: Date.now(), url, events, error, connected: true };
+  const entry = { at: Date.now(), url, events, error, rateLimited, connected: true };
   calendarCache.set(businessId, entry);
   return entry;
 }
@@ -1168,11 +1180,16 @@ app.put('/api/dashboard/calendar', requireAuth, requireRole(['admin']), async (r
       return res.json({ ok: true, connected: false });
     }
     if (!/^(https|webcals?):\/\//i.test(raw)) return res.status(400).json({ error: 'Collez l’adresse secrète au format iCal (elle commence par https://).' });
-    let events;
-    try { events = parseIcs(await safeFetchIcs(raw)); } catch (e) { return res.status(400).json({ error: e.message || 'Agenda inaccessible.' }); }
+    let events, limited = false;
+    try { events = parseIcs(await safeFetchIcs(raw)); } catch (e) {
+      if (!e.rateLimited) return res.status(400).json({ error: e.message || 'Agenda inaccessible.' });
+      limited = true; events = [];
+    }
     await query('UPDATE businesses SET calendar_ics_url = $1 WHERE id = $2', [raw, req.user.businessId]);
     calendarCache.delete(req.user.businessId);
-    res.json({ ok: true, connected: true, count: events.length });
+    if (limited) calendarCache.set(req.user.businessId, { at: Date.now(), url: raw, events: [], rateLimited: true, connected: true,
+      error: 'Agenda enregistré. Google limite temporairement la lecture : vos rendez-vous apparaîtront d’ici quelques minutes.' });
+    res.json({ ok: true, connected: true, count: events.length, pending: limited });
   } catch (err) {
     console.error('Erreur PUT /api/dashboard/calendar:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
