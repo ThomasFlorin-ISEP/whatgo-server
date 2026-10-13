@@ -237,6 +237,17 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .ovchart__bars i{display:block;width:42%;max-width:16px;border-radius:4px 4px 0 0;background:#9FDDB9;min-height:2px}
 .ovchart__bars i.l{background:var(--green-deep)}
 .ovchart__x{font-size:.66rem;color:var(--ink-faint);margin-top:6px;height:12px;white-space:nowrap}
+/* ---------- Agenda connecté ---------- */
+.calday{margin:14px 0 6px;font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8A948F}
+.calday.today{color:var(--green-deep)}
+.calev{display:grid;grid-template-columns:118px 1fr auto;gap:14px;align-items:center;padding:11px 14px;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;background:#fff}
+.calev__t{font-weight:700;font-size:.9rem;color:var(--ink)}.calev__t small{display:block;font-weight:500;color:var(--ink-soft);font-size:.74rem}
+.calev__m b{display:block;font-size:.9rem;color:var(--ink)}.calev__m span{font-size:.78rem;color:var(--ink-soft)}
+.calev__a{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.calev.is-now{border-color:var(--green);box-shadow:0 0 0 3px rgba(31,170,89,.12)}
+.calsteps{margin:6px 0 14px 18px;padding:0;font-size:.85rem;color:#33403A;line-height:1.6}
+.calconn{display:flex;gap:8px;flex-wrap:wrap}.calconn input{flex:1;min-width:260px}
+@media (max-width:700px){.calev{grid-template-columns:1fr}.calev__a{justify-content:flex-start}}
 /* ---------- Canaux : chat (vert) / voix (violet) ---------- */
 :root{--vox:#6B5BD6;--vox-soft:#EEEBFC}
 .seg{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
@@ -657,7 +668,13 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 
     <!-- ============================== RENDEZ-VOUS (réel, version simple) -->
     <section class="tab-page" id="page-appointments">
-      <div class="topbar"><div><h2>Rendez-vous</h2><p>Les leads marqués « RDV pris ». Pas encore de connexion à un vrai calendrier — passez un lead en statut « RDV pris » depuis l'onglet Leads pour qu'il apparaisse ici.</p></div></div>
+      <div class="topbar"><div><h2>Rendez-vous</h2><p>Les rendez-vous de votre agenda connecté, et les leads marqués « RDV pris » (changez le statut d'un lead dans l'onglet Leads).</p></div></div>
+
+      <div class="card" id="calCard">
+        <div class="card__head"><div><h3>📅 Votre agenda</h3><p class="card__sub" id="calSub">Les rendez-vous de votre agenda (Google, Outlook, Apple), y compris les démos réservées depuis le chat.</p></div>
+          <div id="calActs" style="display:flex;gap:8px"></div></div>
+        <div id="calBody"><p class="cell-sub">Chargement…</p></div>
+      </div>
       <div class="card card--flush">
         <div class="tablewrap"><table class="tbl" id="appointmentsTable"></table></div>
       </div>
@@ -1143,6 +1160,7 @@ var diagnosticsNavItem = $('#diagnosticsNavItem');
 if (diagnosticsNavItem) diagnosticsNavItem.addEventListener('click', loadDiagnostics);
 function switchTab(tab) {
   if (tab === 'settings') { loadBotLook(); loadVoiceAgent(); }
+  if (tab === 'appointments') loadCalendar();
   if (tab === 'improve') loadImprove();
   if (tab === 'knowledge') loadDocs();
   $$('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
@@ -1337,6 +1355,93 @@ if ($('#impLearnedSave')) $('#impLearnedSave').addEventListener('click', async f
     toast('Réponses enregistrées');
   } catch (e) { toast("Impossible d'enregistrer.", true); }
 });
+
+/* ---------- Rendez-vous → agenda connecté ---------- */
+var CAL_DATA = null;
+function calTime(ts) { return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }); }
+function calDayKey(ts) { return new Date(ts).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); }
+function calDayLabel(ts) {
+  var k = calDayKey(ts), today = calDayKey(Date.now()), tom = calDayKey(Date.now() + 86400000);
+  var long = new Date(ts).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+  return k === today ? 'Aujourd\'hui · ' + long : k === tom ? 'Demain · ' + long : long;
+}
+function calConnectForm(err) {
+  var admin = ME && ME.role === 'admin';
+  return (err ? '<p class="msg msg--err" style="display:block">' + esc(err) + '</p>' : '') +
+    '<p style="margin:0 0 6px;font-size:.88rem">Reliez votre agenda pour voir ici toutes vos démos et rendez-vous, même ceux réservés en dehors du chat.</p>' +
+    '<ol class="calsteps"><li>Ouvrez <b>Google Agenda</b> sur un ordinateur, puis ⚙️ <b>Paramètres</b>.</li>' +
+    '<li>À gauche, sous « Paramètres de mes agendas », cliquez sur <b>votre agenda</b>.</li>' +
+    '<li>Descendez jusqu\'à <b>« Adresse secrète au format iCal »</b> et copiez-la.</li>' +
+    '<li>Collez-la ci-dessous. (Outlook : Paramètres → Calendrier partagé → Publier un calendrier → lien ICS.)</li></ol>' +
+    (admin ? '<div class="calconn"><input type="url" id="calUrl" placeholder="https://calendar.google.com/calendar/ical/…/private-…/basic.ics" />' +
+      '<button type="button" class="btn btn--primary" id="calSave">Connecter l\'agenda</button></div>' +
+      '<p class="help" style="margin-top:6px">Cette adresse reste privée : seul le serveur WHATGO la lit, en lecture seule.</p>'
+      : '<p class="cell-sub">Demandez à un administrateur de connecter l\'agenda.</p>');
+}
+function renderCalendar() {
+  var body = $('#calBody'), acts = $('#calActs');
+  if (!body) return;
+  var d = CAL_DATA || {};
+  var admin = ME && ME.role === 'admin';
+  if (!d.connected) {
+    acts.innerHTML = '';
+    body.innerHTML = calConnectForm(d.saveError);
+    var sv = $('#calSave');
+    if (sv) sv.addEventListener('click', async function () {
+      var url = $('#calUrl').value.trim();
+      if (!url) { toast('Collez l\'adresse iCal de votre agenda.', true); return; }
+      sv.disabled = true; sv.textContent = 'Connexion…';
+      try {
+        var r = await fetch(API + '/api/dashboard/calendar', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ icsUrl: url }) });
+        var j = await r.json().catch(function () { return {}; });
+        if (!r.ok) throw new Error(j.error || '');
+        toast('Agenda connecté (' + plural(j.count || 0, 'événement lu', 'événements lus') + ')');
+        loadCalendar();
+      } catch (e) { CAL_DATA = { connected: false, saveError: e.message || 'Connexion impossible.' }; renderCalendar(); }
+    });
+    return;
+  }
+  acts.innerHTML = '<button type="button" class="btn btn--ghost btn--sm" id="calRefresh">↻ Actualiser</button>' +
+    (admin ? '<button type="button" class="btn btn--ghost btn--sm" id="calOff">Déconnecter</button>' : '');
+  $('#calSub').textContent = 'Agenda connecté · actualisé à ' + calTime(d.fetchedAt || Date.now()) + (d.error ? ' · ⚠️ ' + d.error : '');
+  var evs = (d.events || []).filter(function (e) { return (e.end || e.start) >= Date.now() - 2 * 3600 * 1000; });
+  if (!evs.length) {
+    body.innerHTML = '<p class="cell-sub">Aucun rendez-vous à venir dans les 60 prochains jours.</p>';
+  } else {
+    var html = '', lastDay = '', now = Date.now();
+    evs.forEach(function (e) {
+      var k = calDayKey(e.start);
+      if (k !== lastDay) { html += '<div class="calday' + (k === calDayKey(now) ? ' today' : '') + '">' + esc(calDayLabel(e.start)) + '</div>'; lastDay = k; }
+      var who = e.attendees.filter(function (a) { return !/calendar\.google\.com$/i.test(a.email); }).map(function (a) { return a.name ? a.name + ' (' + a.email + ')' : a.email; });
+      var isNow = !e.allDay && e.start <= now && (e.end || e.start) >= now;
+      html += '<div class="calev' + (isNow ? ' is-now' : '') + '">' +
+        '<div class="calev__t">' + (e.allDay ? 'Toute la journée' : calTime(e.start) + (e.end ? ' – ' + calTime(e.end) : '')) + (isNow ? '<small>En cours</small>' : '') + '</div>' +
+        '<div class="calev__m"><b>' + esc(e.title) + '</b><span>' + esc(who.join(' · ') || e.location || '') + '</span></div>' +
+        '<div class="calev__a">' +
+          (e.meet ? '<a class="btn btn--primary btn--sm" href="' + esc(e.meet) + '" target="_blank" rel="noopener">Rejoindre</a>' : '') +
+          (e.lead ? '<button type="button" class="btn btn--ghost btn--sm" data-calead="' + esc(e.lead.id) + '">Fiche lead →</button>' : '') +
+        '</div></div>';
+    });
+    body.innerHTML = html;
+    $$('[data-calead]', body).forEach(function (b) { b.addEventListener('click', function () { openLeadCard(b.getAttribute('data-calead')); }); });
+  }
+  $('#calRefresh').addEventListener('click', function () { loadCalendar(true); });
+  if ($('#calOff')) $('#calOff').addEventListener('click', async function () {
+    if (!confirm('Déconnecter cet agenda du tableau de bord ?')) return;
+    await fetch(API + '/api/dashboard/calendar', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ icsUrl: '' }) }).catch(function () {});
+    loadCalendar();
+  });
+}
+async function loadCalendar(refresh) {
+  if (!$('#calCard')) return;
+  try {
+    var r = await fetch(API + '/api/dashboard/calendar' + (refresh ? '?refresh=1' : ''), { credentials: 'include' });
+    if (!r.ok) { $('#calCard').hidden = true; return; }
+    $('#calCard').hidden = false;
+    CAL_DATA = await r.json();
+    renderCalendar();
+  } catch (e) { $('#calBody').innerHTML = '<p class="cell-sub">Impossible de lire l\'agenda pour le moment.</p>'; }
+}
 
 /* ---------- Paramètres → Apparence du chatbot ---------- */
 var lookAvatar = '';
@@ -1563,7 +1668,7 @@ function renderOverview(o) {
     var hotSub = uniq.length ? uniq.join(' · ') : (t.newLeads ? 'Statut « Nouveau » dans Leads' : 'Tous vos leads sont pris en charge');
     var items = [
       ['hot', '🔥', hotN, hotLabel, hotSub, 'leads'],
-      ['rdv', '📅', t.rdvToday, t.rdvToday > 1 ? 'rendez-vous aujourd\'hui' : 'rendez-vous aujourd\'hui', t.rdvToday ? 'Voir l\'agenda' : 'Aucun rendez-vous prévu', 'appointments'],
+      ['rdv', '📅', t.rdvToday, t.rdvToday > 1 ? 'rendez-vous aujourd\'hui' : 'rendez-vous aujourd\'hui', t.rdvToday ? (t.rdvTodaySource === 'calendar' ? 'D\'après votre agenda · voir le détail' : 'Voir l\'agenda') : 'Aucun rendez-vous prévu', 'appointments'],
       ['imp', '⭐', t.improve, t.improve > 1 ? 'questions à améliorer' : 'question à améliorer', t.improve ? 'Apprenez-les à votre assistant' : 'Votre assistant a réponse à tout', 'improve'],
     ];
     todo.innerHTML = items.map(function (it) {

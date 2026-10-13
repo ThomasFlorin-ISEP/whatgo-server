@@ -1018,6 +1018,167 @@ const OVERVIEW_TOPICS = [
   ['Parler à quelqu\'un', /(humain|conseiller|quelqu['’]un d['’]autre|parler à quelqu|appelez|m['’]appeler|rappel|human|call me|speak to)/i],
 ];
 
+// ============================================================
+// AGENDA CONNECTÉ : le client colle l'adresse secrète iCal de son agenda
+// (Google Agenda, Outlook, Apple). Le serveur la lit (cache 3 min) et
+// l'onglet Rendez-vous affiche les prochains rendez-vous, reliés aux leads.
+// ============================================================
+const calendarCache = new Map(); // business_id -> { at, url, events, error }
+function icsUnescape(v) { return String(v || '').replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1'); }
+function tzOffsetMs(tz, ts) {
+  try {
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const p = Object.fromEntries(f.formatToParts(new Date(ts)).map((x) => [x.type, x.value]));
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - ts;
+  } catch (e) { return null; }
+}
+// "20261015T140000" + TZID → timestamp ; "…Z" = UTC ; "20261015" = journée entière.
+function parseIcsDate(value, params) {
+  const v = String(value || '').trim();
+  let m = v.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m || /VALUE=DATE(?!-)/i.test(params || '')) {
+    m = m || v.match(/^(\d{4})(\d{2})(\d{2})/);
+    if (!m) return null;
+    return { allDay: true, date: `${m[1]}-${m[2]}-${m[3]}`, ts: Date.UTC(+m[1], +m[2] - 1, +m[3], 12) };
+  }
+  m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/);
+  if (!m) return null;
+  const naive = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+  if (m[7]) return { allDay: false, ts: naive };
+  const tz = ((params || '').match(/TZID=("?)([^;:"]+)\1/i) || [])[2] || 'Europe/Paris';
+  let off = tzOffsetMs(tz, naive);
+  if (off === null) off = tzOffsetMs('Europe/Paris', naive) || 0;
+  let ts = naive - off;
+  const off2 = tzOffsetMs(tz, ts);
+  if (off2 !== null && off2 !== off) ts = naive - off2;
+  return { allDay: false, ts };
+}
+function parseIcs(text) {
+  const lines = String(text || '').replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+  const events = [];
+  let ev = null;
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') { ev = { attendees: [] }; continue; }
+    if (line === 'END:VEVENT') { if (ev) events.push(ev); ev = null; continue; }
+    if (!ev) continue;
+    const i = line.indexOf(':');
+    if (i < 0) continue;
+    const head = line.slice(0, i), value = line.slice(i + 1);
+    const name = head.split(';')[0].toUpperCase(), params = head.slice(name.length);
+    if (name === 'DTSTART') ev.start = parseIcsDate(value, params);
+    else if (name === 'DTEND') ev.end = parseIcsDate(value, params);
+    else if (name === 'SUMMARY') ev.title = icsUnescape(value).slice(0, 200);
+    else if (name === 'DESCRIPTION') ev.description = icsUnescape(value).slice(0, 3000);
+    else if (name === 'LOCATION') ev.location = icsUnescape(value).slice(0, 300);
+    else if (name === 'STATUS') ev.status = value.trim().toUpperCase();
+    else if (name === 'UID') ev.uid = value.trim().slice(0, 200);
+    else if (name === 'RRULE') ev.recurring = true;
+    else if (name === 'X-GOOGLE-CONFERENCE') ev.meet = value.trim();
+    else if (name === 'ATTENDEE') {
+      const email = (value.match(/mailto:([^\s;]+)/i) || [])[1];
+      const cn = (params.match(/CN=("?)([^;:"]+)\1/i) || [])[2];
+      if (email) ev.attendees.push({ email: email.toLowerCase(), name: cn && cn.toLowerCase() !== email.toLowerCase() ? icsUnescape(cn).slice(0, 120) : '' });
+    }
+  }
+  return events.filter((e) => e.start && e.status !== 'CANCELLED').map((e) => {
+    const meet = e.meet || ((`${e.location || ''} ${e.description || ''}`).match(/https:\/\/meet\.google\.com\/[a-z0-9-]+/i) || [])[0] ||
+      ((`${e.location || ''} ${e.description || ''}`).match(/https:\/\/[^\s"<>]*(zoom\.us|teams\.microsoft\.com)[^\s"<>]*/i) || [])[0] || '';
+    return {
+      uid: e.uid || '', title: e.title || '(Sans titre)', start: e.start.ts, end: e.end ? e.end.ts : null, allDay: !!e.start.allDay,
+      location: e.location && !/^https?:\/\//i.test(e.location) ? e.location : '', meet, recurring: !!e.recurring,
+      attendees: e.attendees.slice(0, 10),
+    };
+  });
+}
+async function safeFetchIcs(rawUrl) {
+  const dns = require('dns').promises;
+  let current = String(rawUrl).trim().replace(/^webcals?:\/\//i, 'https://');
+  for (let hop = 0; hop < 4; hop++) {
+    const u = new URL(current);
+    if (u.protocol !== 'https:') throw new Error('L’adresse doit commencer par https://');
+    if (!process.env.ALLOW_PRIVATE_FETCH) {
+      if (/^(localhost|.*\.local|.*\.internal)$/i.test(u.hostname)) throw new Error('Adresse non autorisée');
+      const addrs = await dns.lookup(u.hostname, { all: true }).catch(() => []);
+      if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) throw new Error('Agenda introuvable');
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    let r;
+    try {
+      r = await fetch(u.toString(), { redirect: 'manual', signal: ctrl.signal, headers: { 'User-Agent': 'WHATGO-Bot/1.0 (+https://whatgo.ai)', Accept: 'text/calendar,*/*' } });
+    } finally { clearTimeout(timer); }
+    if (r.status >= 300 && r.status < 400 && r.headers.get('location')) { current = new URL(r.headers.get('location'), u).toString(); continue; }
+    if (!r.ok) throw new Error(r.status === 404 ? 'Agenda introuvable : vérifiez que vous avez copié l’adresse secrète au format iCal' : 'Agenda inaccessible (' + r.status + ')');
+    const text = (await r.text()).slice(0, 5 * 1024 * 1024);
+    if (!/BEGIN:VCALENDAR/.test(text)) throw new Error('Ce lien n’est pas un agenda iCal');
+    return text;
+  }
+  throw new Error('Trop de redirections');
+}
+async function calendarEventsFor(businessId, url, force) {
+  if (!url) return { connected: false, events: [] };
+  const c = calendarCache.get(businessId);
+  if (!force && c && c.url === url && Date.now() - c.at < 3 * 60 * 1000) return c;
+  let events = [], error = null;
+  try { events = parseIcs(await safeFetchIcs(url)); } catch (e) { error = e.message || 'Agenda inaccessible'; }
+  if (error && c && c.url === url && c.events.length) { events = c.events; }
+  const entry = { at: Date.now(), url, events, error, connected: true };
+  calendarCache.set(businessId, entry);
+  return entry;
+}
+function maskIcsUrl(u) {
+  try { const x = new URL(String(u).replace(/^webcals?:\/\//i, 'https://')); return x.hostname + '/…' + x.pathname.slice(-12); } catch (e) { return '…'; }
+}
+app.get('/api/dashboard/calendar', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const { rows } = await query('SELECT calendar_ics_url FROM businesses WHERE id = $1', [req.user.businessId]);
+    const url = rows[0] && rows[0].calendar_ics_url;
+    if (!url) return res.json({ connected: false, events: [] });
+    const cal = await calendarEventsFor(req.user.businessId, url, req.query.refresh === '1');
+    const from = Date.now() - 2 * 3600 * 1000, to = Date.now() + 60 * 86400 * 1000;
+    const startOfToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' })).setHours(0, 0, 0, 0);
+    let events = cal.events.filter((e) => (e.end || e.start) >= Math.min(from, startOfToday) && e.start <= to)
+      .sort((a, b) => a.start - b.start).slice(0, 150);
+    // Relie chaque invité à un lead connu (même email).
+    const emails = [...new Set(events.flatMap((e) => e.attendees.map((a) => a.email)))];
+    let byEmail = {};
+    if (emails.length) {
+      const list = emails.slice(0, 200);
+      const ph = list.map((e, i) => '$' + (i + 2)).join(', ');
+      const { rows: lr } = await query(`SELECT id, name, email, conversation_id FROM leads WHERE business_id = $1 AND LOWER(email) IN (${ph})`,
+        [req.user.businessId, ...list]).catch(() => ({ rows: [] }));
+      lr.forEach((l) => { byEmail[String(l.email).toLowerCase()] = l; });
+    }
+    events = events.map((e) => {
+      const lead = e.attendees.map((a) => byEmail[a.email]).find(Boolean);
+      return Object.assign({}, e, { lead: lead ? { id: lead.id, name: lead.name || '', conversationId: lead.conversation_id } : null });
+    });
+    res.json({ connected: true, source: maskIcsUrl(url), fetchedAt: cal.at, error: cal.error, events });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/calendar:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+app.put('/api/dashboard/calendar', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const raw = String((req.body && req.body.icsUrl) || '').trim().slice(0, 1000);
+    if (!raw) {
+      await query('UPDATE businesses SET calendar_ics_url = NULL WHERE id = $1', [req.user.businessId]);
+      calendarCache.delete(req.user.businessId);
+      return res.json({ ok: true, connected: false });
+    }
+    if (!/^(https|webcals?):\/\//i.test(raw)) return res.status(400).json({ error: 'Collez l’adresse secrète au format iCal (elle commence par https://).' });
+    let events;
+    try { events = parseIcs(await safeFetchIcs(raw)); } catch (e) { return res.status(400).json({ error: e.message || 'Agenda inaccessible.' }); }
+    await query('UPDATE businesses SET calendar_ics_url = $1 WHERE id = $2', [raw, req.user.businessId]);
+    calendarCache.delete(req.user.businessId);
+    res.json({ ok: true, connected: true, count: events.length });
+  } catch (err) {
+    console.error('Erreur PUT /api/dashboard/calendar:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
 app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
     const bid = req.user.businessId;
@@ -1039,7 +1200,7 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
     const RDV = `(l.appointment_at IS NOT NULL OR l.status = 'rdv_pris')`;
     const pair = (r) => ({ cur: n(r && r.cur), prev: n(r && r.prev), voice: n(r && r.vcur) });
 
-    const [biz] = await safe('SELECT slug, voice_agent_id, voice_minutes_quota FROM businesses WHERE id = $1', [bid], [{}]);
+    const [biz] = await safe('SELECT slug, voice_agent_id, voice_minutes_quota, calendar_ics_url FROM businesses WHERE id = $1', [bid], [{}]);
     const [conv] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('c.started_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('c.started_at')}) AS prev,
         COUNT(*) FILTER (WHERE ${CUR('c.started_at')} AND ${IS_VOICE('c')}) AS vcur
       FROM conversations c WHERE c.business_id = $1 AND ${CH('c')}`, P, [{}]);
@@ -1103,6 +1264,15 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
       voice: { conv: n(fc.voice), leads: n(fl.voice), rdv: n(fl.rvoice) },
     };
     const rate = (a, b) => (b ? Math.round(a / b * 100) : null);
+    let calToday = null;
+    if (biz && biz.calendar_ics_url) {
+      try {
+        const cal = await calendarEventsFor(bid, biz.calendar_ics_url);
+        const dayKey = (ts) => new Date(ts).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
+        const todayKey = dayKey(Date.now());
+        calToday = cal.events.filter((e) => !e.allDay && dayKey(e.start) === todayKey).length;
+      } catch (e) { calToday = null; }
+    }
 
     res.json({
       days, channel,
@@ -1118,7 +1288,8 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
         hotLeads: hotLeads.length,
         hotNames: hotLeads.slice(0, 3).map((l) => l.name || l.email || l.phone || 'Visiteur'),
         hotList: hotLeads.slice(0, 3).map((l) => ({ name: l.name || l.email || l.phone || 'Visiteur', channel: l.channel, source: l.voice_source || null })),
-        rdvToday: n(today.n),
+        rdvToday: calToday === null ? n(today.n) : calToday,
+        rdvTodaySource: calToday === null ? 'leads' : 'calendar',
         improve: n(impr.n),
       },
       series: series.map((r) => ({ day: r.day, conv: n(r.conv), leads: n(r.lchat) + n(r.lvoice), leadsChat: n(r.lchat), leadsVoice: n(r.lvoice) })),
