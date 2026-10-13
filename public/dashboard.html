@@ -1650,7 +1650,7 @@ function renderCalendar() {
         var r = await fetch(API + '/api/dashboard/calendar', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ icsUrl: url }) });
         var j = await r.json().catch(function () { return {}; });
         if (!r.ok) throw new Error(j.error || '');
-        toast('Agenda connecté (' + plural(j.count || 0, 'événement lu', 'événements lus') + ')');
+        toast(j.pending ? 'Agenda enregistré : les rendez-vous arrivent d\'ici quelques minutes' : 'Agenda connecté (' + plural(j.count || 0, 'événement lu', 'événements lus') + ')');
         loadCalendar();
       } catch (e) { CAL_DATA = { connected: false, saveError: e.message || 'Connexion impossible.' }; renderCalendar(); }
     });
@@ -1660,7 +1660,9 @@ function renderCalendar() {
     (admin ? '<button type="button" class="btn btn--ghost btn--sm" id="calOff">Déconnecter</button>' : '');
   $('#calSub').textContent = 'Agenda connecté · actualisé à ' + calTime(d.fetchedAt || Date.now()) + (d.error ? ' · ⚠️ ' + d.error : '');
   var evs = (d.events || []).filter(function (e) { return (e.end || e.start) >= Date.now() - 2 * 3600 * 1000; });
-  if (!evs.length) {
+  if (!evs.length && d.error) {
+    body.innerHTML = '<p class="cell-sub">⏳ ' + esc(d.error) + '</p>';
+  } else if (!evs.length) {
     body.innerHTML = '<p class="cell-sub">Aucun rendez-vous à venir dans les 60 prochains jours.</p>';
   } else {
     var html = '', lastDay = '', now = Date.now();
