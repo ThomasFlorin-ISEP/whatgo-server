@@ -202,6 +202,23 @@
     .wgt-order dt { color: #6B7580; }
     .wgt-order dd { margin: 0; color: #1B2321; font-weight: 600; }
 .wgt-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .wgt-stay { border: 1px solid #DDE2E7; border-radius: 14px; background: #fff; overflow: hidden; }
+    .wgt-stay-row { display: grid; grid-template-columns: 1fr 1fr; }
+    .wgt-stay-row + .wgt-stay-row { border-top: 1px solid #E8ECEF; }
+    .wgt-stay-f { position: relative; display: block; padding: 9px 12px 10px; min-width: 0; cursor: pointer; margin: 0; }
+    .wgt-stay-row > .wgt-stay-f + .wgt-stay-f { border-left: 1px solid #E8ECEF; }
+    .wgt-stay-f:hover { background: #F7F9FA; }
+    .wgt-stay-f span { display: block; font-size: .64rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8A939C; margin-bottom: 2px; }
+    .wgt-stay-f b { display: block; font-size: .92rem; font-weight: 700; color: #1B2321; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wgt-bk .wgt-stay-f input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; padding: 0; border: 0; cursor: pointer; font-size: 16px; }
+    .wgt-stay-g { grid-template-columns: 1fr auto; align-items: center; }
+    .wgt-stay-g .wgt-stay-f { cursor: default; }
+    .wgt-stay-g .wgt-stay-f:hover { background: none; }
+    .wgt-step { display: flex; gap: 6px; padding-right: 12px; }
+    .wgt-step button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #DDE2E7; background: #fff; color: #1B2321; font-size: 1.05rem; line-height: 1; cursor: pointer; }
+    .wgt-step button:hover:not(:disabled) { border-color: var(--wgt-color); color: var(--wgt-color); }
+    .wgt-step button:disabled { opacity: .35; cursor: default; }
+    .wgt-stay-n { margin: 9px 2px 9px; font-size: .78rem; color: #5B6570; text-align: center; }
     .wgt-lbl { display: block; font-size: .72rem; font-weight: 600; color: #6B7580; margin: 0 0 3px 2px; }
     .wgt-bk select.wgt-sel { width: 100%; border: 1px solid #DDE2E7; border-radius: 10px; padding: 10px 12px; font-size: 16px; margin-bottom: 8px; background: #fff; color: #1B2321; }
     .wgt-prod-cap { font-size: .74rem; color: #6B7580; }
@@ -1407,22 +1424,62 @@
   // ------------------------------------------------------------
   // HÔTEL : dates + personnes → chambres adaptées → moteur de réservation
   // ------------------------------------------------------------
+  function prettyDay(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso + 'T12:00:00');
+    if (isNaN(d)) return iso;
+    var t = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
   function isoDay(offset) { return todayStr(offset); }
 
   function showStayForm() {
     var card = el('div', 'wgt-bk');
     card.appendChild(el('h4', null, 'Votre séjour'));
-    var grid = el('div', 'wgt-2col');
-    var c1 = el('div'); c1.appendChild(el('label', 'wgt-lbl', 'Arrivée'));
-    var inDate = el('input'); inDate.type = 'date'; inDate.min = isoDay(0); inDate.value = isoDay(7); c1.appendChild(inDate);
-    var c2 = el('div'); c2.appendChild(el('label', 'wgt-lbl', 'Départ'));
-    var outDate = el('input'); outDate.type = 'date'; outDate.min = isoDay(1); outDate.value = isoDay(9); c2.appendChild(outDate);
-    grid.appendChild(c1); grid.appendChild(c2);
-    card.appendChild(grid);
-    card.appendChild(el('label', 'wgt-lbl', 'Personnes'));
-    var guests = el('select', 'wgt-sel');
-    for (var i = 1; i <= 6; i++) { var o = el('option', null, i + (i > 1 ? ' personnes' : ' personne')); o.value = String(i); if (i === 2) o.selected = true; guests.appendChild(o); }
-    card.appendChild(guests);
+    var box = el('div', 'wgt-stay');
+    // Une case date : libellé + date lisible, le vrai sélecteur est dessous.
+    function dateTile(label, value, min) {
+      var tile = el('label', 'wgt-stay-f');
+      tile.appendChild(el('span', null, label));
+      var shown = el('b');
+      var input = el('input'); input.type = 'date'; input.min = min; input.value = value;
+      function sync() { shown.textContent = prettyDay(input.value); }
+      input.addEventListener('change', sync);
+      input.addEventListener('click', function () { try { if (input.showPicker) input.showPicker(); } catch (e) {} });
+      sync();
+      tile.appendChild(shown); tile.appendChild(input);
+      tile.sync = sync; tile.input = input;
+      return tile;
+    }
+    var row1 = el('div', 'wgt-stay-row');
+    var tIn = dateTile('Arrivée', isoDay(7), isoDay(0));
+    var tOut = dateTile('Départ', isoDay(9), isoDay(1));
+    row1.appendChild(tIn); row1.appendChild(tOut);
+    var inDate = tIn.input, outDate = tOut.input;
+    var row2 = el('div', 'wgt-stay-row wgt-stay-g');
+    var gl = el('div', 'wgt-stay-f'); gl.appendChild(el('span', null, 'Voyageurs'));
+    var gShown = el('b'); gl.appendChild(gShown);
+    var step = el('div', 'wgt-step');
+    var minus = el('button', null, '−'); minus.type = 'button'; minus.setAttribute('aria-label', 'Une personne de moins');
+    var plus = el('button', null, '+'); plus.type = 'button'; plus.setAttribute('aria-label', 'Une personne de plus');
+    step.appendChild(minus); step.appendChild(plus);
+    row2.appendChild(gl); row2.appendChild(step);
+    box.appendChild(row1); box.appendChild(row2);
+    card.appendChild(box);
+    var guests = { value: '2' };
+    var recap = el('p', 'wgt-stay-n');
+    function refresh() {
+      var n = Number(guests.value);
+      gShown.textContent = n + (n > 1 ? ' personnes' : ' personne');
+      minus.disabled = n <= 1; plus.disabled = n >= 6;
+      var nights = Math.round((new Date(outDate.value + 'T12:00:00') - new Date(inDate.value + 'T12:00:00')) / 86400000);
+      recap.textContent = nights > 0 ? nights + ' nuit' + (nights > 1 ? 's' : '') + ' · ' + gShown.textContent : '';
+    }
+    minus.addEventListener('click', function () { guests.value = String(Math.max(1, Number(guests.value) - 1)); refresh(); });
+    plus.addEventListener('click', function () { guests.value = String(Math.min(6, Number(guests.value) + 1)); refresh(); });
+    outDate.addEventListener('change', refresh);
+    refresh();
+    card.appendChild(recap);
     var btn = el('button', 'wgt-cta', 'Voir les chambres'); btn.type = 'button';
     var err = el('p', 'wgt-bk-err'); err.style.display = 'none';
     card.appendChild(btn); card.appendChild(err);
@@ -1433,6 +1490,7 @@
         var d = new Date(inDate.value + 'T12:00:00'); d.setDate(d.getDate() + 1);
         outDate.value = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
       }
+      tOut.sync(); refresh();
     });
 
     btn.addEventListener('click', async function () {
