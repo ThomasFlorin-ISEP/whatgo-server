@@ -968,6 +968,9 @@
       };
       if (sess.conversationToken) { opts.conversationToken = sess.conversationToken; opts.connectionType = 'webrtc'; voiceConnType = 'webrtc'; }
       else { opts.agentId = sess.agentId; opts.connectionType = 'websocket'; voiceConnType = 'websocket'; }
+      // Démos : même agent Victoria, avec le contexte de l'établissement.
+      if (sess.overrides) opts.overrides = { agent: { prompt: { prompt: sess.overrides.prompt }, firstMessage: sess.overrides.firstMessage } };
+      if (sess.dynamicVariables) opts.dynamicVariables = sess.dynamicVariables;
       voiceConv = await sdk.Conversation.startSession(opts);
       voiceStarting = false;
       voiceRaf = requestAnimationFrame(animateRings);

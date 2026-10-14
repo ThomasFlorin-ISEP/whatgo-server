@@ -1716,8 +1716,17 @@ app.get('/api/dashboard/attachments/:id', requireAuth, requireRole(['admin', 'le
 // chat de WHATGO lui-même, la variable Render WHATGO_VOICE_AGENT_ID suffit.
 function voiceAgentIdOf(b) {
   if (!b) return null;
-  return b.voice_agent_id || (b.slug === 'whatgo' && process.env.WHATGO_VOICE_AGENT_ID) || null;
+  return b.voice_agent_id || (b.slug === 'whatgo' && process.env.WHATGO_VOICE_AGENT_ID)
+    || (DEMO_VOICE_SLUGS.includes(b.slug) && DEMO_VOICE_AGENT_ID) || null;
 }
+
+// Démos (salon, boutique, hôtel) : elles réutilisent l'agent Victoria de
+// WHATGO, avec le contexte de la démo envoyé au début de l'appel. Le slug
+// de la démo voyage avec l'appel (variable « whatgo_business ») pour que
+// le compte-rendu arrive dans le bon tableau de bord.
+// VOICE_DEMOS=off sur Render coupe l'appel vocal des démos.
+const DEMO_VOICE_SLUGS = process.env.VOICE_DEMOS === 'off' ? [] : ['salon-demo', 'boutique-demo', 'hotel-demo'];
+const DEMO_VOICE_AGENT_ID = process.env.DEMO_VOICE_AGENT_ID || process.env.WHATGO_VOICE_AGENT_ID || 'agent_8601m4r6knh2fwf9mbe75vzg60p2';
 
 // « Parler à Victoria » dans le chat : le navigateur du visiteur se connecte
 // directement à ElevenLabs. Avec ELEVENLABS_API_KEY, on remet un jeton
@@ -1806,7 +1815,12 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     if (!externalId) return res.status(400).json({ error: 'conversation_id manquant.' });
 
     let business = null;
-    if (agentId) business = (await query('SELECT * FROM businesses WHERE voice_agent_id = $1 LIMIT 1', [agentId])).rows[0] || null;
+    const initData = data.conversation_initiation_client_data || {};
+    const demoSlug = String(((initData.dynamic_variables || {}).whatgo_business) || '');
+    if (demoSlug && ['salon-demo', 'boutique-demo', 'hotel-demo'].includes(demoSlug)) {
+      business = (await query('SELECT * FROM businesses WHERE slug = $1', [demoSlug])).rows[0] || null;
+    }
+    if (!business && agentId) business = (await query('SELECT * FROM businesses WHERE voice_agent_id = $1 LIMIT 1', [agentId])).rows[0] || null;
     if (!business && agentId && agentId === process.env.WHATGO_VOICE_AGENT_ID) {
       business = (await query("SELECT * FROM businesses WHERE slug = 'whatgo'")).rows[0] || null;
     }
