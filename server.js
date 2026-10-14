@@ -1908,8 +1908,17 @@ app.get('/api/dashboard/attachments/:id', requireAuth, requireRole(['admin', 'le
 // chat de WHATGO lui-même, la variable Render WHATGO_VOICE_AGENT_ID suffit.
 function voiceAgentIdOf(b) {
   if (!b) return null;
-  return b.voice_agent_id || (b.slug === 'whatgo' && process.env.WHATGO_VOICE_AGENT_ID) || null;
+  return b.voice_agent_id || (b.slug === 'whatgo' && process.env.WHATGO_VOICE_AGENT_ID)
+    || (DEMO_VOICE_SLUGS.includes(b.slug) && DEMO_VOICE_AGENT_ID) || null;
 }
+
+// Démos (salon, boutique, hôtel) : elles réutilisent l'agent Victoria de
+// WHATGO, avec le contexte de la démo envoyé au début de l'appel. Le slug
+// de la démo voyage avec l'appel (variable « whatgo_business ») pour que
+// le compte-rendu arrive dans le bon tableau de bord.
+// VOICE_DEMOS=off sur Render coupe l'appel vocal des démos.
+const DEMO_VOICE_SLUGS = process.env.VOICE_DEMOS === 'off' ? [] : ['salon-demo', 'boutique-demo', 'hotel-demo'];
+const DEMO_VOICE_AGENT_ID = process.env.DEMO_VOICE_AGENT_ID || process.env.WHATGO_VOICE_AGENT_ID || 'agent_8601m4r6knh2fwf9mbe75vzg60p2';
 
 // « Parler à Victoria » dans le chat : le navigateur du visiteur se connecte
 // directement à ElevenLabs. Avec ELEVENLABS_API_KEY, on remet un jeton
@@ -1919,9 +1928,17 @@ const VOICE_DAILY_CAP = Number(process.env.VOICE_DAILY_CAP) || 40;
 const voiceDailyCounts = new Map(); // "AAAA-MM-JJ:businessId" -> nombre d'appels
 app.get('/api/widget/:slug/voice-session', async (req, res) => {
   try {
-    const { rows } = await query('SELECT id, slug, voice_agent_id FROM businesses WHERE slug = $1', [req.params.slug]);
+    const { rows } = await query('SELECT id, slug, name, voice_agent_id, system_prompt, booking, business_type FROM businesses WHERE slug = $1', [req.params.slug]);
     const business = rows[0];
     const agentId = voiceAgentIdOf(business);
+    // Démo sur l'agent partagé : on transmet son contexte à l'appel.
+    let demoExtra = {};
+    if (business && !business.voice_agent_id && DEMO_VOICE_SLUGS.includes(business.slug)) {
+      demoExtra = {
+        overrides: { prompt: await demoVoicePrompt(business), firstMessage: `Bonjour, ici Victoria, ${business.slug === 'hotel-demo' ? "de l'" : 'de '}${business.name}. Que puis-je faire pour vous ?` },
+        dynamicVariables: { whatgo_business: business.slug },
+      };
+    }
     if (!agentId) return res.status(404).json({ error: "L'appel vocal n'est pas disponible." });
     if (isRateLimited(`voice:${clientIp(req)}`, 4, 15 * 60 * 1000)) {
       return res.status(429).json({ error: 'Trop d’appels rapprochés. Réessayez dans quelques minutes ou écrivez-nous ici.' });
@@ -1940,18 +1957,54 @@ app.get('/api/widget/:slug/voice-session', async (req, res) => {
         const r = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`,
           { headers: { 'xi-api-key': apiKey } });
         const d = await r.json().catch(() => ({}));
-        if (r.ok && d.token) return res.json({ conversationToken: d.token });
+        if (r.ok && d.token) return res.json({ conversationToken: d.token, ...demoExtra });
         console.error('Jeton ElevenLabs refusé :', r.status, JSON.stringify(d).slice(0, 200));
       } catch (e) {
         console.error('Jeton ElevenLabs indisponible :', e.message);
       }
     }
-    res.json({ agentId });
+    res.json({ agentId, ...demoExtra });
   } catch (err) {
     console.error('Erreur /api/widget/:slug/voice-session:', err);
     res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
+
+// Consignes de l'appel vocal d'une démo : style oral + infos de l'établissement.
+async function demoVoicePrompt(b) {
+  const lines = [
+    `Tu es Victoria, l'assistante vocale de « ${b.name} ». Tu réponds en français, au téléphone ou depuis le site, à la place de l'équipe.`,
+    '',
+    'RÈGLES DE LA CONVERSATION ORALE :',
+    '- Réponses courtes : une ou deux phrases, ton chaleureux et naturel. Toujours vouvoyer.',
+    "- Une seule question à la fois. Jamais de listes, d'emojis, de liens ni d'adresses web.",
+    "- Pour une réservation ou une demande : demande d'abord le prénom, puis le numéro de téléphone, puis le détail (prestation et horaire souhaité, ou dates de séjour et nombre de personnes). Répète le récapitulatif, puis précise que l'équipe confirme très vite.",
+    "- Si tu ne sais pas, dis-le simplement et propose que l'équipe rappelle. N'invente jamais un prix ou une disponibilité.",
+    '',
+    "INFORMATIONS SUR L'ÉTABLISSEMENT :",
+    String(b.system_prompt || '').replace(/\[[A-Z_]+[^\]]*\]/g, '').slice(0, 5000),
+  ];
+  try {
+    if (b.business_type === 'rdv') {
+      const cfg = booking.parseBooking(b);
+      if (cfg.services.length) {
+        lines.push('', 'PRESTATIONS ET TARIFS :');
+        cfg.services.forEach((sv) => lines.push(`- ${sv.name} : ${sv.price || 'prix sur demande'} (${sv.duration} min)`));
+      }
+      const days = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+      lines.push('', 'HORAIRES :');
+      [1, 2, 3, 4, 5, 6, 0].forEach((d) => lines.push(`- ${days[d]} : ${cfg.hours[d] || 'fermé'}`));
+    } else {
+      const { rows: prods } = await query(
+        'SELECT name, price_cents, capacity, category FROM products WHERE business_id = (SELECT id FROM businesses WHERE slug = $1) AND active ORDER BY id LIMIT 15', [b.slug]);
+      if (prods.length) {
+        lines.push('', b.business_type === 'hotel' ? 'CHAMBRES (prix par nuit) :' : 'PRODUITS :');
+        prods.forEach((p) => lines.push(`- ${p.name} : ${(p.price_cents / 100).toFixed(0)} €${p.capacity ? ` (jusqu'à ${p.capacity} personne${p.capacity > 1 ? 's' : ''})` : ''}`));
+      }
+    }
+  } catch (e) { /* infos complémentaires facultatives */ }
+  return lines.join('\n').slice(0, 9000);
+}
 
 // Déroulé d'un appel vocal du chat (fin, échec), écrit dans les logs Render.
 app.post('/api/widget/:slug/voice-log', (req, res) => {
@@ -1998,7 +2051,12 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     if (!externalId) return res.status(400).json({ error: 'conversation_id manquant.' });
 
     let business = null;
-    if (agentId) business = (await query('SELECT * FROM businesses WHERE voice_agent_id = $1 LIMIT 1', [agentId])).rows[0] || null;
+    const initData = data.conversation_initiation_client_data || {};
+    const demoSlug = String(((initData.dynamic_variables || {}).whatgo_business) || '');
+    if (demoSlug && ['salon-demo', 'boutique-demo', 'hotel-demo'].includes(demoSlug)) {
+      business = (await query('SELECT * FROM businesses WHERE slug = $1', [demoSlug])).rows[0] || null;
+    }
+    if (!business && agentId) business = (await query('SELECT * FROM businesses WHERE voice_agent_id = $1 LIMIT 1', [agentId])).rows[0] || null;
     if (!business && agentId && agentId === process.env.WHATGO_VOICE_AGENT_ID) {
       business = (await query("SELECT * FROM businesses WHERE slug = 'whatgo'")).rows[0] || null;
     }
@@ -4303,6 +4361,19 @@ const DEMO_SLUG = 'salon-demo';
 // Démos : Victoria + questions fréquentes (modifiable ensuite dans
 // Paramètres → Apparence du chatbot).
 async function ensureDemoLooks() {
+  const sugg = (fr, en) => JSON.stringify({ fr: fr.map(([label, text]) => ({ label, text })), en: en.map(([label, text]) => ({ label, text })) });
+  const looks = [
+    ['salon-demo', '["💰 Quels sont vos tarifs ?","🕒 Quels sont vos horaires ?","📍 Où se trouve le salon ?"]',
+      sugg([['💶 Voir les tarifs', 'Quels sont vos tarifs ?'], ['🕒 Horaires & accès', 'Quels sont vos horaires et comment venir au salon ?']],
+        [['💶 See prices', 'What are your prices?'], ['🕒 Hours & access', 'What are your opening hours and how do I get there?']])],
+    ['boutique-demo', '["🎁 Une idée cadeau ?"]', sugg([], [])],
+    ['hotel-demo', '["🅿️ Avez-vous un parking ?"]', sugg([], [])],
+  ];
+  for (const [slug, oldValue, value] of looks) {
+    await query('UPDATE businesses SET bot_suggestions = $1 WHERE slug = $2 AND bot_suggestions = $3', [value, slug, oldValue]).catch(() => {});
+  }
+  await query(`UPDATE businesses SET voice_minutes_quota = 250 WHERE slug IN ('salon-demo', 'boutique-demo', 'hotel-demo') AND voice_minutes_quota IS NULL`).catch(() => {});
+
   // Victoria partout : remplace aussi les anciens prénoms de démo.
   await query(
     `UPDATE businesses SET bot_name = 'Victoria', bot_avatar = '/avatars/victoria.jpg'
@@ -4555,6 +4626,149 @@ async function ensureDemoHotel() {
 // AUTO-CRÉATION : compte super-admin par défaut pour l'équipe WHATGO
 // (identifiants personnalisables via variables d'environnement Render)
 // ============================================================
+// ============================================================
+// DÉMOS : activité d'exemple (chat + appels vocaux) pour que les tableaux
+// de bord des démos ressemblent à un vrai compte. Données fictives,
+// repérées par external_id « demo-seed:… » ; elles sont recréées avec des
+// dates récentes dès qu'elles ont plus de 3 jours.
+// ============================================================
+const DEMO_ACTIVITY = {
+  'salon-demo': [
+    { ch: 'voice', src: 'phone', d: 0, h: 9.4, dur: 134, name: 'Camille', phone: '06 12 45 78 90', status: 'nouveau', score: 85,
+      summary: 'Souhaite une couleur + brushing samedi matin. À rappeler pour confirmer le créneau.',
+      t: ['Bonjour, ici Victoria, du Salon Élégance. Que puis-je faire pour vous ?', 'Bonjour, je voudrais faire une couleur samedi matin, c’est possible ?',
+        'Avec plaisir ! Une couleur avec brushing dure environ une heure et demie, pour 75 €. Puis-je avoir votre prénom ?', 'Camille.',
+        'Merci Camille. Et votre numéro de téléphone ?', 'Le 06 12 45 78 90.',
+        'Parfait : une couleur avec brushing samedi matin, au nom de Camille. L’équipe vous confirme le créneau très vite. Bonne journée !'] },
+    { ch: 'voice', src: 'web', d: 1, h: 21.8, dur: 76, name: 'Julien', phone: '07 81 22 34 56', status: 'rdv_pris', score: 90, rdvIn: 2,
+      summary: 'Coupe homme jeudi 18h. Rendez-vous confirmé.',
+      t: ['Bonjour, ici Victoria, du Salon Élégance. Que puis-je faire pour vous ?', 'Vous faites les coupes homme ? C’est combien ?',
+        'Oui, une coupe homme dure 30 minutes et coûte 25 €. Souhaitez-vous réserver ?', 'Oui, jeudi vers 18h.',
+        'C’est noté. Votre prénom et votre téléphone, s’il vous plaît ?', 'Julien, 07 81 22 34 56.',
+        'Merci Julien, coupe homme jeudi à 18h. À jeudi !'] },
+    { ch: 'voice', src: 'phone', d: 3, h: 12.3, dur: 52, name: '', phone: '04 72 10 20 30', status: 'contacte', score: 60,
+      summary: 'Demande si le salon est ouvert le lundi. Réponse : fermé le lundi, ouvert du mardi au samedi.',
+      t: ['Bonjour, ici Victoria, du Salon Élégance. Que puis-je faire pour vous ?', 'Vous êtes ouverts le lundi ?',
+        'Le salon est fermé le lundi. Nous vous accueillons du mardi au vendredi de 9h à 19h, et le samedi de 9h à 18h.', 'D’accord, merci !'] },
+    { ch: 'voice', src: 'web', d: 6, h: 19.1, dur: 158, name: 'Léa', phone: '06 33 44 55 66', status: 'rdv_pris', score: 90, rdvIn: 4,
+      summary: 'Balayage + brushing. Première visite, cheveux longs. Rendez-vous pris.',
+      t: ['Bonjour, ici Victoria, du Salon Élégance. Que puis-je faire pour vous ?', 'Je voudrais un balayage, j’ai les cheveux longs.',
+        'Bonne idée ! Le balayage avec brushing dure environ deux heures, pour 110 €. Quel jour vous arrangerait ?', 'Mardi prochain en début d’après-midi.',
+        'Très bien. Votre prénom et votre téléphone ?', 'Léa, 06 33 44 55 66.', 'Merci Léa, c’est noté pour mardi après-midi. L’équipe vous confirme l’heure exacte.'] },
+    { ch: 'chat', d: 0, h: 13.2, name: 'Sophie', email: 'sophie.martin@gmail.com', status: 'nouveau', score: 80,
+      summary: 'Demande le prix d’une coupe enfant et d’un brushing pour elle.',
+      t: ['Bonjour, combien coûte une coupe enfant ?', 'Bonjour ! Une coupe enfant (moins de 12 ans) coûte 18 € et dure 30 minutes.',
+        'Et un brushing pour moi en même temps ?', 'Un brushing coûte 28 €. Je peux vous réserver les deux à la suite : quel jour vous arrangerait ?'] },
+    { ch: 'chat', d: 2, h: 20.6, name: 'Thomas', email: 'thomas.b@outlook.fr', status: 'rdv_pris', score: 90, rdvIn: 1,
+      summary: 'Coupe homme réservée dans le chat.',
+      t: ['Je peux prendre rendez-vous pour une coupe ?', 'Avec plaisir ! Choisissez votre prestation et votre créneau ci-dessous.', '📅 A réservé : Coupe homme', 'C’est réservé ! À bientôt au salon.'] },
+    { ch: 'chat', d: 8, h: 11.0, name: '', email: '', status: null,
+      t: ['Vous acceptez les chèques ?', 'Oui : nous acceptons la carte, les espèces et les chèques. Aucun acompte n’est demandé à la réservation.'] },
+  ],
+  'boutique-demo': [
+    { ch: 'voice', src: 'phone', d: 0, h: 10.7, dur: 97, name: 'Nadia', phone: '06 54 32 10 98', status: 'nouveau', score: 75,
+      summary: 'Cherche une plante facile pour un bureau peu lumineux. Intéressée par le pothos.',
+      t: ['Bonjour, ici Victoria, de Maison Verte. Que puis-je faire pour vous ?', 'Je cherche une plante pour mon bureau, mais il n’y a pas beaucoup de lumière.',
+        'Le pothos est idéal : il supporte très bien la faible lumière et demande peu d’arrosage. Souhaitez-vous qu’on vous le mette de côté ?', 'Oui, pourquoi pas.',
+        'Votre prénom et votre téléphone, s’il vous plaît ?', 'Nadia, 06 54 32 10 98.', 'Merci Nadia, l’équipe vous rappelle pour finaliser.'] },
+    { ch: 'voice', src: 'web', d: 2, h: 22.4, dur: 64, name: 'Marc', phone: '07 12 98 76 54', status: 'contacte', score: 60,
+      summary: 'Question sur le suivi de sa commande 1042. Expédiée, livraison prévue sous 48 h.',
+      t: ['Bonjour, ici Victoria, de Maison Verte. Que puis-je faire pour vous ?', 'Je voudrais savoir où en est ma commande, la 1042.',
+        'Votre commande 1042 a été expédiée ; la livraison est prévue sous 48 heures.', 'Super, merci.'] },
+    { ch: 'voice', src: 'phone', d: 5, h: 17.9, dur: 141, name: 'Claire', phone: '06 77 88 99 00', status: 'gagne', score: 85,
+      summary: 'Idée cadeau pour une crémaillère : coffret plante + pot. Commande passée.',
+      t: ['Bonjour, ici Victoria, de Maison Verte. Que puis-je faire pour vous ?', 'Je cherche un cadeau pour une crémaillère, autour de 50 euros.',
+        'Le coffret cadeau avec une plante et son pot en céramique est parfait pour ça. Je vous l’envoie par message ?', 'Oui, merci !'] },
+    { ch: 'chat', d: 0, h: 15.5, name: 'Inès', email: 'ines.r@gmail.com', status: 'nouveau', score: 70,
+      summary: 'Délais de livraison à Lyon et retours.',
+      t: ['Vous livrez en combien de temps sur Lyon ?', 'Sur Lyon, comptez 24 à 48 heures. Le click & collect à l’atelier est gratuit.', 'Et si la plante arrive abîmée ?', 'Elle est remplacée ou remboursée : envoyez-nous simplement une photo sous 48 heures.'] },
+    { ch: 'chat', d: 3, h: 21.1, name: '', email: '', status: null,
+      t: ['Le monstera, il faut l’arroser souvent ?', 'Une fois par semaine en été, toutes les deux semaines en hiver, quand la terre est sèche en surface.'] },
+    { ch: 'chat', d: 9, h: 12.6, name: 'Paul', email: 'paul.d@free.fr', status: 'gagne', score: 85,
+      summary: 'Conseil plante pour salon lumineux, achat d’un ficus lyrata.',
+      t: ['Quelle grande plante pour un salon très lumineux ?', 'Le ficus lyrata est la pièce maîtresse idéale : il adore la lumière vive sans soleil direct.', 'Je le prends !', 'Excellent choix ! Je l’ajoute à votre panier.'] },
+  ],
+  'hotel-demo': [
+    { ch: 'voice', src: 'phone', d: 0, h: 2.9, dur: 118, name: 'Mme Garnier', phone: '06 21 43 65 87', status: 'nouveau', score: 85,
+      summary: 'Appel de nuit : chambre supérieure pour 2 personnes du 21 au 23, avec parking. À confirmer.',
+      t: ['Bonjour, ici Victoria, de l’Hôtel Les Tilleuls. Que puis-je faire pour vous ?', 'Bonsoir, avez-vous une chambre pour deux du 21 au 23 ?',
+        'Oui, je peux vous proposer une chambre supérieure avec vue sur le lac. Souhaitez-vous aussi une place de parking, à 15 € la nuit ?', 'Oui, avec le parking.',
+        'C’est noté. Votre nom et votre téléphone, s’il vous plaît ?', 'Garnier, 06 21 43 65 87.', 'Merci Madame Garnier, la réception vous confirme la réservation dès ce matin.'] },
+    { ch: 'voice', src: 'web', d: 1, h: 18.4, dur: 83, name: 'David', phone: '07 65 43 21 09', status: 'contacte', score: 65,
+      summary: 'Questions sur le spa et le petit-déjeuner pour un séjour en famille.',
+      t: ['Bonjour, ici Victoria, de l’Hôtel Les Tilleuls. Que puis-je faire pour vous ?', 'Le spa est inclus ? Et le petit-déjeuner pour les enfants ?',
+        'Le spa est en accès libre de 9h à 20h. Le petit-déjeuner coûte 18 € par personne, et il est gratuit pour les moins de 6 ans.', 'Parfait, merci.'] },
+    { ch: 'voice', src: 'phone', d: 4, h: 23.6, dur: 69, name: '', phone: '04 50 11 22 33', status: 'contacte', score: 60,
+      summary: 'Arrivée tardive vers minuit : boîte à clés après 23h.',
+      t: ['Bonjour, ici Victoria, de l’Hôtel Les Tilleuls. Que puis-je faire pour vous ?', 'J’arrive vers minuit ce soir, comment je fais ?',
+        'Pas de souci : la réception est ouverte jusqu’à 23h, ensuite vos clés vous attendent dans la boîte à clés. Le code vous est envoyé par SMS.', 'Merci beaucoup.'] },
+    { ch: 'voice', src: 'web', d: 7, h: 14.2, dur: 145, name: 'Alexandre', phone: '06 98 76 54 32', status: 'gagne', score: 90,
+      summary: 'Suite Les Tilleuls pour un anniversaire de mariage, 2 nuits. Réservé.',
+      t: ['Bonjour, ici Victoria, de l’Hôtel Les Tilleuls. Que puis-je faire pour vous ?', 'Je voudrais organiser un anniversaire de mariage, deux nuits.',
+        'Toutes nos félicitations ! La Suite Les Tilleuls, avec terrasse sur le lac et accès spa privatif, est parfaite pour l’occasion. Quelles dates souhaitez-vous ?', 'Le week-end du 14.',
+        'C’est noté. Votre prénom et votre téléphone ?', 'Alexandre, 06 98 76 54 32.', 'Merci Alexandre, la réception vous confirme tout très vite.'] },
+    { ch: 'chat', d: 0, h: 8.3, name: 'Julie', email: 'julie.moreau@gmail.com', status: 'nouveau', score: 80,
+      summary: 'Chambre familiale pour 4, une nuit, avec un petit chien.',
+      t: ['Vous acceptez les chiens ?', 'Oui, les petits chiens sont les bienvenus, pour 20 € par nuit.', 'Super, il me faut une chambre pour 4 samedi.', 'Notre chambre familiale accueille jusqu’à 4 personnes. Je vérifie les disponibilités pour samedi ?'] },
+    { ch: 'chat', d: 3, h: 22.9, name: '', email: '', status: null,
+      t: ['À quelle heure peut-on arriver ?', 'L’arrivée se fait à partir de 15h, et le départ avant 11h.'] },
+  ],
+};
+
+async function ensureDemoActivity() {
+  for (const [slug, items] of Object.entries(DEMO_ACTIVITY)) {
+    const { rows: bz } = await query('SELECT id FROM businesses WHERE slug = $1', [slug]);
+    if (!bz[0]) continue;
+    const bid = bz[0].id;
+    const prefix = `demo-seed:${slug}:`;
+    const { rows: last } = await query(
+      'SELECT MAX(started_at) AS m, COUNT(*)::int AS n FROM conversations WHERE business_id = $1 AND external_id LIKE $2', [bid, prefix + '%']);
+    if (last[0].n && last[0].m && Date.now() - new Date(last[0].m).getTime() < 3 * 86400000) continue;
+    const old = await query('SELECT id FROM conversations WHERE business_id = $1 AND external_id LIKE $2', [bid, prefix + '%']);
+    const oldIds = old.rows.map((r) => r.id);
+    if (oldIds.length) {
+      const ph = oldIds.map((_, k) => '$' + (k + 2)).join(',');
+      await query(`DELETE FROM leads WHERE business_id = $1 AND conversation_id IN (${ph})`, [bid, ...oldIds]);
+      await query(`DELETE FROM messages WHERE conversation_id IN (${ph}) AND $1::int IS NOT NULL`, [bid, ...oldIds]);
+      await query(`DELETE FROM conversations WHERE business_id = $1 AND id IN (${ph})`, [bid, ...oldIds]);
+    }
+    const now = Date.now();
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const day = new Date(now - it.d * 86400000);
+      day.setHours(0, 0, 0, 0);
+      let start = day.getTime() + it.h * 3600000;
+      if (start > now) start = now - (i + 1) * 600000;
+      const startSecs = Math.floor(start / 1000);
+      const voice = it.ch === 'voice';
+      const label = voice ? (it.src === 'phone' ? '📞 ' : '🎙️ ') + (it.name || it.phone) : (it.name ? `Visiteur — ${it.name}` : 'Visiteur');
+      const callData = voice ? JSON.stringify({ firstName: it.name || '', company: '', email: '', phone: it.phone || '', need: it.summary || '', offer: '', wantsDemo: false, summary: it.summary || '' }) : null;
+      const { rows: c } = await query(
+        `INSERT INTO conversations (business_id, visitor_label, started_at, channel, external_id, duration_secs, voice_source, caller_number, call_data)
+         VALUES ($1, $2, to_timestamp($3), $4, $5, $6, $7, $8, $9) RETURNING id`,
+        [bid, label.slice(0, 120), startSecs, voice ? 'voice' : 'chat', prefix + i, voice ? it.dur : null, voice ? it.src : null,
+          voice && it.src === 'phone' ? it.phone : null, callData]);
+      const cid = c[0].id;
+      const step = voice ? Math.max(6, Math.floor(it.dur / it.t.length)) : 25;
+      for (let k = 0; k < it.t.length; k++) {
+        const role = voice ? (k % 2 === 0 ? 'assistant' : 'user') : (k % 2 === 0 ? 'user' : 'assistant');
+        await query('INSERT INTO messages (conversation_id, role, content, created_at) VALUES ($1, $2, $3, to_timestamp($4))',
+          [cid, role, it.t[k], startSecs + k * step]);
+      }
+      if (it.status && (it.email || it.phone)) {
+        const appt = it.rdvIn ? new Date(now + it.rdvIn * 86400000) : null;
+        if (appt) appt.setHours(it.rdvIn % 2 ? 18 : 14, 0, 0, 0);
+        await query(
+          `INSERT INTO leads (business_id, conversation_id, email, phone, name, message, summary, score, status, appointment_at, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, to_timestamp($11), to_timestamp($11))`,
+          [bid, cid, it.email || null, it.phone || null, it.name || null, it.summary || '', it.summary || '', it.score || 60, it.status, appt,
+            startSecs + (voice ? it.dur : 90)]);
+      }
+    }
+    console.log(`✅ Activité d'exemple créée pour la démo ${slug}.`);
+  }
+}
+
 async function ensureSuperAdmin() {
   const email = process.env.SUPERADMIN_EMAIL || 'equipe@whatgo.ai';
   const password = process.env.SUPERADMIN_PASSWORD || 'whatgo-superadmin-2026';
@@ -4585,6 +4799,7 @@ async function start() {
     await ensureDemoShop();
     await ensureDemoHotel();
     await ensureDemoLooks();
+    await ensureDemoActivity().catch((e) => console.error('Activité de démo non créée :', e.message));
     app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT} (Gemini + tableau de bord)`));
   } catch (err) {
     console.error('❌ Impossible de démarrer le serveur (problème de connexion à la base ?) :', err);
