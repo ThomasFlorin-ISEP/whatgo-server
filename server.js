@@ -2080,7 +2080,15 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     const phoneRaw = voiceField(results, /phone|t[ée]l[ée]phone/i);
     const need = voiceField(results, /summary|besoin|activity|activit/i);
     const offer = voiceField(results, /offer|offre/i);
-    const demoRaw = voiceField(results, /d[ée]mo/i);
+    const demoRaw = voiceField(results, /d[ée]mo|rendez|rdv/i);
+    // Autres informations recueillies par l'agent (âge, type de boîte,
+    // financement…) : ajoutées telles quelles à la fiche du lead.
+    const KNOWN_FIELD = /first_?name|pr[ée]nom|company|entreprise|soci[ée]t[ée]|e-?mail|phone|t[ée]l[ée]phone|summary|besoin|activity|activit|offer|offre|d[ée]mo|rendez|rdv/i;
+    const extras = Object.entries(results).map(([k, item]) => {
+      const v = item && typeof item === 'object' && 'value' in item ? item.value : item;
+      if (KNOWN_FIELD.test(k) || v === null || v === undefined || v === '' || /^(none|null|n\/a|inconnu|unknown)$/i.test(String(v).trim())) return null;
+      return `${k.replace(/_/g, ' ')} : ${String(v).slice(0, 120)}`;
+    }).filter(Boolean).slice(0, 8);
     const wantsDemo = demoRaw === true || /^(true|oui|yes|vrai)$/i.test(String(demoRaw || ''));
     const email = emailRaw ? (extractEmail(String(emailRaw)) || null) : null;
     const callerNumber = meta.phone_call && (meta.phone_call.external_number || meta.phone_call.from_number);
@@ -2092,7 +2100,7 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
 
     const voiceSource = meta.phone_call ? 'phone' : 'web';
     const callData = { firstName: firstName || '', company: company || '', email: email || '', phone: phone || '',
-      need: need ? String(need).slice(0, 500) : '', offer: offer ? String(offer).slice(0, 120) : '', wantsDemo, summary };
+      need: need ? String(need).slice(0, 500) : '', offer: offer ? String(offer).slice(0, 120) : '', wantsDemo, summary, extras };
     const { rows: c } = await query(
       `INSERT INTO conversations (business_id, visitor_label, started_at, channel, external_id, duration_secs, voice_source, caller_number, call_data)
        VALUES ($1, $2, to_timestamp($3), 'voice', $4, $5, $6, $7, $8) RETURNING id`,
@@ -2113,8 +2121,8 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     let leadId = null;
     const score = wantsDemo ? 85 : 60;
     if (email || phone) {
-      const message = [company && `Entreprise : ${company}`, need && `Besoin : ${need}`, offer && `Offre conseillée : ${offer}`,
-        wantsDemo && 'Souhaite une démo'].filter(Boolean).join(' · ') || 'Appel téléphonique';
+      const message = [company && `Entreprise : ${company}`, need && `Besoin : ${need}`, offer && `Offre conseillée : ${offer}`, ...extras,
+        wantsDemo && (voiceField(results, /d[ée]mo/i) != null ? 'Souhaite une démo' : 'Souhaite un rendez-vous')].filter(Boolean).join(' · ') || 'Appel téléphonique';
       const { rows: ins } = await query(
         `INSERT INTO leads (business_id, conversation_id, email, phone, name, message, summary, score, status, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'nouveau', to_timestamp($9), to_timestamp($9)) RETURNING id`,
