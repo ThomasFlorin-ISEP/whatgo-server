@@ -1725,7 +1725,7 @@ function voiceAgentIdOf(b) {
 // de la démo voyage avec l'appel (variable « whatgo_business ») pour que
 // le compte-rendu arrive dans le bon tableau de bord.
 // VOICE_DEMOS=off sur Render coupe l'appel vocal des démos.
-const DEMO_VOICE_SLUGS = process.env.VOICE_DEMOS === 'off' ? [] : ['salon-demo', 'boutique-demo', 'hotel-demo'];
+const DEMO_VOICE_SLUGS = process.env.VOICE_DEMOS === 'off' ? [] : ['salon-demo', 'boutique-demo', 'hotel-demo', 'autoecole-demo'];
 const DEMO_VOICE_AGENT_ID = process.env.DEMO_VOICE_AGENT_ID || process.env.WHATGO_VOICE_AGENT_ID || 'agent_8601m4r6knh2fwf9mbe75vzg60p2';
 
 // « Parler à Victoria » dans le chat : le navigateur du visiteur se connecte
@@ -1817,7 +1817,7 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     let business = null;
     const initData = data.conversation_initiation_client_data || {};
     const demoSlug = String(((initData.dynamic_variables || {}).whatgo_business) || '');
-    if (demoSlug && ['salon-demo', 'boutique-demo', 'hotel-demo'].includes(demoSlug)) {
+    if (demoSlug && ['salon-demo', 'boutique-demo', 'hotel-demo', 'autoecole-demo'].includes(demoSlug)) {
       business = (await query('SELECT * FROM businesses WHERE slug = $1', [demoSlug])).rows[0] || null;
     }
     if (!business && agentId) business = (await query('SELECT * FROM businesses WHERE voice_agent_id = $1 LIMIT 1', [agentId])).rows[0] || null;
