@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Auto-École Horizon — Permis B à Bordeaux</title>
+<meta name="robots" content="noindex, nofollow" />
+<!-- Page de DÉMONSTRATION WHATGO : auto-école fictive, sert à montrer le
+     chatbot (questions, financement, prise de rendez-vous) en rendez-vous commercial. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --navy:#13233F; --navy-2:#1D3360; --ink-soft:#56627A; --paper:#F6F7FA; --white:#FFFFFF;
+    --yellow:#FFC93C; --yellow-deep:#E5A800; --line:#E2E6EE; --sky:#E9F0FB;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--paper);color:var(--navy);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+  .demo-banner{background:var(--navy);color:#DCE4F2;font-size:.78rem;text-align:center;padding:7px 16px}
+  .demo-banner b{color:var(--yellow)}
+  header{position:sticky;top:0;z-index:10;background:rgba(246,247,250,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;height:68px;gap:16px}
+  .logo{display:flex;align-items:center;gap:10px;font-family:'Outfit',sans-serif;font-weight:800;font-size:1.3rem;letter-spacing:-.01em}
+  .logo__mark{width:36px;height:36px;border-radius:10px;background:var(--navy);display:grid;place-items:center;color:var(--yellow);font-size:1.05rem}
+  .logo small{display:block;font-family:'Inter',sans-serif;font-weight:500;font-size:.7rem;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase;line-height:1}
+  nav{display:flex;gap:26px;font-size:.9rem;color:var(--ink-soft)}
+  nav a:hover{color:var(--navy)}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;border-radius:12px;font:600 .94rem 'Inter',sans-serif;padding:13px 22px;transition:transform .15s,background .15s,box-shadow .15s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn--navy{background:var(--navy);color:#fff}
+  .btn--navy:hover{background:var(--navy-2)}
+  .btn--yellow{background:var(--yellow);color:var(--navy);box-shadow:0 8px 22px rgba(229,168,0,.28)}
+  .btn--yellow:hover{background:#FFD25E}
+  .btn--ghost{background:transparent;border:1.5px solid var(--navy);color:var(--navy)}
+  .hero{padding:64px 0 56px}
+  .hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+  .pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .pill{font-size:.76rem;font-weight:600;background:var(--white);border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--ink-soft)}
+  .pill b{color:var(--navy)}
+  h1{font-family:'Outfit',sans-serif;font-size:clamp(2.4rem,5.6vw,3.8rem);line-height:1.04;font-weight:800;letter-spacing:-.02em;margin-bottom:18px}
+  h1 em{font-style:normal;background:linear-gradient(transparent 62%,var(--yellow) 62%);padding:0 4px}
+  .hero p.sub{font-size:1.06rem;color:var(--ink-soft);max-width:46ch;margin-bottom:26px}
+  .hero__cta{display:flex;gap:12px;flex-wrap:wrap}
+  .hero__note{margin-top:16px;font-size:.84rem;color:var(--ink-soft)}
+  .visual{position:relative;border-radius:28px;overflow:hidden;background:linear-gradient(180deg,#CFE0F7 0%,#EAF2FC 55%,#DDE7D3 55%,#C9D9BC 100%);aspect-ratio:5/4;box-shadow:0 30px 60px rgba(19,35,63,.18)}
+  .visual svg{position:absolute;inset:0;width:100%;height:100%}
+  .float{position:absolute;background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 18px 40px rgba(19,35,63,.16);font-size:.8rem}
+  .float b{display:block;font-family:'Outfit',sans-serif;font-size:1rem}
+  .float--a{left:-14px;top:26px}
+  .float--b{right:-10px;bottom:26px}
+  section{padding:64px 0}
+  h2{font-family:'Outfit',sans-serif;font-size:clamp(1.9rem,3.8vw,2.5rem);font-weight:800;letter-spacing:-.015em;margin-bottom:8px}
+  .lead{color:var(--ink-soft);margin-bottom:32px;max-width:62ch}
+  .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .plan{background:var(--white);border:1px solid var(--line);border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:8px}
+  .plan--hl{background:var(--navy);color:#fff;border-color:var(--navy);position:relative}
+  .plan--hl .plan__for,.plan--hl li{color:#C9D3E6}
+  .plan__tag{position:absolute;top:-11px;left:20px;background:var(--yellow);color:var(--navy);font-size:.7rem;font-weight:700;border-radius:999px;padding:3px 10px}
+  .plan h3{font-family:'Outfit',sans-serif;font-size:1.12rem;font-weight:700}
+  .plan__for{font-size:.82rem;color:var(--ink-soft);min-height:40px}
+  .plan__price{font-family:'Outfit',sans-serif;font-size:2rem;font-weight:800}
+  .plan__price small{font-size:.85rem;font-weight:600;opacity:.7}
+  .plan ul{list-style:none;display:flex;flex-direction:column;gap:6px;margin:6px 0 14px;font-size:.84rem;color:var(--ink-soft)}
+  .plan li::before{content:'✓';color:var(--yellow-deep);font-weight:700;margin-right:7px}
+  .plan--hl li::before{color:var(--yellow)}
+  .plan .btn{margin-top:auto;justify-content:center;width:100%}
+  .extras{margin-top:18px;font-size:.86rem;color:var(--ink-soft)}
+  .money{background:var(--white);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .money__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .mcard{border-radius:18px;background:var(--sky);padding:22px}
+  .mcard .ic{font-size:1.5rem;margin-bottom:8px}
+  .mcard h3{font-family:'Outfit',sans-serif;font-size:1.05rem;margin-bottom:4px}
+  .mcard p{font-size:.86rem;color:var(--ink-soft)}
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;counter-reset:s}
+  .step{position:relative;padding:22px;border-radius:18px;background:var(--white);border:1px solid var(--line)}
+  .step::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--yellow);font-family:'Outfit',sans-serif;font-weight:800;margin-bottom:10px}
+  .step h3{font-family:'Outfit',sans-serif;font-size:1.02rem;margin-bottom:4px}
+  .step p{font-size:.86rem;color:var(--ink-soft)}
+  .info .wrap{display:grid;grid-template-columns:1fr 1fr;gap:36px}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:22px;padding:28px}
+  .hours li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:.93rem;list-style:none}
+  .hours li span:last-child{color:var(--ink-soft)}
+  .closed{opacity:.55}
+  .docs{list-style:none;display:flex;flex-direction:column;gap:7px;margin:12px 0 22px;font-size:.92rem}
+  .docs li::before{content:'📄';margin-right:8px}
+  footer{padding:32px 0;color:var(--ink-soft);font-size:.82rem;border-top:1px solid var(--line)}
+  footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  @media (max-width:900px){
+    .plans,.money__grid,.steps{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:760px){
+    nav{display:none}
+    .hero{padding:40px 0}
+    .hero .wrap,.info .wrap{grid-template-columns:1fr}
+    .plans,.money__grid,.steps{grid-template-columns:1fr}
+    .float--a{left:8px}.float--b{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-banner">Site de <b>démonstration</b> — auto-école fictive. Posez vos questions à l'assistante en bas à droite : tarifs, financement, inscription… elle peut aussi réserver une évaluation.</div>
+
+<header>
+  <div class="wrap">
+    <a href="#" class="logo"><span class="logo__mark">H</span><span>Horizon<small>Auto-école · Bordeaux</small></span></a>
+    <nav>
+      <a href="#forfaits">Forfaits</a>
+      <a href="#financement">Financement</a>
+      <a href="#parcours">Votre parcours</a>
+      <a href="#infos">Infos pratiques</a>
+    </nav>
+    <button class="btn btn--navy" type="button" onclick="WHATGO.book()">Réserver</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <div class="pills">
+          <span class="pill"><b>Agréée</b> préfecture</span>
+          <span class="pill"><b>Qualiopi</b> · CPF accepté</span>
+          <span class="pill">Moniteurs <b>diplômés d'État</b></span>
+        </div>
+        <h1>Votre permis, <em>sans stress</em>, à votre rythme.</h1>
+        <p class="sub">Code, boîte manuelle ou automatique, conduite accompagnée dès 15 ans : on vous accompagne de l'inscription jusqu'à l'examen, en plein cœur de Bordeaux.</p>
+        <div class="hero__cta">
+          <button class="btn btn--yellow" type="button" onclick="WHATGO.book()">Réserver mon évaluation de départ</button>
+          <a class="btn btn--ghost" href="#forfaits">Voir les forfaits</a>
+        </div>
+        <p class="hero__note">Paiement en 3 ou 4 fois sans frais · Permis à 1 € par jour</p>
+      </div>
+      <div style="position:relative">
+        <div class="visual" aria-hidden="true">
+          <svg viewBox="0 0 500 400" preserveAspectRatio="xMidYMid slice">
+            <circle cx="400" cy="70" r="34" fill="#FFE59A"/>
+            <path d="M0 220 C 80 200, 140 214, 200 206 C 280 196, 340 214, 500 200 L500 400 L0 400Z" fill="#C3D6B4"/>
+            <path d="M120 400 L 225 220 L 275 220 L 380 400 Z" fill="#3A4660"/>
+            <path d="M250 228 L250 250 M250 270 L250 300 M250 324 L250 362" stroke="#FFC93C" stroke-width="6" stroke-linecap="round"/>
+            <g transform="translate(205 296)">
+              <rect x="0" y="22" width="92" height="34" rx="10" fill="#FFFFFF"/>
+              <path d="M14 22 L26 4 H66 L80 22 Z" fill="#FFFFFF"/>
+              <path d="M22 21 L30 9 H44 V21 Z M48 21 V9 H62 L72 21 Z" fill="#B8CBE6"/>
+              <rect x="30" y="-10" width="34" height="12" rx="3" fill="#13233F"/>
+              <text x="47" y="-1" text-anchor="middle" font-family="Inter,sans-serif" font-size="7" font-weight="700" fill="#FFC93C">AUTO-ÉCOLE</text>
+              <circle cx="20" cy="58" r="9" fill="#13233F"/><circle cx="72" cy="58" r="9" fill="#13233F"/>
+              <rect x="80" y="30" width="10" height="7" rx="2" fill="#FFC93C"/>
+            </g>
+            <g fill="#6E8F5E"><circle cx="60" cy="214" r="18"/><circle cx="86" cy="206" r="22"/><circle cx="430" cy="206" r="20"/><circle cx="456" cy="214" r="16"/></g>
+          </svg>
+        </div>
+        <div class="float float--a"><b>Évaluation de départ</b>Réservable 24h/24 dans le chat</div>
+        <div class="float float--b"><b>Code + conduite</b>Dès 15 ans en accompagnée</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="forfaits">
+    <div class="wrap">
+      <h2>Nos forfaits</h2>
+      <p class="lead">Des formules claires, démarches ANTS comprises. L'évaluation de départ (45 €) permet d'estimer précisément le nombre d'heures dont vous aurez besoin.</p>
+      <div class="plans">
+        <div class="plan">
+          <h3>Code de la route</h3>
+          <p class="plan__for">Accès en ligne + cours en salle illimités pendant 6 mois</p>
+          <div class="plan__price">49 €</div>
+          <ul><li>Tests en ligne illimités</li><li>Cours thématiques en salle</li><li>Examen : 30 € (tarif national)</li></ul>
+          <button class="btn btn--ghost" type="button" onclick="WHATGO.open()">Poser une question</button>
+        </div>
+        <div class="plan plan--hl">
+          <span class="plan__tag">Le plus choisi</span>
+          <h3>Permis B — manuelle</h3>
+          <p class="plan__for">20 h de conduite, accompagnement à l'examen inclus</p>
+          <div class="plan__price">1 290 €</div>
+          <ul><li>Inscription et démarches ANTS</li><li>20 h de conduite</li><li>Accompagnement à l'examen</li></ul>
+          <button class="btn btn--yellow" type="button" onclick="WHATGO.book()">Réserver l'évaluation</button>
+        </div>
+        <div class="plan">
+          <h3>Permis B — automatique</h3>
+          <p class="plan__for">13 h de conduite, idéal pour aller vite et sans calage</p>
+          <div class="plan__price">990 €</div>
+          <ul><li>13 h de conduite</li><li>Passerelle manuelle possible (7 h)</li><li>Accompagnement à l'examen</li></ul>
+          <button class="btn btn--ghost" type="button" onclick="WHATGO.book()">Réserver l'évaluation</button>
+        </div>
+        <div class="plan">
+          <h3>Conduite accompagnée</h3>
+          <p class="plan__for">Dès 15 ans, avec rendez-vous pédagogiques</p>
+          <div class="plan__price">1 390 €</div>
+          <ul><li>20 h + rendez-vous pédagogiques</li><li>Formation des accompagnateurs</li><li>Examen dès 17 ans</li></ul>
+          <button class="btn btn--ghost" type="button" onclick="WHATGO.open()">Poser une question</button>
+        </div>
+      </div>
+      <p class="extras">Heure supplémentaire : 55 € (manuelle) · 58 € (automatique) · Passerelle automatique → manuelle : 420 € · Annulation d'une leçon gratuite jusqu'à 48 h avant.</p>
+    </div>
+  </section>
+
+  <section class="money" id="financement">
+    <div class="wrap">
+      <h2>Financer votre permis</h2>
+      <p class="lead">Plusieurs solutions se cumulent souvent : demandez à notre assistante ce qui s'applique à votre situation.</p>
+      <div class="money__grid">
+        <div class="mcard"><div class="ic">🎓</div><h3>CPF</h3><p>Code et permis B finançables avec votre Compte Personnel de Formation (formation certifiée Qualiopi).</p></div>
+        <div class="mcard"><div class="ic">💶</div><h3>Permis à 1 € / jour</h3><p>Pour les 15-25 ans, un prêt à taux zéro avec notre banque partenaire, sous conditions.</p></div>
+        <div class="mcard"><div class="ic">🗓️</div><h3>3 ou 4 fois sans frais</h3><p>Réglez votre forfait en plusieurs mensualités, sans aucun frais.</p></div>
+        <div class="mcard"><div class="ic">🧰</div><h3>Aide apprentis</h3><p>500 € d'aide pour les apprentis majeurs, et d'autres aides possibles selon votre situation.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="parcours">
+    <div class="wrap">
+      <h2>Votre parcours en 4 étapes</h2>
+      <p class="lead">En moyenne 3 à 6 mois selon vos disponibilités. Les dates d'examen dépendent des places attribuées par la préfecture.</p>
+      <div class="steps">
+        <div class="step"><h3>Évaluation de départ</h3><p>1 h en voiture avec un moniteur pour définir votre nombre d'heures.</p></div>
+        <div class="step"><h3>Inscription</h3><p>On s'occupe des démarches ANTS. Vous démarrez le code en ligne.</p></div>
+        <div class="step"><h3>Leçons de conduite</h3><p>Du lundi au samedi, 8h-20h, avec votre moniteur attitré.</p></div>
+        <div class="step"><h3>Examen</h3><p>Votre moniteur vous accompagne le jour J.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="info" id="infos">
+    <div class="wrap">
+      <div class="card">
+        <h2>Horaires de l'agence</h2>
+        <ul class="hours">
+          <li class="closed"><span>Lundi</span><span>Fermé (leçons assurées)</span></li>
+          <li><span>Mardi</span><span>10h – 12h30 · 14h – 19h</span></li>
+          <li><span>Mercredi</span><span>10h – 12h30 · 14h – 19h</span></li>
+          <li><span>Jeudi</span><span>10h – 12h30 · 14h – 19h</span></li>
+          <li><span>Vendredi</span><span>10h – 12h30 · 14h – 19h</span></li>
+          <li><span>Samedi</span><span>9h – 13h</span></li>
+          <li class="closed"><span>Dimanche</span><span>Fermé</span></li>
+        </ul>
+      </div>
+      <div>
+        <h2>S'inscrire</h2>
+        <p class="lead" style="margin-bottom:6px">24 cours de la Marne, 33800 Bordeaux · Tram C, arrêt Sainte-Croix · 05 56 00 00 00</p>
+        <ul class="docs">
+          <li>Pièce d'identité</li>
+          <li>Justificatif de domicile de moins de 6 mois</li>
+          <li>E-photo avec code ANTS (photomaton agréé)</li>
+          <li>ASSR2 (moins de 21 ans) · certificat de JDC (17-25 ans)</li>
+        </ul>
+        <button class="btn btn--yellow" type="button" onclick="WHATGO.book()">Prendre rendez-vous en ligne</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© Auto-École Horizon — établissement fictif de démonstration</span>
+    <span>Assistant et réservation par WHATGO AI</span>
+  </div>
+</footer>
+
+<script
+  src="/widget.js"
+  data-server="/api/chat"
+  data-business="autoecole-demo"
+  data-name="Auto-École Horizon"
+  data-color="#1FAA59"
+  data-welcome="Bonjour et bienvenue à l'Auto-École Horizon ! Je suis Victoria, je peux vous renseigner sur nos forfaits et le financement, ou réserver votre évaluation de départ."
+  data-nudge="false"
+></script>
+</body>
+</html>

@@ -1917,7 +1917,7 @@ function voiceAgentIdOf(b) {
 // de la démo voyage avec l'appel (variable « whatgo_business ») pour que
 // le compte-rendu arrive dans le bon tableau de bord.
 // VOICE_DEMOS=off sur Render coupe l'appel vocal des démos.
-const DEMO_VOICE_SLUGS = process.env.VOICE_DEMOS === 'off' ? [] : ['salon-demo', 'boutique-demo', 'hotel-demo'];
+const DEMO_VOICE_SLUGS = process.env.VOICE_DEMOS === 'off' ? [] : ['salon-demo', 'boutique-demo', 'hotel-demo', 'autoecole-demo'];
 const DEMO_VOICE_AGENT_ID = process.env.DEMO_VOICE_AGENT_ID || process.env.WHATGO_VOICE_AGENT_ID || 'agent_8601m4r6knh2fwf9mbe75vzg60p2';
 
 // « Parler à Victoria » dans le chat : le navigateur du visiteur se connecte
@@ -1935,7 +1935,7 @@ app.get('/api/widget/:slug/voice-session', async (req, res) => {
     let demoExtra = {};
     if (business && !business.voice_agent_id && DEMO_VOICE_SLUGS.includes(business.slug)) {
       demoExtra = {
-        overrides: { prompt: await demoVoicePrompt(business), firstMessage: `Bonjour, ici Victoria, ${business.slug === 'hotel-demo' ? "de l'" : 'de '}${business.name}. Que puis-je faire pour vous ?` },
+        overrides: { prompt: await demoVoicePrompt(business), firstMessage: `Bonjour, ici Victoria, ${business.slug === 'hotel-demo' || business.slug === 'autoecole-demo' ? "de l'" : 'de '}${business.name}. Que puis-je faire pour vous ?` },
         dynamicVariables: { whatgo_business: business.slug },
       };
     }
@@ -1992,7 +1992,7 @@ async function demoVoicePrompt(b) {
         cfg.services.forEach((sv) => lines.push(`- ${sv.name} : ${sv.price || 'prix sur demande'} (${sv.duration} min)`));
       }
       const days = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-      lines.push('', 'HORAIRES :');
+      lines.push('', 'CRÉNEAUX DE RENDEZ-VOUS :');
       [1, 2, 3, 4, 5, 6, 0].forEach((d) => lines.push(`- ${days[d]} : ${cfg.hours[d] || 'fermé'}`));
     } else {
       const { rows: prods } = await query(
@@ -2053,7 +2053,7 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     let business = null;
     const initData = data.conversation_initiation_client_data || {};
     const demoSlug = String(((initData.dynamic_variables || {}).whatgo_business) || '');
-    if (demoSlug && ['salon-demo', 'boutique-demo', 'hotel-demo'].includes(demoSlug)) {
+    if (demoSlug && ['salon-demo', 'boutique-demo', 'hotel-demo', 'autoecole-demo'].includes(demoSlug)) {
       business = (await query('SELECT * FROM businesses WHERE slug = $1', [demoSlug])).rows[0] || null;
     }
     if (!business && agentId) business = (await query('SELECT * FROM businesses WHERE voice_agent_id = $1 LIMIT 1', [agentId])).rows[0] || null;
@@ -4633,6 +4633,38 @@ async function ensureDemoHotel() {
 // dates récentes dès qu'elles ont plus de 3 jours.
 // ============================================================
 const DEMO_ACTIVITY = {
+  'autoecole-demo': [
+    { ch: 'voice', src: 'phone', d: 0, h: 12.6, dur: 148, name: 'Mme Laurent', phone: '06 87 76 65 54', status: 'nouveau', score: 85,
+      summary: 'Maman de Chloé (16 ans) : se renseigne sur la conduite accompagnée et le permis à 1 € par jour. Souhaite un rendez-vous d’inscription samedi matin.',
+      t: ['Bonjour, ici Victoria, de l’Auto-École Horizon. Que puis-je faire pour vous ?', 'Bonjour, c’est pour ma fille, elle a 16 ans, elle peut commencer la conduite accompagnée ?',
+        'Oui, la conduite accompagnée est possible dès 15 ans. Notre forfait coûte 1 390 €, et le permis à 1 € par jour est possible jusqu’à 25 ans, sous conditions. Souhaitez-vous venir l’inscrire en agence ?', 'Oui, samedi matin si possible.',
+        'Avec plaisir. Puis-je avoir votre nom et un numéro où vous joindre ?', 'Madame Laurent, 06 87 76 65 54.',
+        'Merci Madame Laurent, c’est noté pour un rendez-vous d’inscription samedi matin. Pensez à apporter la pièce d’identité de Chloé et son attestation ASSR2. L’équipe vous confirme l’horaire.'] },
+    { ch: 'voice', src: 'phone', d: 1, h: 8.2, dur: 71, name: 'Yanis', phone: '07 98 89 78 67', status: 'contacte', score: 60,
+      summary: 'Élève inscrit : souhaite décaler sa leçon de jeudi. Rappel de la règle d’annulation à 48 h.',
+      t: ['Bonjour, ici Victoria, de l’Auto-École Horizon. Que puis-je faire pour vous ?', 'Oui bonjour, c’est Yanis, je voudrais décaler ma leçon de jeudi.',
+        'Bien sûr Yanis. Je transmets votre demande au moniteur. Pour rappel, une leçon peut être annulée gratuitement jusqu’à 48 heures avant. Quel autre moment vous arrangerait ?', 'Vendredi en fin d’après-midi.',
+        'C’est noté : vendredi en fin d’après-midi. L’équipe vous confirme par SMS.'] },
+    { ch: 'voice', src: 'web', d: 3, h: 21.4, dur: 126, name: 'Sarah', phone: '06 34 45 56 67', status: 'rdv_pris', score: 90, rdvIn: 2,
+      summary: '22 ans, code obtenu, hésite entre boîte manuelle et automatique, financement CPF. Évaluation de départ réservée.',
+      t: ['Bonjour, ici Victoria, de l’Auto-École Horizon. Que puis-je faire pour vous ?', 'J’ai eu mon code, je voudrais passer le permis mais j’hésite entre manuelle et automatique.',
+        'Félicitations pour le code ! La boîte automatique demande 13 heures minimum, contre 20 en manuelle, et le forfait est à 990 € au lieu de 1 290 €. Vous pourrez ensuite passer en manuelle avec une passerelle de 7 heures. Avez-vous pensé au CPF ?', 'Oui j’ai du CPF, c’est accepté ?',
+        'Oui, nous sommes labellisés Qualiopi, le CPF est accepté. Le mieux est de commencer par une évaluation de départ d’une heure, à 45 €. Votre prénom et votre téléphone ?', 'Sarah, 06 34 45 56 67.',
+        'Merci Sarah, votre évaluation de départ est notée. À très vite !'] },
+    { ch: 'voice', src: 'phone', d: 6, h: 19.7, dur: 58, name: '', phone: '05 56 12 34 56', status: 'contacte', score: 55,
+      summary: 'Demande les horaires d’ouverture de l’agence et les documents pour s’inscrire.',
+      t: ['Bonjour, ici Victoria, de l’Auto-École Horizon. Que puis-je faire pour vous ?', 'Vous êtes ouverts quand ? Et il faut quoi pour s’inscrire ?',
+        'L’agence est ouverte du mardi au vendredi de 10h à 12h30 et de 14h à 19h, et le samedi de 9h à 13h. Pour l’inscription : une pièce d’identité, un justificatif de domicile, une e-photo avec code ANTS, et l’ASSR2 si vous avez moins de 21 ans.', 'Parfait, merci.'] },
+    { ch: 'chat', d: 0, h: 22.8, name: 'Hugo', email: 'hugo.m@gmail.com', phone: '07 12 34 56 78', status: 'nouveau', score: 80,
+      summary: '17 ans, veut passer le permis B rapidement, demande les tarifs et le paiement en plusieurs fois.',
+      t: ['Bonsoir, je peux passer le permis à 17 ans ?', 'Bonsoir ! Oui, le permis B est possible dès 17 ans. Notre forfait boîte manuelle 20 h est à 1 290 €, payable en 3 ou 4 fois sans frais.',
+        'Ok et je peux commencer quand ?', 'Dès que vous êtes inscrit ! La première étape est une évaluation de départ d’une heure en voiture (45 €). Voulez-vous la réserver ?'] },
+    { ch: 'chat', d: 2, h: 13.1, name: 'Camille', email: 'camille.dupont@outlook.fr', status: 'rdv_pris', score: 90, rdvIn: 3,
+      summary: 'Évaluation de départ réservée dans le chat.',
+      t: ['Je voudrais réserver une évaluation.', 'Avec plaisir ! Choisissez votre créneau ci-dessous.', '📅 A réservé : Évaluation de départ (1 h en voiture)', 'C’est réservé ! Pensez à apporter votre pièce d’identité. À bientôt !'] },
+    { ch: 'chat', d: 5, h: 18.3, name: '', email: '', status: null,
+      t: ['C’est combien l’examen du code ?', 'L’examen du code coûte 30 €, c’est un tarif national. Il se réserve auprès d’un centre agréé, et nous vous accompagnons dans la démarche.'] },
+  ],
   'salon-demo': [
     { ch: 'voice', src: 'phone', d: 0, h: 9.4, dur: 134, name: 'Camille', phone: '06 12 45 78 90', status: 'nouveau', score: 85,
       summary: 'Souhaite une couleur + brushing samedi matin. À rappeler pour confirmer le créneau.',
@@ -4769,6 +4801,105 @@ async function ensureDemoActivity() {
   }
 }
 
+// ============================================================
+// AUTO-CRÉATION : auto-école de démonstration "Auto-École Horizon"
+// ============================================================
+// Verticale de lancement : questions sur les forfaits, le financement
+// (CPF, permis à 1 €/jour), l'âge, les documents d'inscription, et prise
+// de rendez-vous (évaluation de départ, inscription en agence).
+// Page vitrine /demo-autoecole.html, compte demo-autoecole@whatgo.ai
+// (même mot de passe DEMO_PASSWORD).
+const DEMO_AE_SLUG = 'autoecole-demo';
+async function ensureDemoAutoEcole() {
+  const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [DEMO_AE_SLUG]);
+  if (rows[0]) {
+    console.log('ℹ️  Auto-école de démo "Horizon" déjà présente.');
+    return;
+  }
+  const instructions = [
+    "Auto-École Horizon est une auto-école située 24 cours de la Marne, 33800 Bordeaux (tram C, arrêt Sainte-Croix). Téléphone : 05 56 00 00 00. Agréée par la préfecture, labellisée Qualiopi (formations finançables par le CPF).",
+    "Équipe : 4 moniteurs diplômés d'État. Véhicules récents en boîte manuelle et boîte automatique, double commande.",
+    "Accueil en agence : mardi au vendredi 10h-12h30 et 14h-19h, samedi 9h-13h, fermé dimanche et lundi. Leçons de conduite du lundi au samedi, 8h-20h (samedi jusqu'à 13h).",
+    "TARIFS (TTC) :",
+    "- Code de la route : accès code en ligne + cours en salle illimités 6 mois : 49 €. Examen du code : 30 € (tarif national, à réserver auprès d'un centre agréé).",
+    "- Évaluation de départ (obligatoire avant toute formation, 1 h en voiture) : 45 €.",
+    "- Forfait Permis B boîte manuelle 20 h (inscription, démarches ANTS, livret, 20 h de conduite, accompagnement à l'examen) : 1 290 €.",
+    "- Forfait Permis B boîte automatique 13 h : 990 €.",
+    "- Conduite accompagnée (AAC) dès 15 ans, 20 h + rendez-vous pédagogiques : 1 390 €.",
+    "- Passerelle boîte automatique vers manuelle (7 h, 3 mois après l'obtention du permis auto) : 420 €.",
+    "- Heure de conduite supplémentaire : 55 € en manuelle, 58 € en automatique. Accompagnement à l'examen pratique supplémentaire : 55 €.",
+    "FINANCEMENT : CPF accepté (permis B, code et conduite) ; permis à 1 € par jour pour les 15-25 ans, sous conditions, avec une banque partenaire ; paiement en 3 ou 4 fois sans frais ; aide de 500 € pour les apprentis majeurs ; possibles aides de France Travail ou de la mairie selon la situation.",
+    "ÂGE : conduite accompagnée dès 15 ans ; permis B (et examen) possible dès 17 ans ; code dès 15 ans.",
+    "INSCRIPTION (en agence ou en ligne) : pièce d'identité, justificatif de domicile de moins de 6 mois, e-photo avec code ANTS (photomaton agréé), attestation ASSR2 pour les moins de 21 ans, certificat de JDC pour les 17-25 ans. L'auto-école fait les démarches ANTS.",
+    "DÉLAIS : la formation dure en moyenne 3 à 6 mois selon les disponibilités de l'élève ; les dates d'examen dépendent des places attribuées par la préfecture : ne jamais promettre une date d'examen précise.",
+    "Annulation d'une leçon gratuite jusqu'à 48 h avant, sinon la leçon est due.",
+    "QUALIFICATION : pour un futur élève, chercher à connaître (une question à la fois, naturellement) : son âge, s'il a déjà le code, boîte manuelle ou automatique, s'il pense utiliser le CPF ou un autre financement, ses disponibilités. Proposer ensuite de réserver l'évaluation de départ ou un rendez-vous d'inscription en agence.",
+    "Toujours vouvoyer, ton chaleureux, rassurant et pédagogue (beaucoup d'élèves sont jeunes ou stressés ; les parents appellent souvent pour leur enfant).",
+  ].join('\n');
+
+  const config = booking.sanitizeBooking({
+    enabled: true,
+    mode: 'agenda',
+    services: [
+      { id: 'evaluation', name: 'Évaluation de départ (1 h en voiture)', duration: 60, price: '45 €' },
+      { id: 'inscription', name: "Rendez-vous d'inscription en agence", duration: 30, price: 'Gratuit' },
+      { id: 'lecon-bm', name: 'Leçon de conduite — boîte manuelle', duration: 60, price: '55 €' },
+      { id: 'lecon-ba', name: 'Leçon de conduite — boîte automatique', duration: 60, price: '58 €' },
+    ],
+    hours: { 0: '', 1: '08:00-20:00', 2: '08:00-20:00', 3: '08:00-20:00', 4: '08:00-20:00', 5: '08:00-20:00', 6: '08:00-13:00' },
+    capacity: 4,
+    slotStep: 60,
+    minNoticeHours: 12,
+    maxDaysAhead: 30,
+  });
+
+  const business = {
+    name: 'Auto-École Horizon', sector: 'Auto-école', instructions,
+    faq: '[]', intro: '', pricing: '', hours: '', qualification: '{}',
+  };
+  const { rows: inserted } = await query(
+    `INSERT INTO businesses (slug, name, system_prompt, status, sector, instructions, booking, business_type, bot_name, bot_avatar, bot_suggestions, voice_minutes_quota)
+     VALUES ($1, $2, $3, 'published', $4, $5, $6, 'rdv', 'Victoria', '/avatars/victoria.jpg', $7, 250) RETURNING id`,
+    [DEMO_AE_SLUG, business.name, buildSystemPrompt(business), business.sector, instructions, JSON.stringify(config),
+      JSON.stringify({
+        fr: [{ label: '💶 Tarifs des forfaits', text: 'Quels sont vos tarifs pour le permis B ?' },
+          { label: '🎓 Financement (CPF, 1 €/jour)', text: 'Comment financer mon permis ? Le CPF est-il accepté ?' }],
+        en: [{ label: '💶 Prices', text: 'What are your prices for a driving licence?' },
+          { label: '🎓 Funding options', text: 'How can I fund my driving licence?' }],
+      })]
+  );
+  const businessId = inserted[0].id;
+
+  const email = process.env.DEMO_AE_EMAIL || 'demo-autoecole@whatgo.ai';
+  const hash = await hashPassword(process.env.DEMO_PASSWORD || 'demo-salon-2026');
+  await query(
+    `INSERT INTO users (business_id, email, password_hash, role) VALUES ($1, $2, $3, 'admin') ON CONFLICT (email) DO NOTHING`,
+    [businessId, email, hash]
+  );
+
+  // Agenda de démo : quelques leçons et évaluations déjà réservées.
+  const today = booking.dateToParis(new Date()).dateStr;
+  const samples = [
+    [1, 540, 'Leçon de conduite — boîte manuelle', 60, '55 €', 'Lucas Moreau', '06 21 32 43 54'],
+    [1, 600, 'Évaluation de départ (1 h en voiture)', 60, '45 €', 'Inès Garcia', '07 61 52 43 34'],
+    [1, 1020, 'Leçon de conduite — boîte automatique', 60, '58 €', 'Thomas Petit', '06 45 56 67 78'],
+    [2, 660, "Rendez-vous d'inscription en agence", 30, 'Gratuit', 'Mme Laurent (pour sa fille Chloé)', '06 87 76 65 54'],
+    [2, 840, 'Leçon de conduite — boîte manuelle', 60, '55 €', 'Yanis Haddad', '07 98 89 78 67'],
+    [3, 480, 'Évaluation de départ (1 h en voiture)', 60, '45 €', 'Emma Roux', '06 11 22 33 99'],
+  ];
+  for (const [dayOffset, minutes, service, duration, price, name, phone] of samples) {
+    let day = booking.addDays(today, dayOffset);
+    for (let i = 0; i < 7 && !config.hours[booking.weekdayOf(day)]; i++) day = booking.addDays(day, 1);
+    const start = booking.parisToDate(day, minutes);
+    await query(
+      `INSERT INTO bookings (business_id, service_name, duration, price, start_at, end_at, customer_name, phone, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manuel')`,
+      [businessId, service, duration, price, start, new Date(start.getTime() + duration * 60000), name, phone]
+    );
+  }
+  console.log(`✅ Auto-école de démo "Horizon" créée (${email}) — page vitrine : /demo-autoecole.html`);
+}
+
 async function ensureSuperAdmin() {
   const email = process.env.SUPERADMIN_EMAIL || 'equipe@whatgo.ai';
   const password = process.env.SUPERADMIN_PASSWORD || 'whatgo-superadmin-2026';
@@ -4798,6 +4929,7 @@ async function start() {
     await ensureDemoSalon();
     await ensureDemoShop();
     await ensureDemoHotel();
+    await ensureDemoAutoEcole();
     await ensureDemoLooks();
     await ensureDemoActivity().catch((e) => console.error('Activité de démo non créée :', e.message));
     app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT} (Gemini + tableau de bord)`));
