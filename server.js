@@ -1980,6 +1980,7 @@ async function demoVoicePrompt(b) {
     "- Une seule question à la fois. Jamais de listes, d'emojis, de liens ni d'adresses web.",
     "- Pour une réservation ou une demande : demande d'abord le prénom, puis le numéro de téléphone, puis le détail (prestation et horaire souhaité, ou dates de séjour et nombre de personnes). Répète le récapitulatif, puis précise que l'équipe confirme très vite.",
     "- Si tu ne sais pas, dis-le simplement et propose que l'équipe rappelle. N'invente jamais un prix ou une disponibilité.",
+    "- Avant de terminer l'appel, si la personne t'a donné des informations personnelles (prénom, téléphone, email) ou une demande de rendez-vous, récapitule-les en une phrase (ex. : « Je récapitule : Sarah, 06 34 45 56 67, une évaluation de départ mardi. C'est bien ça ? »), en lisant le numéro chiffre par chiffre. Corrige si besoin, puis termine poliment.",
     '',
     "INFORMATIONS SUR L'ÉTABLISSEMENT :",
     String(b.system_prompt || '').replace(/\[[A-Z_]+[^\]]*\]/g, '').slice(0, 5000),
@@ -2006,6 +2007,31 @@ async function demoVoicePrompt(b) {
   return lines.join('\n').slice(0, 9000);
 }
 
+// Récapitulatif d'un appel passé depuis le chat : le widget le demande juste
+// après l'appel, avec l'identifiant de conversation ElevenLabs que seul ce
+// navigateur connaît. Uniquement pendant 30 minutes après l'appel.
+app.get('/api/widget/:slug/voice-recap', async (req, res) => {
+  try {
+    if (isRateLimited(`voicerecap:${clientIp(req)}`, 40, 10 * 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes.' });
+    const cid = String(req.query.c || '');
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(cid)) return res.status(400).json({ error: 'Identifiant invalide.' });
+    const { rows } = await query(
+      `SELECT c.call_data, c.started_at, c.duration_secs FROM conversations c JOIN businesses b ON b.id = c.business_id
+       WHERE c.external_id = $1 AND b.slug = $2 AND c.channel = 'voice' LIMIT 1`, [cid, req.params.slug]);
+    const row = rows[0];
+    if (!row) return res.json({ ready: false });
+    const ended = new Date(row.started_at).getTime() + (Number(row.duration_secs) || 0) * 1000;
+    if (Date.now() - ended > 30 * 60 * 1000) return res.json({ ready: false, expired: true });
+    let d = {};
+    try { d = JSON.parse(row.call_data || '{}') || {}; } catch (e) { d = {}; }
+    if (!d.summaryReady && Date.now() - ended < 25 * 1000) return res.json({ ready: false });
+    res.json({ ready: true, firstName: d.firstName || '', phone: d.phone || '', email: d.email || '',
+      need: String((d.summaryFr ? d.summary : (d.need || d.summary)) || '').slice(0, 400) });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // Déroulé d'un appel vocal du chat (fin, échec), écrit dans les logs Render.
 app.post('/api/widget/:slug/voice-log', (req, res) => {
   if (isRateLimited(`voicelog:${clientIp(req)}`, 20, 15 * 60 * 1000)) return res.status(429).end();
@@ -2025,6 +2051,19 @@ function verifyElevenLabsSignature(req) {
   const crypto = require('crypto');
   const expected = crypto.createHmac('sha256', secret).update(`${t}.${req.rawBody.toString('utf8')}`).digest('hex');
   try { return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v0)); } catch (e) { return false; }
+}
+
+// Nettoie une phrase dite à l'oral : retire les « euh », les mots répétés et
+// les mots coupés, remet une majuscule. Le sens n'est jamais modifié.
+function cleanSpeech(text) {
+  var s = String(text || '');
+  s = s.replace(/(^|[\s,.;!?…])(?:e+u+h+m*|h+e+u+h*|h+u+m+|h+m+|m+h+|m+m+h*|bah|hein)(?=$|[\s,.;!?…])/gi, '$1');
+  s = s.replace(/(^|\s)[A-Za-zÀ-ÿ]{1,6}-(?=\s)/g, '$1');
+  s = s.replace(/\b([A-Za-zÀ-ÿ']+)(?:[\s,]+\1\b)+/gi, function (m, w) { return /^(nous|vous)$/i.test(w) ? m : w; });
+  s = s.replace(/\s+([,.;!?…])/g, '$1').replace(/([,;])(?:\s*[,;])+/g, '$1').replace(/\s{2,}/g, ' ');
+  s = s.replace(/^[\s,.;…-]+/, '').trim();
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function voiceField(results, regex) {
@@ -2109,10 +2148,16 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     );
     const convoId = c[0].id;
     const turns = [];
+    const rawTranscript = [];
     for (const turn of (Array.isArray(data.transcript) ? data.transcript : [])) {
-      const text = String((turn && turn.message) || '').trim();
-      if (!text) continue;
+      const raw = String((turn && turn.message) || '').trim();
+      if (!raw) continue;
       const role = turn.role === 'user' ? 'user' : 'assistant';
+      // Paroles du visiteur nettoyées (« euh », répétitions) ; la version
+      // brute reste dans call_data.rawTranscript.
+      const text = role === 'user' ? cleanSpeech(raw) : raw;
+      rawTranscript.push({ role, text: raw.slice(0, 2000) });
+      if (!text) continue;
       turns.push({ role, content: text });
       await query('INSERT INTO messages (conversation_id, role, content, created_at) VALUES ($1, $2, $3, to_timestamp($4))',
         [convoId, role, text.slice(0, 8000), startSecs + (Number(turn.time_in_call_secs) || 0)]);
@@ -2139,9 +2184,12 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     if (frSummary) {
       summary = frSummary;
       callData.summary = frSummary;
-      await query('UPDATE conversations SET call_data = $1 WHERE id = $2', [JSON.stringify(callData), convoId]).catch(() => {});
       if (leadId) await query('UPDATE leads SET summary = $1 WHERE id = $2', [frSummary, leadId]).catch(() => {});
     }
+    callData.rawTranscript = rawTranscript.slice(0, 80);
+    callData.summaryReady = true;
+    callData.summaryFr = Boolean(frSummary);
+    await query('UPDATE conversations SET call_data = $1 WHERE id = $2', [JSON.stringify(callData), convoId]).catch(() => {});
     if (leadId) {
       sendLeadToWebhook(business, {
         type: 'voice_call',
