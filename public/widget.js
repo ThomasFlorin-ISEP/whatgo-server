@@ -202,6 +202,9 @@
     .wgt-order dt { color: #6B7580; }
     .wgt-order dd { margin: 0; color: #1B2321; font-weight: 600; }
 .wgt-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .wgt-recap dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: .8rem; }
+    .wgt-recap dt { color: #6B7580; }
+    .wgt-recap dd { margin: 0; color: #1B2321; font-weight: 600; overflow-wrap: anywhere; }
     .wgt-stay { border: 1px solid #DDE2E7; border-radius: 14px; background: #fff; overflow: hidden; }
     .wgt-stay-row { display: grid; grid-template-columns: 1fr 1fr; }
     .wgt-stay-row + .wgt-stay-row { border-top: 1px solid #E8ECEF; }
@@ -955,6 +958,7 @@
           var text = String((msg && msg.message) || '').trim();
           if (!text) return;
           var who = msg.source === 'user' || msg.role === 'user' ? 'user' : 'bot';
+          if (who === 'user') { text = cleanSpeech(text); if (!text) return; }
           if (who === 'bot' && voiceDiag) voiceDiag.agentSpoke = true;
           callCap.textContent = (who === 'user' ? 'Vous : ' : '') + text;
           addMessage(who, text);
@@ -978,6 +982,8 @@
             addMessage('bot', "Désolée, l'appel a été coupé avant que je puisse vous répondre. Réessayez dans un instant, ou écrivez-moi ici." +
               (why ? '\n\n(Détail technique : ' + why + ')' : ''));
           }
+          if (!failed && dur > 8000) showVoiceRecap(voiceConvId);
+          voiceConvId = '';
           reportVoice(failed ? 'fail' : 'end', 'raison=' + reason + (why ? ' | ' + why : '') + ' | statuts=' + (d.status || []).join(',') +
             ' | agent_a_parle=' + !!d.agentSpoke + ' | duree=' + Math.round(dur / 1000) + 's | conn=' + (voiceConnType || '?'));
           showQuickReplies();
@@ -989,6 +995,7 @@
       if (sess.overrides) opts.overrides = { agent: { prompt: { prompt: sess.overrides.prompt }, firstMessage: sess.overrides.firstMessage } };
       if (sess.dynamicVariables) opts.dynamicVariables = sess.dynamicVariables;
       voiceConv = await sdk.Conversation.startSession(opts);
+      try { voiceConvId = (voiceConv.getId && voiceConv.getId()) || ''; } catch (e) { voiceConvId = ''; }
       voiceStarting = false;
       voiceRaf = requestAnimationFrame(animateRings);
       // Ce qui a déjà été écrit dans le chat sert de contexte à l'appel.
@@ -1006,7 +1013,56 @@
       reportVoice('start', String((err && (err.name + ' ' + (err.userMessage || err.message))) || err));
     }
   }
-  var voiceDiag = null, voiceConnType = '';
+  var voiceDiag = null, voiceConnType = '', voiceConvId = '';
+  // Nettoie une phrase dite à l'oral : retire les « euh », les mots répétés et
+  // les mots coupés, remet une majuscule. Le sens n'est jamais modifié.
+  function cleanSpeech(text) {
+    var s = String(text || '');
+    s = s.replace(/(^|[\s,.;!?…])(?:e+u+h+m*|h+e+u+h*|h+u+m+|h+m+|m+h+|m+m+h*|bah|hein)(?=$|[\s,.;!?…])/gi, '$1');
+    s = s.replace(/(^|\s)[A-Za-zÀ-ÿ]{1,6}-(?=\s)/g, '$1');
+    s = s.replace(/\b([A-Za-zÀ-ÿ']+)(?:[\s,]+\1\b)+/gi, function (m, w) { return /^(nous|vous)$/i.test(w) ? m : w; });
+    s = s.replace(/\s+([,.;!?…])/g, '$1').replace(/([,;])(?:\s*[,;])+/g, '$1').replace(/\s{2,}/g, ' ');
+    s = s.replace(/^[\s,.;…-]+/, '').trim();
+    if (!s) return '';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  // Après un appel : carte « Récapitulatif de votre appel » avec ce que
+  // WHATGO a enregistré (prénom, téléphone, email, demande), si la personne
+  // a donné des coordonnées.
+  function showVoiceRecap(cid) {
+    if (!cid) return;
+    var tries = 0;
+    function poll() {
+      tries++;
+      fetch(API_BASE + '/api/widget/' + encodeURIComponent(BUSINESS) + '/voice-recap?c=' + encodeURIComponent(cid))
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d && d.ready) {
+            if (!d.firstName && !d.phone && !d.email) return;
+            var card = el('div', 'wgt-bk wgt-recap');
+            card.appendChild(el('h4', null, '📋 Récapitulatif de votre appel'));
+            var dl = el('dl');
+            var tel = String(d.phone || '').replace(/\s+/g, '');
+            if (/^0\d{9}$/.test(tel)) tel = tel.replace(/(\d{2})(?=\d)/g, '$1 ');
+            [['Prénom', d.firstName], ['Téléphone', tel || d.phone], ['Email', d.email], ['Demande', d.need]].forEach(function (it) {
+              if (!it[1]) return;
+              dl.appendChild(el('dt', null, it[0]));
+              dl.appendChild(el('dd', null, it[1]));
+            });
+            card.appendChild(dl);
+            card.appendChild(el('p', 'wgt-bk-legal', "Une erreur ? Écrivez-la simplement ici, nous la corrigerons."));
+            log.appendChild(card);
+            scrollDown();
+            return;
+          }
+          if (d && d.expired) return;
+          if (tries < 14) setTimeout(poll, tries < 4 ? 4000 : 6000);
+        })
+        .catch(function () { if (tries < 14) setTimeout(poll, 6000); });
+    }
+    setTimeout(poll, 5000);
+  }
   // Envoie le déroulé de l'appel dans les logs du serveur (diagnostic).
   function reportVoice(kind, detail) {
     try {
