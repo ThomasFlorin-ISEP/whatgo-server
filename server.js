@@ -594,6 +594,10 @@ const CHAT_UX_INSTRUCTION =
   `[SUITES: question 1 | question 2 | question 3] avec 2 ou 3 questions très courtes (6 mots maximum) que le visiteur ` +
   `pourrait vouloir poser ensuite, écrites de son point de vue et dans la langue de la conversation. Ne les annonce pas ` +
   `et ne les répète pas dans le texte.` +
+  `\n\nCONDUITE DE LA CONVERSATION : relis toujours l'échange avant d'écrire. Ne redemande JAMAIS une information que le visiteur a déjà donnée, même sous une forme courte (un « 22 » qui répond à « quel âge ? » est une réponse). ` +
+  `Pose au maximum UNE question par message. Si le visiteur demande un conseil ou une recommandation, donne-la dès que ` +
+  `tu as l'essentiel, avec au plus deux questions avant ; s'il manque une info, recommande quand même en précisant ` +
+  `ce qui pourrait changer ton conseil.` +
   `\n\nPHOTOS ET FICHIERS : le visiteur peut joindre une photo ou un PDF. Décris en une phrase ce que tu vois, puis aide-le ` +
   `selon les règles de l'entreprise (retour, échange, réclamation, devis…). Ne promets jamais un remboursement, un échange ` +
   `ou un geste commercial que les documents de l'entreprise ne prévoient pas : propose plutôt de transmettre la demande à ` +
@@ -1978,6 +1982,7 @@ async function demoVoicePrompt(b) {
     'RÈGLES DE LA CONVERSATION ORALE :',
     '- Réponses courtes : une ou deux phrases, ton chaleureux et naturel. Toujours vouvoyer.',
     "- Une seule question à la fois. Jamais de listes, d'emojis, de liens ni d'adresses web.",
+    "- Ne redemande jamais une information déjà donnée pendant l'appel. Si on te demande un conseil, donne-le dès que tu as l'essentiel (au plus deux questions avant).",
     "- Pour une réservation ou une demande : demande d'abord le prénom, puis le numéro de téléphone, puis le détail (prestation et horaire souhaité, ou dates de séjour et nombre de personnes). Répète le récapitulatif, puis précise que l'équipe confirme très vite.",
     "- Si tu ne sais pas, dis-le simplement et propose que l'équipe rappelle. N'invente jamais un prix ou une disponibilité.",
     "- Avant de terminer l'appel, si la personne t'a donné des informations personnelles (prénom, téléphone, email) ou une demande de rendez-vous, récapitule-les en une phrase (ex. : « Je récapitule : Sarah, 06 34 45 56 67, une évaluation de départ mardi. C'est bien ça ? »), en lisant le numéro chiffre par chiffre. Corrige si besoin, puis termine poliment.",
@@ -4417,6 +4422,18 @@ const DEMO_SLUG = 'salon-demo';
 // Démos : Victoria + questions fréquentes (modifiable ensuite dans
 // Paramètres → Apparence du chatbot).
 async function ensureDemoLooks() {
+  // Auto-école : consignes de qualification remplacées par une consigne de
+  // conseil (évite de redemander l'âge, recommande vite un forfait).
+  try {
+    const { rows: ae } = await query("SELECT * FROM businesses WHERE slug = 'autoecole-demo' AND instructions LIKE '%QUALIFICATION : pour un futur élève%'");
+    if (ae[0]) {
+      const instr = ae[0].instructions.replace(/QUALIFICATION : pour un futur élève[^\n]*/,
+        "CONSEIL : pour recommander un forfait, l'essentiel est l'âge de l'élève (conduite accompagnée dès 15 ans, permis dès 17 ans) et le choix boîte manuelle ou automatique (automatique : moins d'heures et moins cher ; manuelle : plus de véhicules accessibles ensuite). Dès que tu as ces deux infos, recommande un forfait avec son prix. Le code déjà obtenu, le financement et les disponibilités sont des précisions à demander seulement si c'est utile, sans jamais redemander ce qui a déjà été dit. Propose ensuite de réserver l'évaluation de départ ou un rendez-vous d'inscription en agence.");
+      await query('UPDATE businesses SET instructions = $1, system_prompt = $2 WHERE id = $3',
+        [instr, buildSystemPrompt({ ...ae[0], instructions: instr }), ae[0].id]);
+    }
+  } catch (e) { console.error('Mise à jour démo auto-école :', e.message); }
+
   const sugg = (fr, en) => JSON.stringify({ fr: fr.map(([label, text]) => ({ label, text })), en: en.map(([label, text]) => ({ label, text })) });
   const looks = [
     ['salon-demo', '["💰 Quels sont vos tarifs ?","🕒 Quels sont vos horaires ?","📍 Où se trouve le salon ?"]',
@@ -4889,7 +4906,7 @@ async function ensureDemoAutoEcole() {
     "INSCRIPTION (en agence ou en ligne) : pièce d'identité, justificatif de domicile de moins de 6 mois, e-photo avec code ANTS (photomaton agréé), attestation ASSR2 pour les moins de 21 ans, certificat de JDC pour les 17-25 ans. L'auto-école fait les démarches ANTS.",
     "DÉLAIS : la formation dure en moyenne 3 à 6 mois selon les disponibilités de l'élève ; les dates d'examen dépendent des places attribuées par la préfecture : ne jamais promettre une date d'examen précise.",
     "Annulation d'une leçon gratuite jusqu'à 48 h avant, sinon la leçon est due.",
-    "QUALIFICATION : pour un futur élève, chercher à connaître (une question à la fois, naturellement) : son âge, s'il a déjà le code, boîte manuelle ou automatique, s'il pense utiliser le CPF ou un autre financement, ses disponibilités. Proposer ensuite de réserver l'évaluation de départ ou un rendez-vous d'inscription en agence.",
+    "CONSEIL : pour recommander un forfait, l'essentiel est l'âge de l'élève (conduite accompagnée dès 15 ans, permis dès 17 ans) et le choix boîte manuelle ou automatique (automatique : moins d'heures et moins cher ; manuelle : plus de véhicules accessibles ensuite). Dès que tu as ces deux infos, recommande un forfait avec son prix. Le code déjà obtenu, le financement et les disponibilités sont des précisions à demander seulement si c'est utile, sans jamais redemander ce qui a déjà été dit. Propose ensuite de réserver l'évaluation de départ ou un rendez-vous d'inscription en agence.",
     "Toujours vouvoyer, ton chaleureux, rassurant et pédagogue (beaucoup d'élèves sont jeunes ou stressés ; les parents appellent souvent pour leur enfant).",
   ].join('\n');
 
