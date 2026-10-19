@@ -239,6 +239,13 @@ body.is-ae select.lead-status{min-width:178px}
 .ovmain{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:stretch}
 .ovmain>.card{margin-bottom:0;min-width:0}
 .ovline svg{display:block;width:100%;height:auto}
+.ovline{position:relative}
+.ovline svg{cursor:crosshair;touch-action:pan-y}
+.ovtip{position:absolute;left:0;top:0;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:.8rem;line-height:1.55;color:var(--ink);box-shadow:0 10px 26px rgba(15,40,28,.14);pointer-events:none;white-space:nowrap;z-index:3}
+.ovtip b{display:block;font-size:.82rem;margin-bottom:2px}
+.ovtip i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+.ovtip i.c{width:12px;height:3px;border-radius:2px;background:#1FAA59;vertical-align:3px}
+.ovtip small{color:var(--ink-faint)}
 .ovlink{border:none;background:none;color:var(--green-deep);font-weight:600;font-size:.84rem;cursor:pointer;padding:0}
 .ovleads{padding:4px 0 6px}
 .ovlrow{display:grid;grid-template-columns:1fr auto 92px;gap:12px;align-items:center;padding:10px 22px;border-top:1px solid var(--line-soft)}
@@ -2244,19 +2251,62 @@ function renderOverview(o) {
   var Y = function (v) { return base - (v / cmax) * (base - top); };
   var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.conv).toFixed(1); }).join(' ');
   var every = pts.length > 16 ? Math.ceil(pts.length / 8) : 1;
+  var isAE = typeof AE !== 'undefined' && AE;
+  var convW = o.channel === 'voice' ? ['appel', 'appels'] : ['conversation', 'conversations'];
+  var leadW = isAE ? ['futur élève', 'futurs élèves'] : ['lead', 'leads'];
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Activité">' +
     '<g stroke="var(--line-soft)">' + [0, 1, 2].map(function (g) { var y = top + g * (base - top) / 2; return '<line x1="0" x2="' + W + '" y1="' + y + '" y2="' + y + '"/>'; }).join('') + '</g>' +
+    '<line class="ovguide" x1="0" x2="0" y1="' + (top - 6) + '" y2="' + base + '" stroke="#8FA69A" stroke-width="1.2" stroke-dasharray="3 4" visibility="hidden"/>' +
     (pts.length ? '<path d="' + line + ' L' + X(pts.length - 1).toFixed(1) + ' ' + base + ' L' + X(0).toFixed(1) + ' ' + base + 'Z" fill="#1FAA59" opacity=".08"/>' +
       '<path d="' + line + '" fill="none" stroke="#1FAA59" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>' : '') +
     pts.map(function (p, i) {
       var lab = fmtDay(p.day);
-      var tip = (weekly ? 'Semaine du ' : '') + lab + ' : ' + plural(p.conv, o.channel === 'voice' ? 'appel' : 'conversation', o.channel === 'voice' ? 'appels' : 'conversations') + ', ' + plural(p.leads, 'lead', 'leads') +
-        (both ? ' (' + (p.leadsChat || 0) + ' chat, ' + (p.leadsVoice || 0) + ' voix)' : '');
-      return '<g><title>' + esc(tip) + '</title><rect x="' + (X(i) - Math.max(stepX, 20) / 2).toFixed(1) + '" y="0" width="' + Math.max(stepX, 20).toFixed(1) + '" height="' + H + '" fill="transparent"/>' +
-        (p.leads ? '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.leads).toFixed(1) + '" r="4.5" fill="' + leadCol + '"/>' : '') +
-        ((pts.length - 1 - i) % every === 0 ? '<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="11" fill="#7F8F87">' + esc(lab) + '</text>' : '') + '</g>';
-    }).join('') + '</svg>';
-  $('#ovChart').innerHTML = svg;
+      return (p.leads ? '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.leads).toFixed(1) + '" r="4.5" fill="' + leadCol + '"/>' : '') +
+        ((pts.length - 1 - i) % every === 0 ? '<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="11" fill="#7F8F87">' + esc(lab) + '</text>' : '');
+    }).join('') +
+    '<circle class="ovhc" r="5.5" fill="#fff" stroke="#1FAA59" stroke-width="2.6" visibility="hidden"/>' +
+    '<circle class="ovhl" r="6.5" fill="' + leadCol + '" stroke="#fff" stroke-width="2" visibility="hidden"/>' +
+    '<rect class="ovhit" x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent"/></svg>';
+  var chartBox = $('#ovChart');
+  chartBox.innerHTML = svg + '<div class="ovtip" hidden></div>';
+  // Survol : ligne verticale + bulle avec les chiffres du jour (ou de la semaine) le plus proche.
+  var svgEl = chartBox.querySelector('svg'), tipEl = chartBox.querySelector('.ovtip');
+  var guide = svgEl.querySelector('.ovguide'), hc = svgEl.querySelector('.ovhc'), hl = svgEl.querySelector('.ovhl');
+  var dayLong = function (d) {
+    var t = new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+  function hideTip() { tipEl.hidden = true; [guide, hc, hl].forEach(function (n) { n.setAttribute('visibility', 'hidden'); }); }
+  function showTip(i) {
+    var p = pts[i]; if (!p) return hideTip();
+    var x = X(i);
+    guide.setAttribute('x1', x); guide.setAttribute('x2', x); guide.setAttribute('visibility', 'visible');
+    hc.setAttribute('cx', x); hc.setAttribute('cy', Y(p.conv)); hc.setAttribute('visibility', 'visible');
+    if (p.leads) { hl.setAttribute('cx', x); hl.setAttribute('cy', Y(p.leads)); hl.setAttribute('visibility', 'visible'); }
+    else hl.setAttribute('visibility', 'hidden');
+    tipEl.innerHTML = '<b>' + esc(weekly ? 'Semaine du ' + fmtDay(p.day) + ' au ' + fmtDay(p.end || p.day) : dayLong(p.day)) + '</b>' +
+      '<div><i class="c"></i>' + plural(p.conv, convW[0], convW[1]) + '</div>' +
+      '<div><i class="l" style="background:' + leadCol + '"></i>' + plural(p.leads, leadW[0], leadW[1]) +
+        (both && p.leads ? ' <small>(' + (p.leadsChat || 0) + ' chat · ' + (p.leadsVoice || 0) + ' voix)</small>' : '') + '</div>';
+    tipEl.hidden = false;
+    var r = svgEl.getBoundingClientRect(), bw = chartBox.clientWidth, tw = tipEl.offsetWidth;
+    var px = x / W * r.width + (r.left - chartBox.getBoundingClientRect().left);
+    // À côté de la ligne (à droite, ou à gauche s'il n'y a pas la place) : ne cache jamais les points.
+    var left = px + 16 + tw <= bw ? px + 16 : px - 16 - tw;
+    tipEl.style.left = Math.max(0, left) + 'px';
+    var py = (Y(p.conv) + (p.leads ? Y(p.leads) : Y(p.conv))) / 2 / H * r.height;
+    tipEl.style.top = Math.max(0, Math.min(r.height - tipEl.offsetHeight - 24, py - tipEl.offsetHeight / 2)) + 'px';
+  }
+  function onPoint(ev) {
+    if (!pts.length) return;
+    var r = svgEl.getBoundingClientRect();
+    var vx = (ev.clientX - r.left) / r.width * W;
+    var i = pts.length > 1 ? Math.round((vx - padX) / stepX) : 0;
+    showTip(Math.max(0, Math.min(pts.length - 1, i)));
+  }
+  svgEl.addEventListener('pointermove', onPoint);
+  svgEl.addEventListener('pointerdown', onPoint);
+  svgEl.addEventListener('pointerleave', hideTip);
 }
 if ($('#ovChan')) $$('#ovChan button').forEach(function (b) {
   b.addEventListener('click', function () {
