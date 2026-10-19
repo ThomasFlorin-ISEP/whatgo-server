@@ -554,6 +554,8 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 .bkw-ev.c3{background:#DDF3F3;border-color:#1A9E9E;color:#0D5555}
 .bkw-ev.c4{background:#FBE7EF;border-color:#D24B7E;color:#7A1F42}
 .bkw-ev.is-team{background-image:repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(255,255,255,.55) 7px,rgba(255,255,255,.55) 9px)}
+.bkw-hover{position:absolute;left:4px;right:4px;border-radius:9px;background:rgba(31,170,89,.10);border:1.5px dashed rgba(31,170,89,.55);color:var(--green-deep);font-size:.74rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:none;z-index:1}
+.bkw-hover.is-closed{background:rgba(127,143,135,.08);border-color:rgba(127,143,135,.45);color:var(--ink-faint)}
 .bkw-now{position:absolute;left:0;right:0;height:2px;background:#E5484D;pointer-events:none;z-index:3}
 .bkw-now::before{content:'';position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:#E5484D}
 .bk-legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;padding:12px 22px;border-top:1px solid var(--line-soft);font-size:.78rem;color:var(--ink-soft)}
@@ -3320,7 +3322,7 @@ function renderWeek() {
         '<b>' + esc(bkHHMM(s).replace(/h00$/, 'h') + ' · ' + who) + '</b>' + (hgt > 34 ? '<span>' + src + ' ' + esc(b.service) + '</span>' : '') + '</div>';
     });
     if (d.ymd === today && nowMin >= h0 * 60 && nowMin <= h1 * 60) html += '<div class="bkw-now" style="top:' + Y(nowMin) + 'px"></div>';
-    return '<div class="bkw-col' + (ME.role === 'admin' ? ' can-add' : '') + '" data-day="' + d.ymd + '" style="height:' + H + 'px">' + html + '</div>';
+    return '<div class="bkw-col' + (ME.role === 'admin' ? ' can-add' : '') + '" data-day="' + d.ymd + '" data-ranges="' + esc(JSON.stringify(d.ranges)) + '" style="height:' + H + 'px">' + html + '<div class="bkw-hover" hidden></div></div>';
   }).join('') + '</div>';
   box.innerHTML = '<div class="bkw">' + hdr + body + '</div>' + (live.length ? '' : '<p class="bk-empty-week">Aucun rendez-vous cette semaine.</p>');
 
@@ -3343,10 +3345,29 @@ function renderWeek() {
       if (b) openBookingCard(b);
     });
   });
+  // Survol d'une plage horaire : surbrillance « 11h – 12h » (créneau d'une heure).
+  var slotAt = function (col, e) {
+    var r = col.getBoundingClientRect();
+    var m = Math.floor((h0 * 60 + (e.clientY - r.top) / PX * 60) / 60) * 60;
+    return Math.max(h0 * 60, Math.min((h1 - 1) * 60, m));
+  };
+  $$('.bkw-col', box).forEach(function (col) {
+    var hov = col.querySelector('.bkw-hover');
+    var ranges = []; try { ranges = JSON.parse(col.dataset.ranges || '[]'); } catch (er) {}
+    col.addEventListener('mousemove', function (e) {
+      if (e.target.closest('.bkw-ev')) { hov.hidden = true; return; }
+      var m = slotAt(col, e);
+      var open = ranges.some(function (rg) { return m >= rg[0] && m < rg[1]; });
+      hov.classList.toggle('is-closed', !open);
+      hov.style.top = (Y(m) + 2) + 'px'; hov.style.height = (PX - 4) + 'px';
+      hov.textContent = (open && ME.role === 'admin' ? '+ ' : '') + (m / 60) + 'h – ' + (m / 60 + 1) + 'h' + (open ? '' : ' · fermé');
+      hov.hidden = false;
+    });
+    col.addEventListener('mouseleave', function () { hov.hidden = true; });
+  });
   if (ME.role === 'admin') $$('.bkw-col', box).forEach(function (col) {
     col.addEventListener('click', function (e) {
-      var r = col.getBoundingClientRect();
-      var m = Math.round((h0 * 60 + (e.clientY - r.top) / PX * 60) / 30) * 30;
+      var m = slotAt(col, e);
       $('#bkAddCard').classList.add('is-on');
       $('#bk-a-date').value = col.dataset.day;
       $('#bk-a-time').value = String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
