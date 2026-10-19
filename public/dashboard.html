@@ -517,6 +517,50 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 .bk-who{font-size:.86rem}
 .bk-who small,.bk-svc small{display:block;color:var(--ink-soft);font-size:.76rem;font-weight:500}
 .bk-act{display:flex;gap:8px;align-items:center;justify-content:flex-end}
+/* Agenda : vue semaine */
+.bkc{margin-top:12px}.bkc-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line-soft);font-size:.86rem}.bkc-row span{color:var(--ink-faint)}.bkc-row b{font-weight:600;text-align:right}.bkc-row a{color:var(--green-deep)}
+.bk-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.bk-ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bk-nav{display:inline-flex;align-items:center;gap:4px}
+.bk-nav button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 10px;font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--ink)}
+.bk-nav button:hover{border-color:var(--green)}
+.bk-nav span{font-size:.84rem;font-weight:650;margin-left:6px;min-width:120px}
+.bk-stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+.bk-stats>div{padding:12px 22px;border-left:1px solid var(--line-soft)}.bk-stats>div:first-child{border-left:none}
+.bk-stats .l{font-size:.76rem;color:var(--ink-faint);font-weight:600}
+.bk-stats .n{font-family:'Space Grotesk',Inter,sans-serif;font-size:1.45rem;font-weight:600;line-height:1.2}
+.bk-stats .n small{font-size:.78rem;color:var(--ink-faint);font-family:Inter,sans-serif;font-weight:500}
+.bkw-scroll{overflow-x:auto}
+.bkw{min-width:680px;position:relative}
+.bkw-hdr,.bkw-body{display:grid}
+.bkw-hdr>div{padding:10px 6px;text-align:center;font-size:.72rem;font-weight:700;color:var(--ink-faint);letter-spacing:.06em;border-left:1px solid var(--line-soft)}
+.bkw-hdr>div:first-child{border-left:none}
+.bkw-hdr b{display:block;font-family:'Space Grotesk',Inter,sans-serif;font-size:1.25rem;color:var(--ink);letter-spacing:0;margin-top:1px}
+.bkw-hdr .is-today b{background:var(--green);color:#fff;width:34px;height:34px;line-height:34px;border-radius:50%;margin:2px auto 0}
+.bkw-hr{position:relative;border-top:1px solid var(--line-soft)}
+.bkw-hr span{position:absolute;right:8px;top:-8px;font-size:.68rem;color:var(--ink-faint);background:var(--card,#fff);padding:0 2px}
+.bkw-col{position:relative;border-left:1px solid var(--line-soft);cursor:default}
+.bkw-col.can-add{cursor:copy}
+.bkw-line{position:absolute;left:0;right:0;border-top:1px solid var(--line-soft);pointer-events:none}
+.bkw-closed{position:absolute;left:0;right:0;background:repeating-linear-gradient(45deg,#F5F8F6,#F5F8F6 6px,#ECF2EF 6px,#ECF2EF 12px);pointer-events:none}
+.bkw-ev{position:absolute;border-radius:9px;padding:5px 8px;font-size:.74rem;line-height:1.3;overflow:hidden;border-left:3px solid;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.bkw-ev:hover{box-shadow:0 6px 16px rgba(15,40,28,.14);transform:translateY(-1px);z-index:2}
+.bkw-ev b{display:block;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bkw-ev span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85}
+.bkw-ev.is-cancel{opacity:.45;text-decoration:line-through}
+.bkw-ev.c0{background:#E4F5EB;border-color:#1FAA59;color:#0B4D2A}
+.bkw-ev.c1{background:#ECE9FB;border-color:#6B5BD6;color:#3B2C9A}
+.bkw-ev.c2{background:#E3EEFB;border-color:#3B7DD8;color:#1D4680}
+.bkw-ev.c3{background:#DDF3F3;border-color:#1A9E9E;color:#0D5555}
+.bkw-ev.c4{background:#FBE7EF;border-color:#D24B7E;color:#7A1F42}
+.bkw-ev.is-team{background-image:repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(255,255,255,.55) 7px,rgba(255,255,255,.55) 9px)}
+.bkw-now{position:absolute;left:0;right:0;height:2px;background:#E5484D;pointer-events:none;z-index:3}
+.bkw-now::before{content:'';position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:#E5484D}
+.bk-legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;padding:12px 22px;border-top:1px solid var(--line-soft);font-size:.78rem;color:var(--ink-soft)}
+.bk-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.bk-legend .keys{display:flex;gap:14px;flex-wrap:wrap}
+.bk-empty-week{padding:8px 22px 0;font-size:.82rem;color:var(--ink-faint)}
+@media (max-width:700px){.bk-stats{grid-template-columns:1fr 1fr}.bk-stats>div:nth-child(3){border-left:none}.bk-stats>div:nth-child(n+3){border-top:1px solid var(--line-soft)}}
 .pthumb{width:52px;height:39px;border-radius:8px;object-fit:cover;background:#EEF3F1;display:block}
 .ptop{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:.86rem}
 .ptop:last-child{border-bottom:none}
@@ -821,8 +865,15 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
       </div>
 
       <div class="card card--flush" id="bkAgendaCard">
-        <div class="card__head card__head--pad"><div><h3>Agenda</h3>
-          <p class="card__sub">Rendez-vous d'aujourd'hui et à venir. Cliquez sur un rendez-vous pris dans le chat pour relire la conversation.</p></div></div>
+        <div class="card__head card__head--pad bk-head"><div><h3>Agenda</h3>
+          <p class="card__sub" id="bkSub">Cliquez sur un rendez-vous pour voir la fiche, ou sur un créneau vide pour en ajouter un.</p></div>
+          <div class="bk-ctrl">
+            <div class="seg" id="bkViewSeg"><button type="button" data-v="week">Semaine</button><button type="button" data-v="list">Liste</button></div>
+            <div class="bk-nav" id="bkNav"><button type="button" id="bkPrev" aria-label="Semaine précédente">‹</button><button type="button" id="bkToday">Aujourd'hui</button><button type="button" id="bkNext" aria-label="Semaine suivante">›</button><span id="bkWeekLbl"></span></div>
+          </div></div>
+        <div class="bk-stats" id="bkStats"></div>
+        <div class="bkw-scroll" id="bkWeek"></div>
+        <div class="bk-legend" id="bkLegend"></div>
         <div id="bkList" style="margin-top:6px"></div>
       </div>
 
@@ -3058,6 +3109,7 @@ $$('input[name="bk-mode"]').forEach(function (r) { r.addEventListener('change', 
 
 function renderBookingSettings(cfg) {
   bkSettings = cfg;
+  try { renderAgenda(); } catch (e) {}
   $('#bk-enabled').checked = !!cfg.enabled;
   $$('input[name="bk-mode"]').forEach(function (r) { r.checked = r.value === (cfg.mode || 'link'); });
   $('#bk-link').value = cfg.linkUrl || '';
@@ -3130,12 +3182,217 @@ $('#bkSettingsForm').addEventListener('submit', async function (e) {
   } catch (err) { showMsg('#bkSettingsError', 'Impossible de contacter le serveur.', true); }
 });
 
+/* ---------- Agenda : vue semaine (par défaut) ou liste ---------- */
+var BK_DATA = [], BK_LOADED = false, BK_VIEW = 'week', BK_WEEK0 = null;
+try { var bkSaved = localStorage.getItem('bk-view'); BK_VIEW = bkSaved ? (bkSaved === 'list' ? 'list' : 'week') : (window.innerWidth < 700 ? 'list' : 'week'); } catch (e) {}
+function bkYmd(d) { return d.toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); }
+function bkAddDays(ymd, n) { var d = new Date(ymd + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function bkMonday(ymd) { var d = new Date(ymd + 'T12:00:00Z'); return bkAddDays(ymd, -((d.getUTCDay() + 6) % 7)); }
+function bkMin(hhmm) { var p = String(hhmm || '0:0').split(':'); return Number(p[0]) * 60 + Number(p[1] || 0); }
+function bkHHMM(m) { return String(Math.floor(m / 60)).padStart(2, '0') + 'h' + String(m % 60).padStart(2, '0'); }
+function bkRanges(text) {
+  var out = [];
+  String(text || '').split(/[,;]/).forEach(function (part) {
+    var m = part.trim().match(/^(\d{1,2})[:hH]?(\d{2})?\s*[-–à]\s*(\d{1,2})[:hH]?(\d{2})?$/);
+    if (!m) return;
+    var a = Number(m[1]) * 60 + Number(m[2] || 0), b = Number(m[3]) * 60 + Number(m[4] || 0);
+    if (a < b && b <= 1440) out.push([a, b]);
+  });
+  return out;
+}
+function fmtPhone(p) {
+  var d = String(p || '').replace(/[^\d+]/g, '');
+  if (/^0\d{9}$/.test(d)) return d.replace(/(\d{2})(?=\d)/g, '$1 ');
+  if (/^\+33\d{9}$/.test(d)) return '+33 ' + d.slice(3, 4) + ' ' + d.slice(4).replace(/(\d{2})(?=\d)/g, '$1 ');
+  return p || '';
+}
+function bkFromVictoria(b) { return b.source === 'chat' || b.source === 'voice' || b.source === 'phone'; }
+// Une couleur par prestation (dans l'ordre des réglages), pour toutes les activités.
+function bkColorOf(name) {
+  var list = ((bkSettings && bkSettings.services) || []).map(function (s) { return s.name; });
+  var i = list.indexOf(name);
+  if (i < 0) { BK_EXTRA = BK_EXTRA || []; if (BK_EXTRA.indexOf(name) < 0) BK_EXTRA.push(name); i = list.length + BK_EXTRA.indexOf(name); }
+  return 'c' + (i % 5);
+}
+var BK_EXTRA = null;
+
 async function loadBookings() {
+  if (!BK_WEEK0) BK_WEEK0 = bkMonday(bkYmd(new Date()));
+  var url = API + '/api/dashboard/bookings' + (BK_VIEW === 'week' ? '?from=' + BK_WEEK0 + '&to=' + bkAddDays(BK_WEEK0, 6) : '');
   try {
-    var res = await fetch(API + '/api/dashboard/bookings', { credentials: 'include' });
+    var res = await fetch(url, { credentials: 'include' });
     if (!res.ok) throw new Error();
-    renderBookings(await res.json());
+    BK_DATA = await res.json(); BK_LOADED = true;
+    renderAgenda();
   } catch (e) { $('#bkList').innerHTML = '<div class="empty"><b>Agenda indisponible</b><p>Réessayez dans un instant.</p></div>'; }
+}
+function renderAgenda() {
+  if (!BK_LOADED) return;
+  var week = BK_VIEW === 'week';
+  $$('#bkViewSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === BK_VIEW); });
+  $('#bkNav').hidden = !week; $('#bkStats').hidden = !week; $('#bkWeek').hidden = !week; $('#bkLegend').hidden = !week; $('#bkList').hidden = week;
+  $('#bkSub').textContent = week ? 'Cliquez sur un rendez-vous pour voir la fiche' + (ME.role === 'admin' ? ', ou sur un créneau vide pour en ajouter un.' : '.')
+    : 'Rendez-vous d\'aujourd\'hui et à venir. Cliquez sur un rendez-vous pour voir la fiche.';
+  if (week) renderWeek(); else renderBookings(BK_DATA);
+}
+$$('#bkViewSeg button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    BK_VIEW = b.getAttribute('data-v');
+    try { localStorage.setItem('bk-view', BK_VIEW); } catch (e) {}
+    loadBookings();
+  });
+});
+$('#bkPrev').addEventListener('click', function () { BK_WEEK0 = bkAddDays(BK_WEEK0, -7); loadBookings(); });
+$('#bkNext').addEventListener('click', function () { BK_WEEK0 = bkAddDays(BK_WEEK0, 7); loadBookings(); });
+$('#bkToday').addEventListener('click', function () { BK_WEEK0 = bkMonday(bkYmd(new Date())); loadBookings(); });
+
+function renderWeek() {
+  var box = $('#bkWeek');
+  var hours = (bkSettings && bkSettings.hours) || {};
+  var cap = (bkSettings && bkSettings.capacity) || 1;
+  var today = bkYmd(new Date());
+  var days = [];
+  for (var i = 0; i < 7; i++) {
+    var ymd = bkAddDays(BK_WEEK0, i), wd = (i + 1) % 7;
+    days.push({ ymd: ymd, wd: wd, ranges: bkRanges(hours[wd]), ev: BK_DATA.filter(function (b) { return b.day === ymd; }) });
+  }
+  // Le dimanche (ou tout jour) fermé et vide n'est pas affiché en fin de semaine.
+  while (days.length > 5 && !days[days.length - 1].ranges.length && !days[days.length - 1].ev.length) days.pop();
+  var lo = 1440, hi = 0;
+  days.forEach(function (d) {
+    d.ranges.forEach(function (r) { lo = Math.min(lo, r[0]); hi = Math.max(hi, r[1]); });
+    d.ev.forEach(function (b) { var m = bkMin(b.time); lo = Math.min(lo, m); hi = Math.max(hi, m + b.duration); });
+  });
+  if (hi <= lo) { lo = 8 * 60; hi = 19 * 60; }
+  var h0 = Math.floor(lo / 60), h1 = Math.ceil(hi / 60), PX = 52, H = (h1 - h0) * PX;
+  var Y = function (m) { return (m - h0 * 60) / 60 * PX; };
+  var cols = '56px repeat(' + days.length + ',1fr)';
+  var lbl = function (ymd, o) { return new Date(ymd + 'T12:00:00').toLocaleDateString('fr-FR', o); };
+
+  // En-tête de semaine + chiffres
+  var last = days[days.length - 1].ymd;
+  $('#bkWeekLbl').textContent = lbl(BK_WEEK0, { day: 'numeric' }) + ' – ' + lbl(last, { day: 'numeric', month: 'short' });
+  var live = BK_DATA.filter(function (b) { return b.status !== 'annule' && days.some(function (d) { return d.ymd === b.day; }); });
+  var byVic = live.filter(bkFromVictoria).length;
+  var openMin = days.reduce(function (t, d) { return t + d.ranges.reduce(function (a, r) { return a + (r[1] - r[0]); }, 0); }, 0) * cap;
+  var bookedMin = live.reduce(function (t, b) { return t + (b.duration || 0); }, 0);
+  $('#bkStats').innerHTML =
+    '<div><div class="l">Rendez-vous cette semaine</div><div class="n">' + live.length + '</div></div>' +
+    '<div><div class="l">Réservés par Victoria</div><div class="n">' + byVic + (live.length ? ' <small>' + Math.round(byVic / live.length * 100) + ' %</small>' : '') + '</div></div>' +
+    '<div><div class="l">Ajoutés par l\'équipe</div><div class="n">' + (live.length - byVic) + '</div></div>' +
+    '<div><div class="l">Créneaux remplis</div><div class="n">' + (openMin ? Math.min(100, Math.round(bookedMin / openMin * 100)) + ' %' : '—') + '</div></div>';
+
+  var hdr = '<div class="bkw-hdr" style="grid-template-columns:' + cols + '"><div></div>' + days.map(function (d) {
+    return '<div class="' + (d.ymd === today ? 'is-today' : '') + '">' + esc(lbl(d.ymd, { weekday: 'short' }).replace('.', '').toUpperCase()) + '<b>' + Number(d.ymd.slice(8)) + '</b></div>';
+  }).join('') + '</div>';
+  var hrs = '';
+  for (var h = h0; h < h1; h++) hrs += '<div class="bkw-hr" style="height:' + PX + 'px">' + (h > h0 ? '<span>' + h + 'h</span>' : '<span style="top:2px">' + h + 'h</span>') + '</div>';
+  var nowMin = (function () { var p = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).split(':'); return Number(p[0]) * 60 + Number(p[1]); })();
+  var body = '<div class="bkw-body" style="grid-template-columns:' + cols + '"><div>' + hrs + '</div>' + days.map(function (d) {
+    var html = '';
+    for (var h = h0 + 1; h < h1; h++) html += '<div class="bkw-line" style="top:' + Y(h * 60) + 'px"></div>';
+    // Zones fermées (hachurées)
+    var cur = h0 * 60;
+    d.ranges.slice().sort(function (a, b) { return a[0] - b[0]; }).concat([[h1 * 60, h1 * 60]]).forEach(function (r) {
+      if (r[0] > cur) html += '<div class="bkw-closed" style="top:' + Y(cur) + 'px;height:' + (Y(r[0]) - Y(cur)) + 'px"></div>';
+      cur = Math.max(cur, r[1]);
+    });
+    // Rendez-vous, côte à côte quand ils se chevauchent
+    var evs = d.ev.slice().sort(function (a, b) { return bkMin(a.time) - bkMin(b.time); });
+    // Groupes de rendez-vous qui se chevauchent : chaque groupe se partage la largeur.
+    var group = [], groupEnd = -1;
+    var flush = function () { var n = 0; group.forEach(function (g) { n = Math.max(n, g._lane + 1); }); group.forEach(function (g) { g._lanes = n; }); group = []; };
+    evs.forEach(function (b) {
+      var s = bkMin(b.time), e = s + (b.duration || 30);
+      if (s >= groupEnd) { flush(); groupEnd = -1; }
+      var used = group.filter(function (g) { return bkMin(g.time) + (g.duration || 30) > s; }).map(function (g) { return g._lane; });
+      var lane = 0; while (used.indexOf(lane) >= 0) lane++;
+      b._lane = lane; group.push(b); groupEnd = Math.max(groupEnd, e);
+    });
+    flush();
+    evs.forEach(function (b) {
+      var s = bkMin(b.time), e = s + (b.duration || 30), hgt = Math.max(22, Y(e) - Y(s) - 3);
+      var w = 100 / (b._lanes || 1);
+      var who = niceName(b.name) || 'Client sans nom';
+      var src = bkFromVictoria(b) ? (b.source === 'chat' ? '💬' : '📞') : '✍️';
+      html += '<div class="bkw-ev ' + bkColorOf(b.service) + (bkFromVictoria(b) ? '' : ' is-team') + (b.status === 'annule' ? ' is-cancel' : '') + '" data-id="' + esc(b.id) + '" ' +
+        'style="top:' + (Y(s) + 1) + 'px;height:' + hgt + 'px;left:calc(' + (b._lane * w) + '% + 4px);width:calc(' + w + '% - 8px)" title="' + esc(bkHHMM(s) + ' · ' + who + ' · ' + b.service) + '">' +
+        '<b>' + esc(bkHHMM(s).replace(/h00$/, 'h') + ' · ' + who) + '</b>' + (hgt > 34 ? '<span>' + src + ' ' + esc(b.service) + '</span>' : '') + '</div>';
+    });
+    if (d.ymd === today && nowMin >= h0 * 60 && nowMin <= h1 * 60) html += '<div class="bkw-now" style="top:' + Y(nowMin) + 'px"></div>';
+    return '<div class="bkw-col' + (ME.role === 'admin' ? ' can-add' : '') + '" data-day="' + d.ymd + '" style="height:' + H + 'px">' + html + '</div>';
+  }).join('') + '</div>';
+  box.innerHTML = '<div class="bkw">' + hdr + body + '</div>' + (live.length ? '' : '<p class="bk-empty-week">Aucun rendez-vous cette semaine.</p>');
+
+  // Légende : une couleur par prestation
+  var names = [];
+  ((bkSettings && bkSettings.services) || []).forEach(function (s) { names.push(s.name); });
+  BK_DATA.forEach(function (b) { if (names.indexOf(b.service) < 0) names.push(b.service); });
+  var used = names.filter(function (n) { return BK_DATA.some(function (b) { return b.service === n; }) || names.length <= 5; }).slice(0, 6);
+  $('#bkLegend').innerHTML = '<div class="keys">' + used.map(function (n) {
+    var c = { c0: '#1FAA59', c1: '#6B5BD6', c2: '#3B7DD8', c3: '#1A9E9E', c4: '#D24B7E' }[bkColorOf(n)];
+    return '<span><i style="background:' + c + '"></i>' + esc(n) + '</span>';
+  }).join('') + '<span><i style="background:repeating-linear-gradient(135deg,#CFE5D8,#CFE5D8 3px,#fff 3px,#fff 5px)"></i>Ajouté par l\'équipe</span>' +
+    '<span><i style="background:repeating-linear-gradient(45deg,#E6EEE9,#E6EEE9 2px,#F7FAF8 2px,#F7FAF8 4px)"></i>Fermé</span></div>' +
+    '<span>💬 réservé dans le chat · 📞 au téléphone · ✍️ par l\'équipe</span>';
+
+  $$('.bkw-ev', box).forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var b = BK_DATA.find(function (x) { return String(x.id) === el.dataset.id; });
+      if (b) openBookingCard(b);
+    });
+  });
+  if (ME.role === 'admin') $$('.bkw-col', box).forEach(function (col) {
+    col.addEventListener('click', function (e) {
+      var r = col.getBoundingClientRect();
+      var m = Math.round((h0 * 60 + (e.clientY - r.top) / PX * 60) / 30) * 30;
+      $('#bkAddCard').classList.add('is-on');
+      $('#bk-a-date').value = col.dataset.day;
+      $('#bk-a-time').value = String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+      $('#bkAddCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(function () { try { $('#bk-a-name').focus(); } catch (er) {} }, 350);
+    });
+  });
+}
+
+// Fiche d'un rendez-vous (clic dans l'agenda)
+function openBookingCard(b) {
+  var isAdmin = ME.role === 'admin';
+  var s = bkMin(b.time), e = s + (b.duration || 30);
+  var lead = (b.leadId && typeof LEADS_CACHE !== 'undefined') ? LEADS_CACHE.find(function (l) { return String(l.id) === String(b.leadId); }) : null;
+  var tags = lead && typeof aeTagsHtml === 'function' ? aeTagsHtml(lead) : '';
+  var row = function (k, v) { return v ? '<div class="bkc-row"><span>' + k + '</span><b>' + v + '</b></div>' : ''; };
+  var body = '<div class="leadcard">' + (tags ? '<label class="leadcard__label">Profil</label>' + tags : '') +
+    '<div class="bkc">' +
+      row('Prestation', esc(b.service) + (b.price ? ' · ' + esc(b.price) : '')) +
+      row('Horaire', esc(bkHHMM(s) + ' → ' + bkHHMM(e))) +
+      row('Téléphone', b.phone ? '<a href="' + telHref(b.phone) + '">' + esc(fmtPhone(b.phone)) + '</a>' : '') +
+      row('Email', b.email ? '<a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : '') +
+      row('Réservé', bkFromVictoria(b) ? (b.source === 'chat' ? '💬 par Victoria, dans le chat' : '📞 par Victoria, au téléphone') : '✍️ par l\'équipe') +
+      row('Note', esc(b.notes || '')) +
+      row('Statut', b.status === 'annule' ? '<span class="tag tag--red">Annulé</span>' : '<span class="tag tag--green">Confirmé</span>') +
+    '</div>' +
+    '<div class="leadcard__actions" style="flex-wrap:wrap">' +
+      (b.phone ? '<a class="btn btn--primary" href="' + telHref(b.phone) + '">📞 Appeler</a>' : '') +
+      (b.conversationId ? '<button type="button" class="btn btn--ghost" id="bkcConvo">💬 Voir la conversation</button>' : '') +
+      (isAdmin ? '<button type="button" class="btn btn--ghost" id="bkcStatus" style="' + (b.status === 'annule' ? '' : 'color:var(--red)') + '">' + (b.status === 'annule' ? 'Rétablir' : 'Annuler le rendez-vous') + '</button>' : '') +
+    '</div></div>';
+  openDrawer(niceName(b.name) || 'Client sans nom', bkDayLabel(b.day) + ' · ' + bkHHMM(s), body);
+  var cb = $('#bkcConvo'); if (cb) cb.addEventListener('click', function () { openTranscript(b.conversationId); });
+  var sb = $('#bkcStatus');
+  if (sb) sb.addEventListener('click', async function () {
+    var next = b.status === 'annule' ? 'confirme' : 'annule';
+    if (next === 'annule' && !confirm('Annuler ce rendez-vous ? Le créneau redeviendra disponible pour les visiteurs.')) return;
+    try {
+      var res = await fetch(API + '/api/dashboard/bookings/' + b.id + '/status', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: next }),
+      });
+      if (!res.ok) throw new Error();
+      toast(next === 'annule' ? 'Rendez-vous annulé' : 'Rendez-vous rétabli');
+      closeDrawer(); loadBookings();
+    } catch (err) { toast('Action impossible pour le moment.', true); }
+  });
 }
 
 function renderBookings(list) {
@@ -3153,10 +3410,10 @@ function renderBookings(list) {
     var cancelled = b.status === 'annule';
     var endDate = new Date(b.end);
     var endTxt = endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
-    html += '<div class="bk-item' + (cancelled ? ' is-cancel' : '') + (b.conversationId ? ' clickable' : '') + '" data-convo="' + esc(b.conversationId || '') + '">' +
+    html += '<div class="bk-item clickable' + (cancelled ? ' is-cancel' : '') + '" data-id="' + esc(b.id) + '">' +
       '<div class="bk-time">' + esc(b.time.replace(':', 'h')) + '<small>→ ' + esc(endTxt.replace(':', 'h')) + '</small></div>' +
       '<div class="bk-svc">' + esc(b.service) + '<small>' + esc(b.duration + ' min' + (b.price ? ' · ' + b.price : '')) + '</small></div>' +
-      '<div class="bk-who">' + esc(b.name || 'Client sans nom') + '<small>' + esc([b.phone, b.email].filter(Boolean).join(' · ') || b.notes || '') + '</small></div>' +
+      '<div class="bk-who">' + esc(niceName(b.name) || 'Client sans nom') + '<small>' + esc([fmtPhone(b.phone), b.email].filter(Boolean).join(' · ') || b.notes || '') + '</small></div>' +
       '<div class="bk-act">' +
         (b.source === 'chat' ? '<span class="tag tag--green">Chat</span>' : '<span class="tag tag--grey">Ajouté à la main</span>') +
         (cancelled ? '<span class="tag tag--red">Annulé</span>' : '') +
@@ -3166,7 +3423,10 @@ function renderBookings(list) {
   wrap.innerHTML = html;
 
   $$('.bk-item.clickable', wrap).forEach(function (row) {
-    row.addEventListener('click', function () { openTranscript(row.dataset.convo); });
+    row.addEventListener('click', function () {
+      var b = BK_DATA.find(function (x) { return String(x.id) === row.dataset.id; });
+      if (b) openBookingCard(b);
+    });
   });
   $$('.bk-status', wrap).forEach(function (btn) {
     btn.addEventListener('click', async function (e) {

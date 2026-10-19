@@ -3815,10 +3815,13 @@ app.put('/api/dashboard/booking-settings', requireAuth, requireRole('admin'), as
 // Agenda : rendez-vous à venir (et ceux du jour déjà passés), du plus proche au plus lointain.
 app.get('/api/dashboard/bookings', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
-    const todayStart = booking.parisToDate(booking.dateToParis(new Date()).dateStr, 0);
+    // Par défaut : aujourd'hui et à venir. Vue semaine : ?from=AAAA-MM-JJ&to=AAAA-MM-JJ (inclus).
+    const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+    const from = isDay(req.query.from) ? booking.parisToDate(req.query.from, 0) : booking.parisToDate(booking.dateToParis(new Date()).dateStr, 0);
+    const to = isDay(req.query.to) ? booking.parisToDate(booking.addDays(req.query.to, 1), 0) : new Date('2999-01-01T00:00:00Z');
     const { rows } = await query(
-      `SELECT * FROM bookings WHERE business_id = $1 AND start_at >= $2 ORDER BY start_at ASC LIMIT 300`,
-      [req.user.businessId, todayStart]
+      `SELECT * FROM bookings WHERE business_id = $1 AND start_at >= $2 AND start_at < $3 ORDER BY start_at ASC LIMIT 500`,
+      [req.user.businessId, from, to]
     );
     res.json(rows.map((b) => ({
       id: b.id,
