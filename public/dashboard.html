@@ -1605,7 +1605,7 @@ async function loadVoicePage() {
     '<div><b>' + (v.leadRate === null || v.leadRate === undefined ? '—' : v.leadRate + ' %') + '</b><span>deviennent un lead</span></div></div>';
   tb.innerHTML = '<thead><tr><th>Appelant</th><th>Canal</th><th>Durée</th><th class="right">Date</th></tr></thead><tbody>' +
     (calls.length ? calls.slice(0, 10).map(function (c) {
-      return '<tr class="clickable" data-id="' + esc(c.id) + '"><td class="cell-main">' + esc(c.visitor_label) + '</td>' +
+      return '<tr class="clickable" data-id="' + esc(c.id) + '"><td class="cell-main">' + esc(niceLabel(c.visitor_label)) + '</td>' +
         '<td><span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + '</span></td>' +
         '<td class="cell-sub">' + (c.duration_secs ? fmtDur(c.duration_secs) : '—') + '</td>' +
         '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td></tr>';
@@ -1962,8 +1962,8 @@ function renderConversations() {
       (list.length ? list.map(function (c) {
         return '<tr class="clickable" data-id="' + esc(c.id) + '">' +
           '<td class="cell-main">' + (c.channel === 'voice'
-            ? esc(c.visitor_label) + ' <span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + (c.duration_secs ? ' · ' + fmtDur(c.duration_secs) : '') + '</span>'
-            : '💬 ' + esc(String(c.visitor_label || 'Visiteur anonyme').replace(/^Visiteur\s+—\s+/, '')) + ' <span class="chanb c">💬 Chat</span>') + '</td>' +
+            ? esc(niceLabel(c.visitor_label)) + ' <span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + (c.duration_secs ? ' · ' + fmtDur(c.duration_secs) : '') + '</span>'
+            : '💬 ' + esc(niceName(String(c.visitor_label || 'Visiteur anonyme').replace(/^Visiteur\s+—\s+/, ''))) + ' <span class="chanb c">💬 Chat</span>') + '</td>' +
           '<td class="num ctr">' + c.message_count + '</td>' +
           '<td class="ctr cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td>' +
           '<td class="right"><span class="viewbtn">Voir la conversation ›</span></td></tr>';
@@ -2022,7 +2022,7 @@ async function openTranscript(id) {
       return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + files + fmtMsg(text) + '</div>';
     }).join('') + '</div>';
     openDrawer(
-      data.conversation.visitor_label,
+      niceLabel(data.conversation.visitor_label),
       new Date(data.conversation.started_at).toLocaleString('fr-FR') + ' · ' + data.messages.length + ' message(s)',
       body
     );
@@ -2050,8 +2050,23 @@ function truncate(text, max) {
 // d'ensemble, Rendez-vous) : le nom en gras s'il est connu (détecté par le
 // bot ou renseigné à la main dans la fiche), sinon l'email ou le téléphone
 // en repli — jamais "—" tant qu'on a au moins une info.
+function niceName(raw) {
+  var s = String(raw || '').trim().replace(/\s+/g, ' ');
+  if (!s || /[@\d]/.test(s) || /^visiteur( anonyme)?$/i.test(s)) return s;
+  var parts = ['de', 'du', 'des', 'la', 'le', 'van', 'von', 'da', 'di', 'del', 'el', 'ben', 'bin'];
+  return s.split(' ').map(function (w, i) {
+    if (w !== w.toLowerCase() && w !== w.toUpperCase()) return w;
+    if (i > 0 && parts.indexOf(w.toLowerCase()) >= 0) return w.toLowerCase();
+    return w.split(/([-'’])/).map(function (x) { return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); }).join('');
+  }).join(' ');
+}
+// Libellé de conversation : "Visiteur — thomas florin" / "📞 yanis" → nom en forme.
+function niceLabel(label) {
+  var m = String(label || '').match(/^([^\p{L}\s]+\s+|Visiteur\s+—\s+)?(.*)$/u);
+  return m ? (m[1] || '') + niceName(m[2]) : label;
+}
 function leadContactHtml(l) {
-  var main = l.name || l.email || l.phone || '—';
+  var main = niceName(l.name) || l.email || l.phone || '—';
   var subParts = [];
   if (l.name) {
     if (l.email) subParts.push(l.email);
@@ -2397,7 +2412,7 @@ function renderOverviewLeads(leads) {
   var recent = leads.filter(function (l) { return OV_CHANNEL === 'all' || (OV_CHANNEL === 'voice' ? isVoiceLead(l) : !isVoiceLead(l)); }).slice(0, 5);
   box.innerHTML = recent.length ? recent.map(function (l) {
     var v = isVoiceLead(l);
-    var who = l.name || l.email || l.phone || 'Visiteur';
+    var who = niceName(l.name) || l.email || l.phone || 'Visiteur';
     return '<div class="ovlrow' + (l.conversationId ? ' clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
       '<div style="min-width:0"><b>' + esc(who) + '</b><small>' + esc(truncate(l.summary || l.message || '', 60)) + '</small></div>' +
       '<span class="ci' + (v ? ' v' : '') + '" title="' + (v ? (l.voiceSource === 'phone' ? 'Téléphone' : 'Voix · site') : 'Chat') + '">' + chanIcon(v ? 'voice' : 'chat', l.voiceSource).trim() + '</span>' +
