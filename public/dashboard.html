@@ -208,6 +208,19 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .ovtodo{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
 /* Vue d'ensemble épurée : bande « à faire », chiffres en une carte, activité + derniers leads */
 .ovstrip{display:grid;grid-template-columns:1.6fr 1fr 1fr;padding:0;margin-bottom:14px;overflow:hidden}
+/* ---- Métier auto-école ---- */
+.ovstrip.ae4{grid-template-columns:1.35fr 1fr 1fr 1fr}
+.todo--stu .todo__ic{background:#FFF1DC}
+.card.aeban{display:flex;align-items:center;gap:16px;padding:16px 22px;margin-bottom:14px;background:linear-gradient(115deg,#0C7A40,#1FAA59);color:#fff;border:none}
+.aeban .ic{font-size:1.7rem;width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.16);display:grid;place-items:center;flex-shrink:0}
+.aeban b{font-size:1.02rem;font-weight:650}
+.aeban small{display:block;color:rgba(255,255,255,.82);margin-top:3px;font-size:.82rem;line-height:1.4}
+.aetags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.aetag{font-size:.69rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#EEF2F0;color:#3A4A42;white-space:nowrap}
+.aetag.p{background:#E7F0FB;color:#28518F}.aetag.f{background:var(--green-soft);color:var(--green-deep)}.aetag.stu{background:#FFF1DC;color:#8A5300}
+.ovlrow .aetags{margin-top:4px}
+#aeChips{margin-top:-4px}
+body.is-ae select.lead-status{min-width:178px}
 .ovstrip .todo{border-radius:0;box-shadow:none;background:transparent;border:none;border-left:1px solid var(--line-soft);padding:14px 18px;gap:12px}
 .ovstrip .todo:first-child{border-left:none}
 .ovstrip .todo:hover{transform:none;box-shadow:none;background:rgba(255,255,255,.65)}
@@ -245,7 +258,7 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .vgrid.vgrid3{grid-template-columns:repeat(3,1fr)}
 @media (max-width:700px){.vgrid.vgrid3{grid-template-columns:1fr}.rtbl .funnel__bar{display:none}table.tbl.rtbl th{white-space:normal;letter-spacing:.02em}table.tbl.rtbl th,table.tbl.rtbl td{padding:8px 6px}}
 .ovsat .n{font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:700}
-@media (max-width:900px){.ovstrip{grid-template-columns:1fr}.ovstrip .todo{border-left:none;border-top:1px solid var(--line-soft)}.ovstrip .todo:first-child{border-top:none}.ovk{grid-template-columns:1fr 1fr}.ovmain{grid-template-columns:1fr}}
+@media (max-width:900px){.ovstrip,.ovstrip.ae4{grid-template-columns:1fr}.card.aeban{align-items:flex-start;padding:16px}.aeban .ic{width:40px;height:40px;font-size:1.3rem}.ovstrip .todo{border-left:none;border-top:1px solid var(--line-soft)}.ovstrip .todo:first-child{border-top:none}.ovk{grid-template-columns:1fr 1fr}.ovmain{grid-template-columns:1fr}}
 .todo{display:flex;gap:14px;align-items:center;padding:16px 18px;border-radius:18px;text-align:left;width:100%;font:inherit;color:inherit;
   background:linear-gradient(170deg,rgba(255,255,255,.95),rgba(255,255,255,.7));border:1px solid rgba(255,255,255,.95);
   box-shadow:0 8px 24px rgba(11,26,20,.06);cursor:pointer;transition:transform .15s,box-shadow .15s}
@@ -635,7 +648,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
         <span>Vue d'ensemble</span></button>
       <button class="nav-item" data-tab="leads" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke-linecap="round"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87" stroke-linecap="round"/></svg>
-        <span>Leads</span></button>
+        <span id="navLeadsLabel">Leads</span></button>
       <button class="nav-item" data-tab="conversations" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0112.5 3 8.5 8.5 0 0121 11.5z" stroke-linejoin="round"/></svg>
         <span>Conversations</span></button>
@@ -708,12 +721,13 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
     <!-- ============================== VUE D'ENSEMBLE (réel) -->
     <section class="tab-page active" id="page-overview">
       <div class="topbar">
-        <div><h2>Vue d'ensemble</h2><p>Ce que votre assistant a fait pour vous, à partir des vraies conversations enregistrées.</p></div>
+        <div><h2>Vue d'ensemble</h2><p id="ovIntro">Ce que votre assistant a fait pour vous, à partir des vraies conversations enregistrées.</p></div>
         <div class="topbar__act" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
           <div class="seg" id="ovChan" hidden><button type="button" data-ch="all">Tous les canaux</button><button type="button" data-ch="chat">💬 Chat</button><button type="button" data-ch="voice">🎙️📞 Voix</button></div>
           <select id="ovRange" class="rangepick"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select>
           <span class="tag tag--dot" id="statusBadge">—</span></div>
       </div>
+      <div class="card aeban" id="aeBanner" hidden></div>
       <div class="card ovstrip" id="ovTodo"></div>
       <div class="card ovk" id="ovKpis4"></div>
       <div class="ovmain">
@@ -723,7 +737,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
           <div class="ovline" id="ovChart"></div>
         </div>
         <div class="card card--flush" id="ovLeadsCard">
-          <div class="card__head card__head--pad"><div><h3>Derniers leads</h3></div>
+          <div class="card__head card__head--pad"><div><h3 id="ovLeadsTitle">Derniers leads</h3></div>
             <button class="ovlink" type="button" onclick="switchTab('leads')">Tout voir →</button></div>
           <div class="ovleads" id="ovLeadsTable"></div>
         </div>
@@ -736,8 +750,8 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
           <div class="card ovsat" id="ovSat"></div>
         </div>
         <div class="card card--flush">
-          <div class="card__head card__head--pad"><div><h3>Derniers leads</h3><p class="card__sub">Les 10 contacts les plus récents, avec leur score.</p></div>
-            <button class="btn btn--ghost btn--sm" type="button" onclick="switchTab('leads')">Voir tous les leads</button></div>
+          <div class="card__head card__head--pad"><div><h3 id="ovLeadsFullTitle">Derniers leads</h3><p class="card__sub" id="ovLeadsFullSub">Les 10 contacts les plus récents, avec leur score.</p></div>
+            <button class="btn btn--ghost btn--sm" type="button" id="ovLeadsFullBtn" onclick="switchTab('leads')">Voir tous les leads</button></div>
           <div class="tablewrap"><table class="tbl" id="ovLeadsFull"></table></div>
         </div>
       </div>
@@ -746,11 +760,12 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
     <!-- ============================== LEADS (réel) -->
     <section class="tab-page" id="page-leads">
       <div class="topbar">
-        <div><h2>Leads</h2><p>Les contacts captés par votre assistante, par écrit et à la voix.</p></div>
+        <div><h2 id="leadsTitle">Leads</h2><p id="leadsIntro">Les contacts captés par votre assistante, par écrit et à la voix.</p></div>
         <div class="topbar__act"><a class="btn btn--ghost" href="/api/dashboard/leads/export.csv" download>Exporter en CSV</a></div>
       </div>
       <div class="kpis" id="leadKpis" style="grid-template-columns:repeat(2,1fr)"></div>
       <div class="chips" id="leadChips" hidden></div>
+      <div class="chips" id="aeChips" hidden></div>
       <div class="card card--flush">
         <div class="tablewrap"><table class="tbl" id="leadsTable"></table></div>
       </div>
@@ -1171,6 +1186,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
           </div>
           <div class="field"><label for="nc-type">Type d'activité (pages du dashboard)</label>
             <select id="nc-type">
+              <option value="autoecole">Auto-école : tableau de bord dédié</option>
               <option value="rdv">Services sur rendez-vous : agenda et réservation</option>
               <option value="ecommerce">Boutique en ligne : catalogue et suivi de commande</option>
               <option value="hotel">Hôtel : chambres et moteur de réservation</option>
@@ -1210,6 +1226,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
           <p class="card__sub">Adapte votre tableau de bord et votre assistant à votre métier.</p></div></div>
         <div class="field"><label for="biz-type">Votre activité</label>
           <select id="biz-type">
+            <option value="autoecole">Auto-école : futurs élèves, évaluations et inscriptions</option>
             <option value="rdv">Services sur rendez-vous (salon, institut, restaurant…) : agenda et réservation</option>
             <option value="ecommerce">Boutique en ligne : catalogue, panier et suivi de commande</option>
             <option value="hotel">Hôtel : chambres, recherche de séjour et moteur de réservation</option>
@@ -1397,6 +1414,7 @@ function enterApp() {
     var b = $('#statusBadge');
     b.textContent = ME.status === 'published' ? 'Publié' : 'Brouillon';
     b.className = 'tag tag--dot ' + (ME.status === 'published' ? 'tag--green' : 'tag--amber');
+    applyVertical();
     applyBusinessType(ME.businessType || 'autre');
     switchTab('overview');
     loadStats();
@@ -1410,6 +1428,68 @@ function enterApp() {
     loadWebhook();
     loadQualification();
   }
+}
+
+/* ============================================================
+   MÉTIER AUTO-ÉCOLE : vocabulaire, profil du futur élève, filtres
+   ============================================================ */
+var AE = false;
+var AE_FILTER = 'all';
+var AE_TEXTS = [
+  ['#navLeadsLabel', 'Futurs élèves'],
+  ['#leadsTitle', 'Futurs élèves'],
+  ['#leadsIntro', 'Les personnes intéressées par le permis, captées par Victoria au chat, à la voix et au téléphone. Les demandes d\'élèves déjà inscrits sont signalées à part.'],
+  ['#ovIntro', 'Ce que Victoria a fait pour votre auto-école : demandes reçues, futurs élèves, évaluations et inscriptions.'],
+  ['#ovLeadsTitle', 'Derniers futurs élèves'],
+  ['#ovLeadsFullTitle', 'Derniers futurs élèves'],
+  ['#ovLeadsFullSub', 'Les 10 contacts les plus récents, avec leur profil.'],
+  ['#ovLeadsFullBtn', 'Voir tous les futurs élèves'],
+];
+var AE_STATUS = { contacte: 'Rappelé', rdv_pris: 'Évaluation réservée', gagne: 'Inscrit' };
+var BASE_STATUS = null;
+function applyVertical() {
+  AE = !!(ME && ME.vertical === 'autoecole');
+  document.body.classList.toggle('is-ae', AE);
+  AE_TEXTS.forEach(function (t) {
+    var el = $(t[0]); if (!el) return;
+    if (el.dataset.orig === undefined) el.dataset.orig = el.textContent;
+    el.textContent = AE ? t[1] : el.dataset.orig;
+  });
+  if (!BASE_STATUS) BASE_STATUS = Object.assign({}, LEAD_STATUS_LABELS);
+  Object.keys(BASE_STATUS).forEach(function (k) { LEAD_STATUS_LABELS[k] = AE && AE_STATUS[k] ? AE_STATUS[k] : BASE_STATUS[k]; });
+  if (!AE) { AE_FILTER = 'all'; var b = $('#aeBanner'); if (b) b.hidden = true; }
+}
+var AE_STUDENT_RE = /((d[ée]caler|annuler|reporter|d[ée]placer|changer) (ma|mes|une|la|le) (prochaine )?(le[çc]on|cours|heure)|ma (prochaine )?le[çc]on|mes le[çc]ons|mon moniteur|ma monitrice|d[ée]j[àa] inscrit|[ée]l[èe]ve inscrit|mon livret|mes heures restantes|mon heure de conduite)/i;
+// Profil du futur élève, lu dans le résumé de l'IA et le message.
+function aeProfile(l) {
+  var t = ((l.summary || '') + ' ' + (l.message || '')).toLowerCase();
+  if (AE_STUDENT_RE.test(t)) return { student: true, keys: ['eleve'], tags: [['stu', l.status === 'nouveau' ? '📨 Élève inscrit · à transmettre' : '🎓 Élève inscrit']] };
+  var tags = [], keys = [];
+  if (/(accompagn|\baac\b)/.test(t)) { tags.push(['p', '🚗 Conduite accompagnée']); keys.push('aac'); }
+  else if (/(\bmoto\b|\ba2\b)/.test(t)) { tags.push(['p', '🏍️ Moto']); keys.push('moto'); }
+  else if (/(automatique|bo[iî]te auto)/.test(t)) { tags.push(['p', '⚙️ Boîte auto']); keys.push('auto'); }
+  else if (/(manuelle|permis b\b)/.test(t)) tags.push(['p', '🚗 Permis B']);
+  if (/(code (obtenu|en poche|valid)|(eu|ai|a) (mon|le|son) code)/.test(t)) tags.push(['', '✅ Code obtenu']);
+  else if (/(pas (encore )?(le|mon|son) code|code à passer|sans (le )?code)/.test(t)) tags.push(['', '📘 Code à passer']);
+  if (/\bcpf\b/.test(t)) { tags.push(['f', '💶 CPF']); keys.push('fin'); }
+  if (/((1 ?€|un euro) par jour|permis à 1)/.test(t)) { tags.push(['f', '💶 Permis à 1 €/jour']); if (keys.indexOf('fin') < 0) keys.push('fin'); }
+  if (/(plusieurs fois|en [234] fois)/.test(t)) tags.push(['f', '💳 Paiement en plusieurs fois']);
+  var age = t.match(/\b(1[4-9]|[2-7]\d) ans\b/);
+  if (age) { tags.push(['', age[1] + ' ans']); if (Number(age[1]) < 18) keys.push('mineur'); }
+  if (/(maman|papa|m[èe]re d|p[èe]re d|ma fille|mon fils)/.test(t)) { tags.push(['', '👪 Parent au contact']); if (keys.indexOf('mineur') < 0) keys.push('mineur'); }
+  return { student: false, keys: keys, tags: tags };
+}
+function aeTagsHtml(l, max) {
+  if (!AE) return '';
+  var tags = aeProfile(l).tags;
+  if (max) tags = tags.slice(0, max);
+  return tags.length ? '<div class="aetags">' + tags.map(function (t) { return '<span class="aetag ' + t[0] + '">' + esc(t[1]) + '</span>'; }).join('') + '</div>' : '';
+}
+function aeMatch(l, f) {
+  if (f === 'all') return true;
+  var p = aeProfile(l);
+  if (f === 'eleve') return p.student;
+  return !p.student && p.keys.indexOf(f) >= 0;
 }
 
 /* ============================================================
@@ -1447,7 +1527,7 @@ function applyBusinessType(type) {
   $('#pListTitle').textContent = hotel ? 'Chambres' : 'Produits';
   $('#topSub').textContent = hotel ? '30 derniers jours : clics sur « Réserver » par chambre.' : '30 derniers jours : recommandations et ajouts au panier.';
   if (hotel) loadHotelSettings();
-  var sel = $('#biz-type'); if (sel) { sel.value = type; sel.disabled = ME.role !== 'admin'; }
+  var sel = $('#biz-type'); if (sel) { sel.value = ME.vertical === 'autoecole' ? 'autoecole' : type; sel.disabled = ME.role !== 'admin'; }
   var saveBtn = $('#bizTypeSave'); if (saveBtn) saveBtn.hidden = ME.role !== 'admin';
 }
 
@@ -1459,7 +1539,11 @@ $('#bizTypeSave').addEventListener('click', async function () {
       body: JSON.stringify({ businessType: type }),
     });
     if (!res.ok) throw new Error();
-    applyBusinessType(type);
+    var saved = await res.json().catch(function () { return {}; });
+    ME.vertical = saved.vertical || '';
+    applyVertical();
+    applyBusinessType(saved.businessType || type);
+    loadOverview(); loadLeads();
     toast("Type d'activité enregistré");
   } catch (e) { toast("Impossible d'enregistrer le type d'activité.", true); }
 });
@@ -2015,6 +2099,20 @@ function renderOverview(o) {
     segEl.hidden = !OV_HAS_VOICE;
     $$('button', segEl).forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-ch') === o.channel); });
   }
+  // 0) Auto-école : demandes traitées hors horaires
+  var aeBan = $('#aeBanner');
+  if (aeBan) {
+    aeBan.hidden = !(AE && o.ae);
+    if (!aeBan.hidden) {
+      var oh = o.ae.offHours;
+      aeBan.innerHTML = '<span class="ic">🌙</span><div><b>' +
+        (oh.conv ? plural(oh.conv, 'demande traitée', 'demandes traitées') + ' quand l\'agence était fermée' : 'Aucune demande hors horaires sur la période') + '</b><small>' +
+        (oh.conv ? 'Le soir, le dimanche et pendant vos jours de fermeture · dont ' + plural(oh.prospects, 'futur élève', 'futurs élèves') +
+          '. Sans Victoria, ces personnes seraient tombées sur un répondeur.'
+          : 'Victoria répond 24 h/24 : les demandes du soir et du week-end apparaîtront ici.') +
+        '</small></div>';
+    }
+  }
   // 1) À faire
   var todo = $('#ovTodo');
   if (todo) {
@@ -2033,6 +2131,13 @@ function renderOverview(o) {
       ['rdv', '📅', t.rdvToday, t.rdvToday > 1 ? 'rendez-vous aujourd\'hui' : 'rendez-vous aujourd\'hui', t.rdvToday ? (t.rdvTodaySource === 'calendar' ? 'D\'après votre agenda · voir le détail' : 'Voir l\'agenda') : 'Aucun rendez-vous prévu', 'appointments'],
       ['imp', '⭐', t.improve, t.improve > 1 ? 'questions' : 'question', t.improve ? 'à apprendre à votre assistante' : 'Votre assistante a réponse à tout', 'improve'],
     ];
+    if (AE && o.ae) {
+      items[0][3] = hotN > 1 ? 'futurs élèves à rappeler' : 'futur élève à rappeler';
+      var st = o.ae.students;
+      items.splice(2, 0, ['stu', '📨', st.toForward, st.toForward > 1 ? 'demandes d\'élèves' : 'demande d\'élève',
+        st.toForward ? 'à transmettre : ' + st.list.map(function (x) { return chanIcon(x.channel, x.source) + x.name; }).join(' · ') : 'Aucune demande d\'élève en attente', 'students']);
+    }
+    todo.classList.toggle('ae4', items.length === 4);
     todo.innerHTML = items.map(function (it) {
       return '<button type="button" class="todo todo--' + it[0] + (it[2] ? '' : ' is-zero') + '" data-go="' + it[5] + '">' +
         '<span class="todo__ic">' + it[1] + '</span><div style="min-width:0"><strong>' + it[2] + ' ' + esc(it[3]) + '</strong><small>' + esc(it[4]) + '</small></div></button>';
@@ -2040,6 +2145,7 @@ function renderOverview(o) {
     $$('[data-go]', todo).forEach(function (b) {
       b.addEventListener('click', function () {
         var tab = b.getAttribute('data-go');
+        if (tab === 'students') { AE_FILTER = 'eleve'; LEAD_FILTER = 'all'; try { renderLeads(LEADS_CACHE); } catch (e) {} tab = 'leads'; }
         if (document.querySelector('.nav-item[data-tab="' + tab + '"]:not([hidden])')) switchTab(tab); else switchTab('leads');
       });
     });
@@ -2070,12 +2176,23 @@ function renderOverview(o) {
       ? '<div><div class="l">Minutes de voix ce mois</div><div class="n">' + used0 + (q0 ? ' <small>/ ' + q0 + '</small>' : ' <small>min</small>') + '</div>' +
           (q0 ? '<div class="mbar' + (pct0 > 100 ? ' is-over' : '') + '"><i style="width:' + Math.min(100, Math.max(used0 ? 2 : 0, pct0)) + '%"></i></div>' : '<div class="s">Forfait à indiquer dans IA vocale</div>') + '</div>'
       : '<div><div class="l">Satisfaction</div><div class="n">' + (sat === null ? '—' : sat + ' %') + '</div>' + satDelta.replace('kpi__d', 's') + '</div>');
+  if (AE && o.ae) {
+    var A = o.ae;
+    $('#ovKpis4').innerHTML =
+      '<div><div class="l">Demandes reçues</div><div class="n">' + k.conversations.cur + '</div>' +
+        '<div class="s">' + (both ? 'dont ' + (k.conversations.voice || 0) + ' à la voix' : 'sur ' + days + ' jours') + '</div></div>' +
+      '<div><div class="l">Futurs élèves</div><div class="n">' + A.prospects.cur + '</div><div class="s">' + pctOf(A.prospects.cur, k.conversations.cur) + ' des demandes</div></div>' +
+      '<div><div class="l">Évaluations réservées</div><div class="n">' + A.evals.cur + '</div><div class="s">' + pctOf(A.evals.cur, A.prospects.cur) + ' des futurs élèves</div></div>' +
+      '<div><div class="l">Inscriptions</div><div class="n">' + A.inscrits.cur + '</div><div class="s">' +
+        (A.inscrits.cur ? pctOf(A.inscrits.cur, A.prospects.cur) + ' des futurs élèves' : 'Passez un élève en « Inscrit »') + '</div></div>';
+  }
+  var satDetails = showVoiceKpi || !!(AE && o.ae);
   var satBox = $('#ovSat');
   if (satBox) {
-    satBox.hidden = !showVoiceKpi;
+    satBox.hidden = !satDetails;
     var detSplit = $('#ovDetSplit');
-    if (detSplit) detSplit.classList.toggle('split--even', showVoiceKpi);
-    if (detSplit) detSplit.style.gridTemplateColumns = showVoiceKpi ? '' : '1fr';
+    if (detSplit) detSplit.classList.toggle('split--even', satDetails);
+    if (detSplit) detSplit.style.gridTemplateColumns = satDetails ? '' : '1fr';
     satBox.innerHTML = '<h3>👍 Satisfaction des visiteurs</h3>' +
       '<div class="n">' + (sat === null ? '—' : sat + ' %') + '</div>' +
       '<p class="card__sub">' + (sat === null ? 'Pas encore d\'avis sur la période.' : plural(votes, 'avis', 'avis') + ' 👍/👎 sur ' + days + ' jours') + '</p>';
@@ -2119,7 +2236,7 @@ function renderOverview(o) {
   var leadCol = o.channel === 'voice' ? 'var(--vox)' : 'var(--green-deep)';
   if ($('#ovLegend')) $('#ovLegend').innerHTML =
     '<span><i class="light" style="height:3px;border-radius:2px;width:14px"></i>' + (o.channel === 'voice' ? 'appels' : 'conversations') + '</span>' +
-    '<span><i style="border-radius:50%;background:' + leadCol + '"></i>leads</span>';
+    '<span><i style="border-radius:50%;background:' + leadCol + '"></i>' + (AE ? 'futurs élèves' : 'leads') + '</span>';
   var W = 600, H = 262, padX = 18, top = 14, base = 232;
   var cmax = Math.max(1, ...pts.map(function (p) { return Math.max(p.conv, p.leads); }));
   var stepX = pts.length > 1 ? (W - 2 * padX) / (pts.length - 1) : 0;
@@ -2456,6 +2573,7 @@ function openLeadCard(id) {
         ? '<input type="text" id="leadcardName" class="leadcard__input" maxlength="120" placeholder="Pas encore connu" value="' + esc(lead.name || '') + '">'
         : '<p class="leadcard__value">' + esc(lead.name || '—') + '</p>') +
 
+      (AE ? '<label class="leadcard__label">Profil</label>' + (aeTagsHtml(lead) || '<p class="leadcard__value cell-sub">Pas encore assez d\'informations : le profil se complète pendant la conversation.</p>') : '') +
       '<label class="leadcard__label">Résumé du besoin</label>' +
       '<p class="leadcard__value">' + (lead.summary
         ? esc(lead.summary)
@@ -2658,7 +2776,7 @@ function renderOverviewLeads(leads) {
     var v = isVoiceLead(l);
     var who = l.name || l.email || l.phone || 'Visiteur';
     return '<div class="ovlrow' + (l.conversationId ? ' clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
-      '<div style="min-width:0"><b>' + esc(who) + '</b><small>' + esc(truncate(l.summary || l.message || '', 60)) + '</small></div>' +
+      '<div style="min-width:0"><b>' + esc(who) + '</b>' + (AE && aeProfile(l).tags.length ? aeTagsHtml(l, 2) : '<small>' + esc(truncate(l.summary || l.message || '', 60)) + '</small>') + '</div>' +
       '<span class="ci' + (v ? ' v' : '') + '" title="' + (v ? (l.voiceSource === 'phone' ? 'Téléphone' : 'Voix · site') : 'Chat') + '">' + chanIcon(v ? 'voice' : 'chat', l.voiceSource).trim() + '</span>' +
       '<span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span></div>';
   }).join('') : '<p class="card__sub" style="padding:14px 22px">Aucun lead pour l\'instant : dès qu\'un visiteur laissera ses coordonnées, il apparaîtra ici.</p>';
@@ -2674,7 +2792,7 @@ function renderOverviewLeads(leads) {
     (ten.length ? ten.map(function (l) {
       return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
         '<td>' + leadContactHtml(l) + '</td>' +
-        '<td class="cell-sub">' + esc(truncate(l.summary || l.message, showChan ? 70 : 40)) + '</td>' +
+        '<td class="cell-sub">' + esc(truncate(l.summary || l.message, showChan ? 70 : 40)) + aeTagsHtml(l) + '</td>' +
         (showChan ? '<td>' + chanBadge(l) + '</td>' : '') +
         '<td>' + scoreBarHtml(l.score) + '</td>' +
         '<td><span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span></td>' +
@@ -2690,6 +2808,19 @@ function renderOverviewLeads(leads) {
 function renderLeadKpis(leads) {
   var box = $('#leadKpis');
   if (!box) return;
+  if (AE) {
+    var pros = leads.filter(function (l) { return !aeProfile(l).student; });
+    var stu = leads.filter(function (l) { return aeProfile(l).student && l.status === 'nouveau'; }).length;
+    var toCallAE = pros.filter(function (l) { return l.status === 'nouveau'; }).length;
+    var insc = pros.filter(function (l) { return l.status === 'gagne'; }).length;
+    box.style.gridTemplateColumns = 'repeat(3,1fr)';
+    box.innerHTML =
+      '<div class="kpi kpi--hero"><div class="kpi__l">Futurs élèves</div><div class="kpi__v">' + pros.length + '</div><div class="kpi__d' + (insc ? ' up' : '') + '">' +
+        (insc ? plural(insc, 'déjà inscrit', 'déjà inscrits') : 'Aucun inscrit pour l\'instant') + '</div></div>' +
+      '<div class="kpi"><div class="kpi__l">À rappeler</div><div class="kpi__v">' + toCallAE + '</div><div class="kpi__d">Nouveaux, pas encore rappelés</div></div>' +
+      '<div class="kpi"><div class="kpi__l">Élèves à transmettre</div><div class="kpi__v">' + stu + '</div><div class="kpi__d">Leçons à décaler, questions sur leur dossier…</div></div>';
+    return;
+  }
   var contactes = leads.filter(function (l) { return l.status !== 'nouveau'; }).length;
   if (OV_HAS_VOICE || leads.some(isVoiceLead)) {
     var nv = leads.filter(isVoiceLead).length, nc = leads.length - nv;
@@ -2740,6 +2871,19 @@ function renderLeads(allLeads) {
       leads = allLeads.filter(function (l) { return leadMatches(l, LEAD_FILTER); });
     } else { LEAD_FILTER = 'all'; }
   }
+  var aeBox = $('#aeChips');
+  if (aeBox) {
+    aeBox.hidden = !AE;
+    if (AE) {
+      var base = leads;
+      var c2 = function (f) { return base.filter(function (l) { return aeMatch(l, f); }).length; };
+      var aeItems = [['all', 'Tous les profils', base.length], ['aac', '🚗 Conduite accompagnée', c2('aac')], ['auto', '⚙️ Boîte auto', c2('auto')],
+        ['moto', '🏍️ Moto', c2('moto')], ['fin', '💶 Financement', c2('fin')], ['mineur', '🧒 Mineurs', c2('mineur')], ['eleve', '📨 Élèves inscrits', c2('eleve')]]
+        .filter(function (it) { return it[0] === 'all' || it[2] > 0 || it[0] === AE_FILTER; });
+      renderChips(aeBox, aeItems, AE_FILTER, function (f) { AE_FILTER = f; renderLeads(LEADS_CACHE); });
+      leads = leads.filter(function (l) { return aeMatch(l, AE_FILTER); });
+    }
+  }
   body.innerHTML =
     '<thead><tr><th>Contact</th><th>Sujet</th><th>Canal</th><th>Score</th><th>Statut</th><th class="right">Reçu</th></tr></thead><tbody>' +
     (leads.length ? leads.map(function (l) {
@@ -2753,7 +2897,7 @@ function renderLeads(allLeads) {
 
       return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
         '<td>' + leadContactHtml(l) + '<button type="button" class="leadcard-btn" data-lead="' + esc(l.id) + '">Fiche →</button></td>' +
-        '<td class="cell-sub">' + esc(leadNeedText(l)) + '</td>' +
+        '<td class="cell-sub">' + esc(leadNeedText(l)) + aeTagsHtml(l) + '</td>' +
         '<td>' + chanBadge(l) + '</td>' +
         '<td>' + scoreBarHtml(l.score) + '</td>' +
         '<td class="lead-status-cell">' + statusCell + '</td>' +

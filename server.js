@@ -445,7 +445,7 @@ function extractNameFromMessages(messages) {
 // conversation. Appelé en arrière-plan APRÈS la réponse au visiteur : il ne
 // ralentit donc jamais le chat, et s'il échoue, le dashboard affiche
 // simplement le message brut comme avant.
-async function generateLeadSummary(transcriptMessages) {
+async function generateLeadSummary(transcriptMessages, vertical) {
   const transcript = transcriptMessages
     .map((m) => (m.role === 'user' ? 'Visiteur' : 'Assistant') + ' : ' + String(m.content || '').slice(0, 1500))
     .join('\n')
@@ -455,6 +455,11 @@ async function generateLeadSummary(transcriptMessages) {
     `Tu résumes des conversations commerciales pour une équipe de vente. ` +
     `Résume en UNE seule phrase courte (25 mots maximum), en français, le besoin ou la demande du visiteur ` +
     `(ce qu'il cherche, pour quand, contexte utile). Ne mentionne ni son email ni son téléphone. ` +
+    (vertical === 'autoecole'
+      ? `C'est une auto-école : cite si on les connaît l'âge de l'élève, le type de permis (boîte manuelle, boîte automatique, conduite accompagnée, moto), ` +
+        `si le code est obtenu et le financement (CPF, permis à 1 € par jour, paiement en plusieurs fois). ` +
+        `Si la personne est déjà élève de l'auto-école (leçon à décaler, question sur son dossier…), commence par « Élève inscrit : ». `
+      : '') +
     `Réponds uniquement avec la phrase, sans guillemets ni préambule.`;
   const contents = [{ role: 'user', parts: [{ text: 'Conversation :\n' + transcript }] }];
 
@@ -484,7 +489,8 @@ async function refreshLeadNameOnly(convoId, transcriptMessages) {
 
 async function refreshLeadCard(convoId, transcriptMessages) {
   const { rows } = await query(
-    'SELECT id, name FROM leads WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1',
+    `SELECT l.id, l.name, b.vertical FROM leads l LEFT JOIN businesses b ON b.id = l.business_id
+     WHERE l.conversation_id = $1 ORDER BY l.created_at DESC LIMIT 1`,
     [convoId]
   );
   const lead = rows[0];
@@ -497,7 +503,7 @@ async function refreshLeadCard(convoId, transcriptMessages) {
     }
   }
 
-  const summary = await generateLeadSummary(transcriptMessages);
+  const summary = await generateLeadSummary(transcriptMessages, lead.vertical);
   if (summary) {
     await query('UPDATE leads SET summary = $1, updated_at = NOW() WHERE id = $2', [summary, lead.id]);
   }
@@ -1214,6 +1220,31 @@ const OVERVIEW_TOPICS = [
   ['Parler à quelqu\'un', /(humain|conseiller|quelqu['’]un d['’]autre|parler à quelqu|appelez|m['’]appeler|rappel|human|call me|speak to)/i],
 ];
 
+// Auto-écoles : sujets propres au métier, et détection des demandes
+// d'élèves déjà inscrits (à transmettre au secrétariat, pas des prospects).
+const AE_TOPICS = [
+  ['Tarifs & forfaits', /\b(prix|tarifs?|co[uû]te?s?|combien|forfaits?|€|paiement|plusieurs fois)/i],
+  ['Financement (CPF, 1 €/jour)', /(\bcpf\b|financ|1 ?€|un euro|permis à 1|\baides?\b|france travail|p[ôo]le emploi)/i],
+  ['Conduite accompagnée', /(accompagn|\baac\b)/i],
+  ['Boîte automatique', /(automatique|bo[iî]te auto|\bbva\b)/i],
+  ['Code de la route', /\bcode\b/i],
+  ['Examen & délais', /(examen|passer (le|mon) permis|rapidement|d[ée]lais?)/i],
+  ['Inscription & documents', /(inscri|documents?|papiers|pi[eè]ces?|\bants\b|assr|photo)/i],
+  ['Horaires & agence', /(horaires?|ouvert|ferm[ée]|adresse|agence)/i],
+];
+const AE_STUDENT_RE = /((d[ée]caler|annuler|reporter|d[ée]placer|changer) (ma|mes|une|la|le) (prochaine )?(le[çc]on|cours|heure)|ma (prochaine )?le[çc]on|mes le[çc]ons|mon moniteur|ma monitrice|d[ée]j[àa] inscrit|[ée]l[èe]ve inscrit|mon livret|mes heures restantes|mon heure de conduite)/i;
+function aeIsStudent(text) { return AE_STUDENT_RE.test(String(text || '')); }
+// Hors horaires = en dehors des plages d'ouverture de l'agenda (heure de Paris).
+function aeIsOffHours(ts, hours) {
+  const d = new Date(ts);
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d);
+  const get = (t) => (parts.find((p) => p.type === t) || {}).value;
+  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(get('weekday'));
+  const mins = Number(get('hour')) * 60 + Number(get('minute'));
+  const ranges = booking.parseRanges((hours || {})[wd]);
+  return !ranges.some(([a, b]) => mins >= a && mins < b);
+}
+
 // ============================================================
 // AGENDA CONNECTÉ : le client colle l'adresse secrète iCal de son agenda
 // (Google Agenda, Outlook, Apple). Le serveur la lit (cache 3 min) et
@@ -1418,7 +1449,8 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
     const RDV = `(l.appointment_at IS NOT NULL OR l.status = 'rdv_pris')`;
     const pair = (r) => ({ cur: n(r && r.cur), prev: n(r && r.prev), voice: n(r && r.vcur) });
 
-    const [biz] = await safe('SELECT slug, voice_agent_id, voice_minutes_quota, calendar_ics_url FROM businesses WHERE id = $1', [bid], [{}]);
+    const [biz] = await safe('SELECT slug, voice_agent_id, voice_minutes_quota, calendar_ics_url, vertical, booking FROM businesses WHERE id = $1', [bid], [{}]);
+    const isAE = Boolean(biz && biz.vertical === 'autoecole');
     const [conv] = await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('c.started_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('c.started_at')}) AS prev,
         COUNT(*) FILTER (WHERE ${CUR('c.started_at')} AND ${IS_VOICE('c')}) AS vcur
       FROM conversations c WHERE c.business_id = $1 AND ${CH('c')}`, P, [{}]);
@@ -1459,7 +1491,7 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
       FROM messages m JOIN conversations c ON c.id = m.conversation_id
       WHERE c.business_id = $1 AND m.role = 'user' AND ${CUR('m.created_at')} AND ${CH('c')}
       GROUP BY m.conversation_id LIMIT 3000`, P, []);
-    const topicCounts = OVERVIEW_TOPICS.map(([label, re]) => ({
+    const topicCounts = (isAE ? AE_TOPICS : OVERVIEW_TOPICS).map(([label, re]) => ({
       label, count: texts.filter((r) => re.test((typeof r === 'string' ? r : r.t) || '')).length,
     })).filter((t) => t.count > 0).sort((a, b) => b.count - a.count).slice(0, 6);
 
@@ -1506,8 +1538,35 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
       } catch (e) { calToday = null; }
     }
 
+    // Auto-écoles : demandes hors horaires, élèves déjà inscrits, inscriptions.
+    let ae = null;
+    if (isAE) {
+      const hours = booking.parseBooking(biz).hours;
+      const convs = await safe(`SELECT c.id, c.started_at FROM conversations c WHERE c.business_id = $1 AND ${CUR('c.started_at')} AND ${CH('c')}`, P, []);
+      const offIds = new Set(convs.filter((c) => aeIsOffHours(c.started_at, hours)).map((c) => c.id));
+      const lp = await safe(`SELECT l.id, l.name, l.email, l.phone, l.summary, l.message, l.status, l.conversation_id, l.created_at,
+          COALESCE(c.channel, 'chat') AS channel, c.voice_source
+        ${LJ} WHERE l.business_id = $1 AND ${CUR('l.created_at')} AND ${CH('c')} ORDER BY l.created_at DESC`, P, []);
+      const lprev = await safe(`SELECT l.summary, l.message, l.status ${LJ} WHERE l.business_id = $1 AND ${PREV('l.created_at')} AND ${CH('c')}`, P, []);
+      const isStu = (l) => aeIsStudent(`${l.summary || ''} ${l.message || ''}`);
+      const students = lp.filter(isStu);
+      const prospects = lp.filter((l) => !isStu(l));
+      const pPrev = lprev.filter((l) => !isStu(l));
+      ae = {
+        offHours: { conv: offIds.size, prospects: prospects.filter((l) => offIds.has(l.conversation_id)).length },
+        prospects: { cur: prospects.length, prev: pPrev.length },
+        evals: { cur: prospects.filter((l) => l.status === 'rdv_pris' || l.status === 'gagne').length },
+        inscrits: { cur: prospects.filter((l) => l.status === 'gagne').length, prev: pPrev.filter((l) => l.status === 'gagne').length },
+        students: {
+          cur: students.length,
+          toForward: students.filter((l) => l.status === 'nouveau').length,
+          list: students.filter((l) => l.status === 'nouveau').slice(0, 3).map((l) => ({ name: l.name || l.phone || l.email || 'Élève', channel: l.channel, source: l.voice_source || null })),
+        },
+      };
+    }
+
     res.json({
-      days, channel,
+      days, channel, ae,
       hasVoice: Boolean(voiceAgentIdOf(biz) || n(v.total) > 0),
       kpis: {
         conversations: pair(conv), leads: pair(leads), rdv: pair(rdv), opens: pair(opens),
@@ -2185,7 +2244,7 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
 
     // Résumé en français (celui d'ElevenLabs est souvent en anglais).
     let frSummary = null;
-    try { frSummary = turns.length ? await generateLeadSummary(turns) : null; } catch (e) { frSummary = null; }
+    try { frSummary = turns.length ? await generateLeadSummary(turns, business.vertical) : null; } catch (e) { frSummary = null; }
     if (frSummary) {
       summary = frSummary;
       callData.summary = frSummary;
@@ -3283,10 +3342,10 @@ app.post('/api/auth/login', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    const { rows: businessRows } = await query('SELECT name, status, business_type FROM businesses WHERE id = $1', [user.business_id]);
+    const { rows: businessRows } = await query('SELECT name, status, business_type, vertical FROM businesses WHERE id = $1', [user.business_id]);
     res.json({
       email: user.email, role: user.role, business: businessRows[0].name,
-      status: businessRows[0].status, businessType: businessRows[0].business_type || 'autre',
+      status: businessRows[0].status, businessType: businessRows[0].business_type || 'autre', vertical: businessRows[0].vertical || '',
     });
   } catch (err) {
     console.error('Erreur /api/auth/login:', err);
@@ -3398,9 +3457,9 @@ app.get('/api/dashboard/me', requireAuth, async (req, res) => {
     if (req.user.role === 'super_admin') {
       return res.json({ role: 'super_admin', business: 'WHATGO (équipe)' });
     }
-    const { rows } = await query('SELECT name, status, business_type FROM businesses WHERE id = $1', [req.user.businessId]);
+    const { rows } = await query('SELECT name, status, business_type, vertical FROM businesses WHERE id = $1', [req.user.businessId]);
     const business = rows[0];
-    res.json({ role: req.user.role, business: business.name, status: business.status, businessType: business.business_type || 'autre' });
+    res.json({ role: req.user.role, business: business.name, status: business.status, businessType: business.business_type || 'autre', vertical: business.vertical || '' });
   } catch (err) {
     console.error('Erreur /api/dashboard/me:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
@@ -3680,10 +3739,12 @@ app.get('/api/dashboard/stats', requireAuth, requireRole(['admin', 'lecture']), 
 const BUSINESS_TYPES = ['rdv', 'ecommerce', 'hotel', 'autre'];
 app.put('/api/dashboard/business-type', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const type = req.body && req.body.businessType;
+    let type = req.body && req.body.businessType;
+    const vertical = type === 'autoecole' ? 'autoecole' : '';
+    if (type === 'autoecole') type = 'rdv';
     if (!BUSINESS_TYPES.includes(type)) return res.status(400).json({ error: 'Type d\'activité invalide.' });
-    await query('UPDATE businesses SET business_type = $1 WHERE id = $2', [type, req.user.businessId]);
-    res.json({ ok: true, businessType: type });
+    await query('UPDATE businesses SET business_type = $1, vertical = $2 WHERE id = $3', [type, vertical, req.user.businessId]);
+    res.json({ ok: true, businessType: type, vertical });
   } catch (err) {
     console.error('Erreur PUT /api/dashboard/business-type:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
@@ -4275,7 +4336,8 @@ app.get('/api/superadmin/conversations/:id', requireAuth, requireSuperAdmin, asy
 app.post('/api/superadmin/clients', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const { name, sector, adminEmail, adminPassword } = req.body;
-    const businessType = BUSINESS_TYPES.includes(req.body.businessType) ? req.body.businessType : 'autre';
+    const newVertical = req.body.businessType === 'autoecole' ? 'autoecole' : '';
+    const businessType = newVertical ? 'rdv' : (BUSINESS_TYPES.includes(req.body.businessType) ? req.body.businessType : 'autre');
     if (!name || !adminEmail || !adminPassword) {
       return res.status(400).json({ error: 'Nom de l\'entreprise, email et mot de passe admin sont requis.' });
     }
@@ -4297,10 +4359,10 @@ app.post('/api/superadmin/clients', requireAuth, requireSuperAdmin, async (req, 
     const placeholderPrompt = `Tu es l'assistant virtuel de "${name}". Le contenu n'a pas encore été renseigné par l'équipe WHATGO.`;
 
     const { rows: insertedBusiness } = await query(`
-      INSERT INTO businesses (slug, name, system_prompt, status, sector, business_type)
-      VALUES ($1, $2, $3, 'draft', $4, $5)
+      INSERT INTO businesses (slug, name, system_prompt, status, sector, business_type, vertical)
+      VALUES ($1, $2, $3, 'draft', $4, $5, $6)
       RETURNING id
-    `, [finalSlug, name, placeholderPrompt, sector || '', businessType]);
+    `, [finalSlug, name, placeholderPrompt, sector || '', businessType, newVertical]);
     const businessId = insertedBusiness[0].id;
 
     try {
@@ -4422,6 +4484,7 @@ const DEMO_SLUG = 'salon-demo';
 // Démos : Victoria + questions fréquentes (modifiable ensuite dans
 // Paramètres → Apparence du chatbot).
 async function ensureDemoLooks() {
+  await query("UPDATE businesses SET vertical = 'autoecole' WHERE slug = 'autoecole-demo' AND COALESCE(vertical, '') = ''").catch(() => {});
   // Auto-école : consignes de qualification remplacées par une consigne de
   // conseil (évite de redemander l'âge, recommande vite un forfait).
   try {
@@ -4737,6 +4800,23 @@ const DEMO_ACTIVITY = {
       t: ['Je voudrais réserver une évaluation.', 'Avec plaisir ! Choisissez votre créneau ci-dessous.', '📅 A réservé : Évaluation de départ (1 h en voiture)', 'C’est réservé ! Pensez à apporter votre pièce d’identité. À bientôt !'] },
     { ch: 'chat', d: 5, h: 18.3, name: '', email: '', status: null,
       t: ['C’est combien l’examen du code ?', 'L’examen du code coûte 30 €, c’est un tarif national. Il se réserve auprès d’un centre agréé, et nous vous accompagnons dans la démarche.'] },
+    { ch: 'chat', d: 1, h: 21.2, name: 'Inès', email: 'ines.b@gmail.com', phone: '06 45 12 78 90', status: 'nouveau', score: 75,
+      summary: '19 ans, code à passer, intéressée par la boîte automatique et le permis à 1 € par jour.',
+      t: ['Bonsoir, j’ai 19 ans et j’ai pas encore le code, vous faites la boîte automatique ?', 'Bonsoir ! Oui : le forfait boîte automatique 13 h est à 990 €, code en ligne inclus. Le permis à 1 € par jour est possible jusqu’à 25 ans.',
+        'Ah super, comment je fais pour le 1 € par jour ?', 'C’est un prêt à taux zéro accordé par une banque partenaire : nous vous aidons à monter le dossier lors de l’inscription. Voulez-vous qu’on vous rappelle ?', 'Oui, 06 45 12 78 90, Inès.'] },
+    { ch: 'chat', d: 2, h: 19.6, name: 'Emma', email: 'emma.leroy@gmail.com', status: 'nouveau', score: 40,
+      summary: 'Élève inscrite : souhaite annuler sa leçon de mardi 17 h et savoir combien d’heures il lui reste.',
+      t: ['Bonsoir, je voudrais annuler ma leçon de mardi 17h, et savoir combien d’heures il me reste svp', 'Bonsoir Emma ! Je transmets votre demande d’annulation à l’équipe. Rappel : une leçon annulée moins de 48 h avant est due. Pour vos heures restantes, l’équipe vous répond dès demain matin.',
+        'Ok merci, mon email c’est emma.leroy@gmail.com', 'C’est noté, bonne soirée !'] },
+    { ch: 'voice', src: 'phone', d: 4, h: 10.5, dur: 133, name: 'Lucas', phone: '07 22 33 44 55', status: 'gagne', score: 90,
+      summary: '20 ans, permis moto A2, paiement en 4 fois. Inscrit en agence suite à l’appel.',
+      t: ['Bonjour, ici Victoria, de l’Auto-École Horizon. Que puis-je faire pour vous ?', 'Bonjour, vous faites le permis moto ?',
+        'Oui, nous préparons le permis A2 : le forfait 20 heures plateau et circulation est à 1 090 €, payable en 4 fois sans frais. Quel âge avez-vous ?', '20 ans.',
+        'Parfait, c’est possible dès 18 ans. Souhaitez-vous passer en agence pour vous inscrire ? Votre prénom et votre numéro ?', 'Lucas, 07 22 33 44 55.', 'Merci Lucas, l’équipe vous attend en agence. À bientôt !'] },
+    { ch: 'chat', d: 8, h: 20.4, name: 'Nathan', email: 'nathan.p@outlook.fr', status: 'gagne', score: 90,
+      summary: '23 ans, code obtenu, forfait boîte manuelle 20 h financé par le CPF. Inscription confirmée.',
+      t: ['Bonsoir, j’ai mon code et du CPF, je peux m’inscrire chez vous ?', 'Bonsoir ! Oui, nous sommes certifiés Qualiopi : le CPF couvre le forfait boîte manuelle 20 h à 1 290 €. Voulez-vous réserver votre évaluation de départ ?',
+        '📅 A réservé : Évaluation de départ (1 h en voiture)', 'C’est réservé ! Pensez à votre pièce d’identité et à votre numéro de dossier CPF.'] },
   ],
   'salon-demo': [
     { ch: 'voice', src: 'phone', d: 0, h: 9.4, dur: 134, name: 'Camille', phone: '06 12 45 78 90', status: 'nouveau', score: 85,
@@ -4828,7 +4908,7 @@ async function ensureDemoActivity() {
     const prefix = `demo-seed:${slug}:`;
     const { rows: last } = await query(
       'SELECT MAX(started_at) AS m, COUNT(*)::int AS n FROM conversations WHERE business_id = $1 AND external_id LIKE $2', [bid, prefix + '%']);
-    if (last[0].n && last[0].m && Date.now() - new Date(last[0].m).getTime() < 3 * 86400000) continue;
+    if (last[0].n === items.length && last[0].m && Date.now() - new Date(last[0].m).getTime() < 3 * 86400000) continue;
     const old = await query('SELECT id FROM conversations WHERE business_id = $1 AND external_id LIKE $2', [bid, prefix + '%']);
     const oldIds = old.rows.map((r) => r.id);
     if (oldIds.length) {
