@@ -206,6 +206,40 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 @media (max-width:800px){.docs-add{grid-template-columns:1fr}}
 /* ---- Vue d'ensemble : à faire, évolutions, entonnoir, sujets, courbe ---- */
 .ovtodo{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+/* Vue d'ensemble épurée : bande « à faire », chiffres en une carte, activité + derniers leads */
+.ovstrip{display:grid;grid-template-columns:1.6fr 1fr 1fr;padding:0;margin-bottom:14px;overflow:hidden}
+.ovstrip .todo{border-radius:0;box-shadow:none;background:transparent;border:none;border-left:1px solid var(--line-soft);padding:14px 18px;gap:12px}
+.ovstrip .todo:first-child{border-left:none}
+.ovstrip .todo:hover{transform:none;box-shadow:none;background:rgba(255,255,255,.65)}
+.ovstrip .todo__ic{width:38px;height:38px;border-radius:12px;font-size:1.1rem}
+.ovstrip strong{display:block;font-size:.95rem;font-weight:650;color:var(--ink)}
+.ovstrip .todo small{max-width:none;font-size:.78rem;margin-top:1px}
+.ovstrip .todo.is-zero strong{color:var(--ink-faint)}
+.ovk{display:grid;grid-template-columns:repeat(4,1fr);padding:0;margin-bottom:14px}
+.ovk>div{padding:18px 22px;border-left:1px solid var(--line-soft);min-width:0}
+.ovk>div:first-child{border-left:none}
+.ovk .l{font-size:.8rem;color:var(--ink-soft);font-weight:550}
+.ovk .n{font-family:'Space Grotesk',sans-serif;font-size:1.95rem;font-weight:700;letter-spacing:-.03em;line-height:1.15;margin-top:4px}
+.ovk .n small{font-size:.95rem;color:var(--ink-faint);font-weight:600;letter-spacing:0}
+.ovk .s{font-size:.78rem;color:var(--ink-faint);margin-top:3px}
+.ovk .mbar{margin-top:8px}
+.ovmain{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:stretch}
+.ovmain>.card{margin-bottom:0;min-width:0}
+.ovline svg{display:block;width:100%;height:auto}
+.ovlink{border:none;background:none;color:var(--green-deep);font-weight:600;font-size:.84rem;cursor:pointer;padding:0}
+.ovleads{padding:4px 0 6px}
+.ovlrow{display:grid;grid-template-columns:1fr auto 92px;gap:12px;align-items:center;padding:10px 22px;border-top:1px solid var(--line-soft)}
+.ovlrow:first-child{border-top:none}
+.ovlrow.clickable{cursor:pointer}.ovlrow.clickable:hover{background:rgba(255,255,255,.6)}
+.ovlrow b{display:block;font-size:.88rem;font-weight:600}
+.ovlrow small{display:block;font-size:.78rem;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ovlrow .ci{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:.85rem;background:#E7F0FF}
+.ovlrow .ci.v{background:var(--vox-soft,#ECE9FB)}
+.ovlrow .tag{justify-self:end}
+.ovmore{display:flex;justify-content:center;margin:16px 0 18px}
+.ovsat{display:flex;align-items:center;gap:16px}
+.ovsat .n{font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:700}
+@media (max-width:900px){.ovstrip{grid-template-columns:1fr}.ovstrip .todo{border-left:none;border-top:1px solid var(--line-soft)}.ovstrip .todo:first-child{border-top:none}.ovk{grid-template-columns:1fr 1fr}.ovmain{grid-template-columns:1fr}}
 .todo{display:flex;gap:14px;align-items:center;padding:16px 18px;border-radius:18px;text-align:left;width:100%;font:inherit;color:inherit;
   background:linear-gradient(170deg,rgba(255,255,255,.95),rgba(255,255,255,.7));border:1px solid rgba(255,255,255,.95);
   box-shadow:0 8px 24px rgba(11,26,20,.06);cursor:pointer;transition:transform .15s,box-shadow .15s}
@@ -671,24 +705,28 @@ table.tbl tbody tr:last-child td{border-bottom:none}
           <select id="ovRange" class="rangepick"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select>
           <span class="tag tag--dot" id="statusBadge">—</span></div>
       </div>
-      <div class="ovtodo" id="ovTodo"></div>
-      <div class="kpis" id="ovKpis4" style="grid-template-columns:repeat(4,1fr)"></div>
-      <div class="card vcard" id="ovVoice" hidden></div>
-      <div class="split split--even" style="align-items:stretch">
-        <div class="card"><div class="card__head"><div><h3>De la visite au rendez-vous</h3><p class="card__sub" id="ovFunnelSub"></p></div></div><div id="ovFunnel"></div></div>
-        <div class="card"><div class="card__head"><div><h3>Sujets les plus demandés</h3><p class="card__sub" id="ovTopicsSub"></p></div></div><div id="ovTopics"></div></div>
-      </div>
-      <div class="card card--chart">
-        <div class="card__head"><div><h3 id="ovChartTitle">Conversations et leads par jour</h3></div>
-          <div class="ovlegend" id="ovLegend"><span><i class="light"></i>Conversations</span><span><i></i>Leads</span></div></div>
-        <div class="ovchart" id="ovChart"></div>
-      </div>
-      <div class="card card--flush" id="ovLeadsCard">
-        <div class="card__head card__head--pad">
-          <div><h3>Derniers leads</h3><p class="card__sub">Les contacts les plus récents captés par l'assistant.</p></div>
-          <button class="btn btn--ghost btn--sm" type="button" onclick="switchTab('leads')">Voir tous les leads</button>
+      <div class="card ovstrip" id="ovTodo"></div>
+      <div class="card ovk" id="ovKpis4"></div>
+      <div class="ovmain">
+        <div class="card">
+          <div class="card__head"><div><h3 id="ovChartTitle">Activité</h3></div>
+            <div class="ovlegend" id="ovLegend"></div></div>
+          <div class="ovline" id="ovChart"></div>
         </div>
-        <div class="tablewrap"><table class="tbl" id="ovLeadsTable"></table></div>
+        <div class="card card--flush" id="ovLeadsCard">
+          <div class="card__head card__head--pad"><div><h3>Derniers leads</h3></div>
+            <button class="ovlink" type="button" onclick="switchTab('leads')">Tout voir →</button></div>
+          <div class="ovleads" id="ovLeadsTable"></div>
+        </div>
+      </div>
+      <div class="ovmore"><button type="button" class="btn btn--ghost btn--sm" id="ovMoreBtn">📊 Voir les statistiques détaillées</button></div>
+      <div id="ovDetails" hidden>
+        <div class="card vcard" id="ovVoice" hidden></div>
+        <div class="split split--even" style="align-items:stretch">
+          <div class="card"><div class="card__head"><div><h3>De la visite au rendez-vous</h3><p class="card__sub" id="ovFunnelSub"></p></div></div><div id="ovFunnel"></div></div>
+          <div class="card"><div class="card__head"><div><h3>Sujets les plus demandés</h3><p class="card__sub" id="ovTopicsSub"></p></div></div><div id="ovTopics"></div></div>
+        </div>
+        <div class="card ovsat" id="ovSat"></div>
       </div>
     </section>
 
@@ -1978,13 +2016,13 @@ function renderOverview(o) {
     }
     var hotSub = uniq.length ? uniq.join(' · ') : (t.newLeads ? 'Statut « Nouveau » dans Leads' : 'Tous vos leads sont pris en charge');
     var items = [
-      ['hot', '🔥', hotN, hotLabel, hotSub, 'leads'],
+      ['hot', '🔥', hotN, t.hotLeads ? (t.hotLeads > 1 ? 'leads à rappeler' : 'lead à rappeler') : hotLabel, hotSub, 'leads'],
       ['rdv', '📅', t.rdvToday, t.rdvToday > 1 ? 'rendez-vous aujourd\'hui' : 'rendez-vous aujourd\'hui', t.rdvToday ? (t.rdvTodaySource === 'calendar' ? 'D\'après votre agenda · voir le détail' : 'Voir l\'agenda') : 'Aucun rendez-vous prévu', 'appointments'],
-      ['imp', '⭐', t.improve, t.improve > 1 ? 'questions à améliorer' : 'question à améliorer', t.improve ? 'Apprenez-les à votre assistant' : 'Votre assistant a réponse à tout', 'improve'],
+      ['imp', '⭐', t.improve, t.improve > 1 ? 'questions' : 'question', t.improve ? 'à apprendre à votre assistante' : 'Votre assistante a réponse à tout', 'improve'],
     ];
     todo.innerHTML = items.map(function (it) {
       return '<button type="button" class="todo todo--' + it[0] + (it[2] ? '' : ' is-zero') + '" data-go="' + it[5] + '">' +
-        '<span class="todo__ic">' + it[1] + '</span><div><b>' + it[2] + '</b><span>' + esc(it[3]) + '</span><small>' + esc(it[4]) + '</small></div></button>';
+        '<span class="todo__ic">' + it[1] + '</span><div style="min-width:0"><strong>' + it[2] + ' ' + esc(it[3]) + '</strong><small>' + esc(it[4]) + '</small></div></button>';
     }).join('');
     $$('[data-go]', todo).forEach(function (b) {
       b.addEventListener('click', function () {
@@ -2006,11 +2044,26 @@ function renderOverview(o) {
     return '<div class="split2">' + (tot ? '<i style="width:' + (c / tot * 100) + '%"></i><i class="v" style="width:' + (v / tot * 100) + '%"></i>' : '') + '</div>' +
       '<div class="kpi__s"><span>' + c + ' chat</span><span class="v">' + v + ' voix</span></div>';
   }
+  var pctOf = function (x, y) { return y ? Math.round(x / y * 100) + ' %' : '—'; };
+  var vv0 = o.voice || {};
+  var showVoiceKpi = OV_HAS_VOICE && o.channel !== 'chat';
+  var q0 = vv0.quota, used0 = vv0.monthMinutes || 0, pct0 = q0 ? Math.round(used0 / q0 * 100) : 0;
   $('#ovKpis4').innerHTML =
-    '<div class="kpi kpi--hero"><div class="kpi__l">' + (o.channel === 'voice' ? 'Appels' : 'Conversations') + '</div><div class="kpi__v">' + k.conversations.cur + '</div>' + splitHtml(k.conversations) + '</div>' +
-    '<div class="kpi"><div class="kpi__l">Leads captés</div><div class="kpi__v">' + k.leads.cur + '</div>' + splitHtml(k.leads) + '</div>' +
-    '<div class="kpi"><div class="kpi__l">Rendez-vous pris</div><div class="kpi__v">' + k.rdv.cur + '</div>' + splitHtml(k.rdv) + '</div>' +
-    '<div class="kpi"><div class="kpi__l">Satisfaction</div><div class="kpi__v">' + (sat === null ? '—' : sat + ' %') + '</div>' + satDelta + '</div>';
+    '<div><div class="l">' + (o.channel === 'voice' ? 'Appels' : 'Conversations') + '</div><div class="n">' + k.conversations.cur + '</div>' +
+      '<div class="s">' + (both ? 'dont ' + (k.conversations.voice || 0) + ' à la voix' : (o.channel === 'voice' ? '📞 ' + (vv0.phone || 0) + ' téléphone · 🎙️ ' + (vv0.web || 0) + ' site' : 'sur ' + days + ' jours')) + '</div></div>' +
+    '<div><div class="l">Leads captés</div><div class="n">' + k.leads.cur + '</div><div class="s">' + pctOf(k.leads.cur, k.conversations.cur) + ' des ' + (o.channel === 'voice' ? 'appels' : 'conversations') + '</div></div>' +
+    '<div><div class="l">Rendez-vous pris</div><div class="n">' + k.rdv.cur + '</div><div class="s">' + pctOf(k.rdv.cur, k.leads.cur) + ' des leads</div></div>' +
+    (showVoiceKpi
+      ? '<div><div class="l">Minutes de voix ce mois</div><div class="n">' + used0 + (q0 ? ' <small>/ ' + q0 + '</small>' : ' <small>min</small>') + '</div>' +
+          (q0 ? '<div class="mbar' + (pct0 > 100 ? ' is-over' : '') + '"><i style="width:' + Math.min(100, Math.max(used0 ? 2 : 0, pct0)) + '%"></i></div>' : '<div class="s">Forfait à indiquer dans IA vocale</div>') + '</div>'
+      : '<div><div class="l">Satisfaction</div><div class="n">' + (sat === null ? '—' : sat + ' %') + '</div>' + satDelta.replace('kpi__d', 's') + '</div>');
+  var satBox = $('#ovSat');
+  if (satBox) {
+    satBox.hidden = !showVoiceKpi;
+    satBox.innerHTML = '<span style="font-size:1.4rem">👍</span><div><h3>Satisfaction des visiteurs</h3><p class="card__sub">' +
+      (sat === null ? 'Pas encore d\'avis sur la période.' : plural(votes, 'avis', 'avis') + ' 👍/👎 sur ' + days + ' jours') + '</p></div>' +
+      '<div class="n" style="margin-left:auto">' + (sat === null ? '—' : sat + ' %') + '</div>';
+  }
   // 2 bis) Agent vocal
   var vbox = $('#ovVoice');
   if (vbox) {
@@ -2075,24 +2128,32 @@ function renderOverview(o) {
     }
     pts = g;
   }
-  $('#ovChartTitle').textContent = weekly ? 'Conversations et leads par semaine' : 'Conversations et leads par jour';
+  $('#ovChartTitle').textContent = 'Activité' + (weekly ? ' par semaine' : '');
   try { if (typeof LEADS_CACHE !== 'undefined' && LEADS_CACHE && LEADS_CACHE.length) renderOverviewLeads(LEADS_CACHE); } catch (e) {}
-  if ($('#ovLegend')) $('#ovLegend').innerHTML = both
-    ? '<span><i class="light"></i>Conversations</span><span><i></i>Leads chat</span><span><i class="v"></i>Leads voix</span>'
-    : '<span><i class="light"></i>' + (o.channel === 'voice' ? 'Appels' : 'Conversations') + '</span><span><i' + (o.channel === 'voice' ? ' class="v"' : '') + '></i>Leads</span>';
+  var leadCol = o.channel === 'voice' ? 'var(--vox)' : 'var(--green-deep)';
+  if ($('#ovLegend')) $('#ovLegend').innerHTML =
+    '<span><i class="light" style="height:3px;border-radius:2px;width:14px"></i>' + (o.channel === 'voice' ? 'appels' : 'conversations') + '</span>' +
+    '<span><i style="border-radius:50%;background:' + leadCol + '"></i>leads</span>';
+  var W = 600, H = 262, padX = 18, top = 14, base = 232;
   var cmax = Math.max(1, ...pts.map(function (p) { return Math.max(p.conv, p.leads); }));
-  var every = pts.length > 16 ? Math.ceil(pts.length / 10) : 1;
-  $('#ovChart').innerHTML = pts.map(function (p, i) {
-    var lab = fmtDay(p.day);
-    var tip = (weekly ? 'Semaine du ' : '') + lab + ' : ' + plural(p.conv, 'conversation', 'conversations') + ', ' + plural(p.leads, 'lead', 'leads') +
-      (both ? ' (' + (p.leadsChat || 0) + ' chat, ' + (p.leadsVoice || 0) + ' voix)' : '');
-    var leadBar = both && p.leads
-      ? '<span class="ovstack" style="height:' + Math.round(p.leads / cmax * 100) + '%"><i class="v" style="flex:' + (p.leadsVoice || 0) + '"></i><i style="flex:' + (p.leadsChat || 0) + '"></i></span>'
-      : '<i class="l' + (o.channel === 'voice' ? ' lv' : '') + '" style="height:' + Math.round(p.leads / cmax * 100) + '%"></i>';
-    return '<div class="ovchart__col" title="' + esc(tip) + '"><div class="ovchart__bars">' +
-      '<i style="height:' + Math.round(p.conv / cmax * 100) + '%"></i>' + leadBar + '</div>' +
-      '<div class="ovchart__x">' + ((pts.length - 1 - i) % every === 0 ? lab : '') + '</div></div>';
-  }).join('');
+  var stepX = pts.length > 1 ? (W - 2 * padX) / (pts.length - 1) : 0;
+  var X = function (i) { return pts.length > 1 ? padX + i * stepX : W / 2; };
+  var Y = function (v) { return base - (v / cmax) * (base - top); };
+  var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.conv).toFixed(1); }).join(' ');
+  var every = pts.length > 16 ? Math.ceil(pts.length / 8) : 1;
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Activité">' +
+    '<g stroke="var(--line-soft)">' + [0, 1, 2].map(function (g) { var y = top + g * (base - top) / 2; return '<line x1="0" x2="' + W + '" y1="' + y + '" y2="' + y + '"/>'; }).join('') + '</g>' +
+    (pts.length ? '<path d="' + line + ' L' + X(pts.length - 1).toFixed(1) + ' ' + base + ' L' + X(0).toFixed(1) + ' ' + base + 'Z" fill="#1FAA59" opacity=".08"/>' +
+      '<path d="' + line + '" fill="none" stroke="#1FAA59" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>' : '') +
+    pts.map(function (p, i) {
+      var lab = fmtDay(p.day);
+      var tip = (weekly ? 'Semaine du ' : '') + lab + ' : ' + plural(p.conv, o.channel === 'voice' ? 'appel' : 'conversation', o.channel === 'voice' ? 'appels' : 'conversations') + ', ' + plural(p.leads, 'lead', 'leads') +
+        (both ? ' (' + (p.leadsChat || 0) + ' chat, ' + (p.leadsVoice || 0) + ' voix)' : '');
+      return '<g><title>' + esc(tip) + '</title><rect x="' + (X(i) - Math.max(stepX, 20) / 2).toFixed(1) + '" y="0" width="' + Math.max(stepX, 20).toFixed(1) + '" height="' + H + '" fill="transparent"/>' +
+        (p.leads ? '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.leads).toFixed(1) + '" r="4.5" fill="' + leadCol + '"/>' : '') +
+        ((pts.length - 1 - i) % every === 0 ? '<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="11" fill="#7F8F87">' + esc(lab) + '</text>' : '') + '</g>';
+    }).join('') + '</svg>';
+  $('#ovChart').innerHTML = svg;
 }
 if ($('#ovChan')) $$('#ovChan button').forEach(function (b) {
   b.addEventListener('click', function () {
@@ -2101,6 +2162,15 @@ if ($('#ovChan')) $$('#ovChan button').forEach(function (b) {
     loadOverview();
   });
 });
+(function () {
+  var btn = $('#ovMoreBtn'), box = $('#ovDetails');
+  if (!btn || !box) return;
+  var open = false;
+  try { open = localStorage.getItem('ov-details') === '1'; } catch (e) {}
+  function sync() { box.hidden = !open; btn.textContent = open ? 'Masquer les statistiques détaillées' : '📊 Voir les statistiques détaillées'; }
+  btn.addEventListener('click', function () { open = !open; try { localStorage.setItem('ov-details', open ? '1' : '0'); } catch (e) {} sync(); });
+  sync();
+})();
 if ($('#ovRange')) $('#ovRange').addEventListener('change', function (e) {
   OV_RANGE = Number(e.target.value) || 30;
   try { localStorage.setItem('ov-range', String(OV_RANGE)); } catch (er) {}
@@ -2592,24 +2662,18 @@ function renderOverviewLeads(leads) {
   OV.leads30 = leads30d.length;
   renderOverviewKpis();
 
-  var table = $('#ovLeadsTable');
-  if (!table) return;
-  var showChan = OV_HAS_VOICE || leads.some(isVoiceLead);
+  var box = $('#ovLeadsTable');
+  if (!box) return;
   var recent = leads.filter(function (l) { return OV_CHANNEL === 'all' || (OV_CHANNEL === 'voice' ? isVoiceLead(l) : !isVoiceLead(l)); }).slice(0, 5);
-  table.innerHTML =
-    '<thead><tr><th>Contact</th><th>Sujet</th>' + (showChan ? '<th>Canal</th>' : '') + '<th>Score</th><th>Statut</th><th class="right">Reçu</th></tr></thead><tbody>' +
-    (recent.length ? recent.map(function (l) {
-      return '<tr class="' + (l.conversationId ? 'clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
-        '<td>' + leadContactHtml(l) + '</td>' +
-        '<td class="cell-sub">' + esc(truncate(l.summary || l.message, showChan ? 70 : 40)) + '</td>' +
-        (showChan ? '<td>' + chanBadge(l) + '</td>' : '') +
-        '<td>' + scoreBarHtml(l.score) + '</td>' +
-        '<td><span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span></td>' +
-        '<td class="right cell-sub">' + new Date(l.createdAt).toLocaleString('fr-FR') + '</td></tr>';
-    }).join('') : emptyRow(5, 'Aucun lead pour l\'instant', 'Dès qu\'un visiteur laissera son email dans le chat, il apparaîtra ici.')) +
-    '</tbody>';
-  $$('tr[data-convo]', table).forEach(function (row) {
-    if (!row.classList.contains('clickable')) return;
+  box.innerHTML = recent.length ? recent.map(function (l) {
+    var v = isVoiceLead(l);
+    var who = l.name || l.email || l.phone || 'Visiteur';
+    return '<div class="ovlrow' + (l.conversationId ? ' clickable' : '') + '" data-convo="' + esc(l.conversationId || '') + '">' +
+      '<div style="min-width:0"><b>' + esc(who) + '</b><small>' + esc(truncate(l.summary || l.message || '', 60)) + '</small></div>' +
+      '<span class="ci' + (v ? ' v' : '') + '" title="' + (v ? (l.voiceSource === 'phone' ? 'Téléphone' : 'Voix · site') : 'Chat') + '">' + chanIcon(v ? 'voice' : 'chat', l.voiceSource).trim() + '</span>' +
+      '<span class="tag ' + (LEAD_STATUS_TAGCLASS[l.status] || 'tag--grey') + '">' + esc(LEAD_STATUS_LABELS[l.status] || l.status) + '</span></div>';
+  }).join('') : '<p class="card__sub" style="padding:14px 22px">Aucun lead pour l\'instant : dès qu\'un visiteur laissera ses coordonnées, il apparaîtra ici.</p>';
+  $$('.ovlrow.clickable', box).forEach(function (row) {
     row.addEventListener('click', function () { openTranscript(row.dataset.convo); });
   });
 }
