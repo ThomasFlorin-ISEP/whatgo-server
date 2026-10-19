@@ -408,6 +408,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .cell-sub{font-size:.77rem;color:var(--ink-faint);margin-top:1px}
 .num{font-variant-numeric:tabular-nums}
 .right,table.tbl th.right,table.tbl td.right{text-align:right}
+table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 
 .empty{text-align:center;padding:44px 20px;color:var(--ink-faint)}
 .empty svg{width:34px;height:34px;margin:0 auto 12px;stroke:#BFCCC6;stroke-width:1.6}
@@ -1957,14 +1958,14 @@ function renderConversations() {
     }
     var list = CONVS.filter(function (c) { return matchC(c, CONV_FILTER); });
     body.innerHTML =
-      '<thead><tr><th>Visiteur</th><th>Messages</th><th class="right">Date</th><th></th></tr></thead><tbody>' +
+      '<thead><tr><th>Visiteur</th><th class="ctr">Messages</th><th class="ctr">Date</th><th></th></tr></thead><tbody>' +
       (list.length ? list.map(function (c) {
         return '<tr class="clickable" data-id="' + esc(c.id) + '">' +
           '<td class="cell-main">' + (c.channel === 'voice'
             ? esc(c.visitor_label) + ' <span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + (c.duration_secs ? ' · ' + fmtDur(c.duration_secs) : '') + '</span>'
             : '💬 ' + esc(String(c.visitor_label || 'Visiteur anonyme').replace(/^Visiteur\s+—\s+/, '')) + ' <span class="chanb c">💬 Chat</span>') + '</td>' +
-          '<td class="num">' + c.message_count + '</td>' +
-          '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td>' +
+          '<td class="num ctr">' + c.message_count + '</td>' +
+          '<td class="ctr cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td>' +
           '<td class="right"><span class="viewbtn">Voir la conversation ›</span></td></tr>';
       }).join('') : emptyRow(4, 'Aucune conversation pour le moment', 'Dès qu\'un visiteur écrit à l\'assistant, la conversation apparaît ici.')) +
       '</tbody>';
