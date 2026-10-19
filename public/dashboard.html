@@ -325,6 +325,8 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .fun2{display:grid;grid-template-columns:1fr 1fr;gap:26px}
 .fun2 h4{margin:0 0 10px;font-size:.82rem;display:flex;align-items:center;gap:6px;color:#33403A}
 .fun2 .vox .funnel__bar i{background:var(--vox)}
+.viewbtn{display:inline-flex;align-items:center;font-size:.76rem;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);white-space:nowrap;transition:background .15s,border-color .15s}
+tr.clickable:hover .viewbtn{background:var(--green);border-color:var(--green);color:#fff}
 .chanb{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap}
 .chanb.c{background:#E7F0FB;color:#28518F}.chanb.w{background:var(--vox-soft);color:#4A3AA8}.chanb.p{background:#E9E4FF;color:#3B2C9A}
 .chans{font-size:.7rem;color:#8A948F;margin-top:4px}
@@ -406,7 +408,7 @@ table.tbl tbody tr:last-child td{border-bottom:none}
 .cell-main{font-weight:600}
 .cell-sub{font-size:.77rem;color:var(--ink-faint);margin-top:1px}
 .num{font-variant-numeric:tabular-nums}
-.right{text-align:right}
+.right,table.tbl th.right,table.tbl td.right{text-align:right}
 
 .empty{text-align:center;padding:44px 20px;color:var(--ink-faint)}
 .empty svg{width:34px;height:34px;margin:0 auto 12px;stroke:#BFCCC6;stroke-width:1.6}
@@ -2209,15 +2211,16 @@ function renderConversations() {
     }
     var list = CONVS.filter(function (c) { return matchC(c, CONV_FILTER); });
     body.innerHTML =
-      '<thead><tr><th>Visiteur</th><th>Messages</th><th class="right">Date</th></tr></thead><tbody>' +
+      '<thead><tr><th>Visiteur</th><th>Messages</th><th class="right">Date</th><th></th></tr></thead><tbody>' +
       (list.length ? list.map(function (c) {
         return '<tr class="clickable" data-id="' + esc(c.id) + '">' +
           '<td class="cell-main">' + (c.channel === 'voice'
             ? esc(c.visitor_label) + ' <span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + (c.duration_secs ? ' · ' + fmtDur(c.duration_secs) : '') + '</span>'
             : '💬 ' + esc(String(c.visitor_label || 'Visiteur anonyme').replace(/^Visiteur\s+—\s+/, '')) + ' <span class="chanb c">💬 Chat</span>') + '</td>' +
           '<td class="num">' + c.message_count + '</td>' +
-          '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td></tr>';
-      }).join('') : emptyRow(3, 'Aucune conversation pour le moment', 'Dès qu\'un visiteur écrit à l\'assistant, la conversation apparaît ici.')) +
+          '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td>' +
+          '<td class="right"><span class="viewbtn">Voir la conversation ›</span></td></tr>';
+      }).join('') : emptyRow(4, 'Aucune conversation pour le moment', 'Dès qu\'un visiteur écrit à l\'assistant, la conversation apparaît ici.')) +
       '</tbody>';
     $$('tr[data-id]', body).forEach(function (row) {
       row.addEventListener('click', function () { openTranscript(row.dataset.id); });
