@@ -556,8 +556,9 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 .bkw-ev.is-team{background-image:repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(255,255,255,.55) 7px,rgba(255,255,255,.55) 9px)}
 .bkw-hover{position:absolute;left:4px;right:4px;border-radius:9px;background:rgba(31,170,89,.10);border:1.5px dashed rgba(31,170,89,.55);color:var(--green-deep);font-size:.74rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:none;z-index:1}
 .bkw-hover.is-closed{background:rgba(127,143,135,.08);border-color:rgba(127,143,135,.45);color:var(--ink-faint)}
-.bkw-now{position:absolute;left:0;right:0;height:2px;background:#E5484D;pointer-events:none;z-index:3}
-.bkw-now::before{content:'';position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:#E5484D}
+.bkw-now{position:absolute;left:0;right:0;height:0;border-top:1.5px solid rgba(229,72,77,.55);pointer-events:none;z-index:3}
+.bkw-hcol{position:relative}
+.bkw-nowlbl{position:absolute;right:4px;transform:translateY(-50%);font-size:.66rem;font-weight:700;color:#D4474C;background:#fff;border:1px solid rgba(229,72,77,.35);border-radius:6px;padding:0 4px;line-height:1.5;z-index:4;pointer-events:none}
 .bk-legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;padding:12px 22px;border-top:1px solid var(--line-soft);font-size:.78rem;color:var(--ink-soft)}
 .bk-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .bk-legend .keys{display:flex;gap:14px;flex-wrap:wrap}
@@ -3217,6 +3218,10 @@ function bkColorOf(name) {
   return 'c' + (i % 5);
 }
 var BK_EXTRA = null;
+var BK_NOW = null;
+setInterval(function () {
+  if (BK_NOW && BK_VIEW === 'week' && !document.hidden) { try { BK_NOW(); } catch (e) {} }
+}, 30000);
 
 async function loadBookings() {
   if (!BK_WEEK0) BK_WEEK0 = bkMonday(bkYmd(new Date()));
@@ -3289,8 +3294,9 @@ function renderWeek() {
   }).join('') + '</div>';
   var hrs = '';
   for (var h = h0; h < h1; h++) hrs += '<div class="bkw-hr" style="height:' + PX + 'px">' + (h > h0 ? '<span>' + h + 'h</span>' : '<span style="top:2px">' + h + 'h</span>') + '</div>';
-  var nowMin = (function () { var p = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).split(':'); return Number(p[0]) * 60 + Number(p[1]); })();
-  var body = '<div class="bkw-body" style="grid-template-columns:' + cols + '"><div>' + hrs + '</div>' + days.map(function (d) {
+  var hasToday = days.some(function (d) { return d.ymd === today; });
+  var body = '<div class="bkw-body" style="grid-template-columns:' + cols + '"><div class="bkw-hcol">' + hrs +
+    (hasToday ? '<div class="bkw-nowlbl" hidden></div>' : '') + '</div>' + days.map(function (d) {
     var html = '';
     for (var h = h0 + 1; h < h1; h++) html += '<div class="bkw-line" style="top:' + Y(h * 60) + 'px"></div>';
     // Zones fermées (hachurées)
@@ -3321,10 +3327,23 @@ function renderWeek() {
         'style="top:' + (Y(s) + 1) + 'px;height:' + hgt + 'px;left:calc(' + (b._lane * w) + '% + 4px);width:calc(' + w + '% - 8px)" title="' + esc(bkHHMM(s) + ' · ' + who + ' · ' + b.service) + '">' +
         '<b>' + esc(bkHHMM(s).replace(/h00$/, 'h') + ' · ' + who) + '</b>' + (hgt > 34 ? '<span>' + src + ' ' + esc(b.service) + '</span>' : '') + '</div>';
     });
-    if (d.ymd === today && nowMin >= h0 * 60 && nowMin <= h1 * 60) html += '<div class="bkw-now" style="top:' + Y(nowMin) + 'px"></div>';
+    if (d.ymd === today) html += '<div class="bkw-now" hidden></div>';
     return '<div class="bkw-col' + (ME.role === 'admin' ? ' can-add' : '') + '" data-day="' + d.ymd + '" data-ranges="' + esc(JSON.stringify(d.ranges)) + '" style="height:' + H + 'px">' + html + '<div class="bkw-hover" hidden></div></div>';
   }).join('') + '</div>';
   box.innerHTML = '<div class="bkw">' + hdr + body + '</div>' + (live.length ? '' : '<p class="bk-empty-week">Aucun rendez-vous cette semaine.</p>');
+  // Ligne « maintenant » : discrète, avec l'heure, et qui avance toute seule chaque minute.
+  BK_NOW = function () {
+    var line = box.querySelector('.bkw-now'), lab = box.querySelector('.bkw-nowlbl');
+    if (!line || !lab) return;
+    var t = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+    var p = t.split(':'), m = Number(p[0]) * 60 + Number(p[1]);
+    var show = bkYmd(new Date()) === today && m >= h0 * 60 && m <= h1 * 60;
+    line.hidden = lab.hidden = !show;
+    if (!show) return;
+    line.style.top = lab.style.top = Y(m) + 'px';
+    lab.textContent = t.replace(':', 'h');
+  };
+  BK_NOW();
 
   // Légende : une couleur par prestation
   var names = [];
