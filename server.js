@@ -417,6 +417,19 @@ const NAME_STOPWORDS = new Set([
 function capitalizeName(word) {
   return word.split(/([-'’])/).map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join('');
 }
+// Nom propre tapé par le visiteur ("thomas florin", "THOMAS FLORIN") →
+// "Thomas Florin". Un mot déjà en casse mixte ("McDonald") est gardé tel quel ;
+// les particules (de, du, la…) restent en minuscules sauf en premier.
+const NAME_PARTICLES = new Set(['de', 'du', 'des', 'la', 'le', 'van', 'von', 'da', 'di', 'del', 'el', 'ben', 'bin']);
+function prettyPersonName(raw) {
+  const s = String(raw || '').trim().replace(/\s+/g, ' ');
+  if (!s || /[@\d]/.test(s)) return s;
+  return s.split(' ').map((w, i) => {
+    if (w !== w.toLowerCase() && w !== w.toUpperCase()) return w;
+    if (i > 0 && NAME_PARTICLES.has(w.toLowerCase())) return w.toLowerCase();
+    return capitalizeName(w);
+  }).join(' ');
+}
 function extractName(text) {
   const match = String(text || '').match(NAME_INTRO_REGEX);
   if (!match) return null;
@@ -2177,7 +2190,7 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
     const analysis = data.analysis || {};
     const results = analysis.data_collection_results || {};
     const meta = data.metadata || {};
-    const firstName = voiceField(results, /first_?name|pr[ée]nom/i);
+    const firstName = voiceField(results, /first_?name|pr[ée]nom/i) ? prettyPersonName(voiceField(results, /first_?name|pr[ée]nom/i)) : null;
     const company = voiceField(results, /company|entreprise|soci[ée]t[ée]/i);
     const emailRaw = voiceField(results, /e-?mail/i);
     const phoneRaw = voiceField(results, /phone|t[ée]l[ée]phone/i);
@@ -2324,7 +2337,7 @@ app.post('/api/handoff', async (req, res) => {
     }
     const body = req.body || {};
     const slug = String(body.business || '');
-    const name = String(body.name || '').trim().slice(0, 120);
+    const name = prettyPersonName(String(body.name || '').trim().slice(0, 120));
     const contact = String(body.contact || '').trim().slice(0, 200);
     const note = String(body.message || '').trim().slice(0, 1000);
     const email = extractEmail(contact);
@@ -2971,7 +2984,7 @@ app.post('/api/booking/:slug', async (req, res) => {
 
     const body = req.body || {};
     const service = config.services.find((s) => s.id === body.serviceId);
-    const name = String(body.name || '').trim().slice(0, 120);
+    const name = prettyPersonName(String(body.name || '').trim().slice(0, 120));
     const phone = String(body.phone || '').trim().slice(0, 40);
     const email = String(body.email || '').trim().slice(0, 200);
     const minutes = booking.hhmmToMinutes(body.time);
@@ -3851,7 +3864,7 @@ app.post('/api/dashboard/bookings', requireAuth, requireRole('admin'), async (re
       `INSERT INTO bookings (business_id, service_name, duration, price, start_at, end_at, customer_name, phone, email, notes, source)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'manuel') RETURNING id`,
       [req.user.businessId, serviceName, duration, service ? service.price : '', start, end,
-        String(body.name || '').trim().slice(0, 120) || null, String(body.phone || '').trim().slice(0, 40) || null,
+        prettyPersonName(String(body.name || '').trim().slice(0, 120)) || null, String(body.phone || '').trim().slice(0, 40) || null,
         String(body.email || '').trim().slice(0, 200) || null, String(body.notes || '').trim().slice(0, 1000) || null]
     );
     res.json({ ok: true, id: inserted[0].id });
