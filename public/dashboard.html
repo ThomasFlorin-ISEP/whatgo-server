@@ -2212,7 +2212,9 @@ function renderConversations() {
       '<thead><tr><th>Visiteur</th><th>Messages</th><th class="right">Date</th></tr></thead><tbody>' +
       (list.length ? list.map(function (c) {
         return '<tr class="clickable" data-id="' + esc(c.id) + '">' +
-          '<td class="cell-main">' + esc(c.visitor_label) + (c.channel === 'voice' ? ' <span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + (c.duration_secs ? ' · ' + fmtDur(c.duration_secs) : '') + '</span>' : '') + '</td>' +
+          '<td class="cell-main">' + (c.channel === 'voice'
+            ? esc(c.visitor_label) + ' <span class="chanb ' + (c.voice_source === 'phone' ? 'p">📞 Téléphone' : 'w">🎙️ Voix · site') + (c.duration_secs ? ' · ' + fmtDur(c.duration_secs) : '') + '</span>'
+            : '💬 ' + esc(String(c.visitor_label || 'Visiteur anonyme').replace(/^Visiteur\s+—\s+/, '')) + ' <span class="chanb c">💬 Chat</span>') + '</td>' +
           '<td class="num">' + c.message_count + '</td>' +
           '<td class="right cell-sub">' + new Date(c.started_at).toLocaleString('fr-FR') + '</td></tr>';
       }).join('') : emptyRow(3, 'Aucune conversation pour le moment', 'Dès qu\'un visiteur écrit à l\'assistant, la conversation apparaît ici.')) +
