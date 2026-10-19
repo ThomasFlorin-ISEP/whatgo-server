@@ -1025,6 +1025,7 @@ var ME = null;
 function $(s, r) { return (r || document).querySelector(s); }
 function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
 
+function fmtMsg(t) { return esc(t).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>'); }
 function esc(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/[&<>"']/g, function (c) {
@@ -1935,7 +1936,7 @@ function openCallDrawer(data) {
     (facts.length ? '<div class="ffacts">' + facts.map(function (f) { return '<div>' + f[0] + '<b>' + esc(f[1]) + '</b></div>'; }).join('') + '</div>' : '') +
     '<div class="secttl">Transcription</div>' +
     (data.messages.length ? '<div class="thread">' + data.messages.map(function (m) {
-      return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + esc(m.content) + '</div>';
+      return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + fmtMsg(m.content) + '</div>';
     }).join('') + '</div>' : '<p class="cell-sub">Aucune parole n\'a été enregistrée pendant cet appel.</p>');
   openDrawer(
     (c.voice_source === 'phone' ? '📞 ' : '🎙️ ') + who,
@@ -1959,7 +1960,7 @@ async function openTranscript(id) {
           : '<a href="' + url + '" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:6px;font-weight:600">📄 ' + esc(x.name || 'Fichier') + '</a>';
       }).join('');
       var text = files ? String(m.content || '').replace(/\n?\[📎[^\]]*\]\s*$/, '') : m.content;
-      return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + files + esc(text) + '</div>';
+      return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + files + fmtMsg(text) + '</div>';
     }).join('') + '</div>';
     openDrawer(
       data.conversation.visitor_label,
@@ -2705,7 +2706,7 @@ async function openSuperAdminTranscript(id) {
     var data = await res.json();
     var body = '<div class="thread">' + (data.messages.length
       ? data.messages.map(function (m) {
-          return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + esc(m.content) +
+          return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + fmtMsg(m.content) +
             (m.used_fallback ? ' <span class="cell-sub">(via secours Groq)</span>' : '') + '</div>';
         }).join('')
       : '<p class="card__sub">Aucun message enregistré.</p>') + '</div>';

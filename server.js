@@ -437,6 +437,10 @@ const CHAT_UX_INSTRUCTION =
   `[SUITES: question 1 | question 2 | question 3] avec 2 ou 3 questions très courtes (6 mots maximum) que le visiteur ` +
   `pourrait vouloir poser ensuite, écrites de son point de vue et dans la langue de la conversation. Ne les annonce pas ` +
   `et ne les répète pas dans le texte.` +
+  `\n\nCONDUITE DE LA CONVERSATION : relis toujours l'échange avant d'écrire. Ne redemande JAMAIS une information que le visiteur a déjà donnée, même sous une forme courte (un « 22 » qui répond à « quel âge ? » est une réponse). ` +
+  `Pose au maximum UNE question par message. Si le visiteur demande un conseil ou une recommandation, donne-la dès que ` +
+  `tu as l'essentiel, avec au plus deux questions avant ; s'il manque une info, recommande quand même en précisant ` +
+  `ce qui pourrait changer ton conseil.` +
   `\n\nPHOTOS ET FICHIERS : le visiteur peut joindre une photo ou un PDF. Décris en une phrase ce que tu vois, puis aide-le ` +
   `selon les règles de l'entreprise (retour, échange, réclamation, devis…). Ne promets jamais un remboursement, un échange ` +
   `ou un geste commercial que les documents de l'entreprise ne prévoient pas : propose plutôt de transmettre la demande à ` +
