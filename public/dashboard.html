@@ -265,6 +265,11 @@ body.is-ae select.lead-status{min-width:178px}
 .ovmain{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:stretch}
 .ovmain>.card{margin-bottom:0;min-width:0}
 .ovline svg{display:block;width:100%;height:auto}
+.setgrid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:18px;align-items:start}
+.setcol{display:flex;flex-direction:column;gap:18px}.setcol>.card{margin:0}
+.set2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+#look-sugg{min-height:132px}
+@media (max-width:1000px){.setgrid{grid-template-columns:1fr}}@media (max-width:700px){.set2{grid-template-columns:1fr;gap:0}}
 .ovmini{display:grid;grid-template-columns:repeat(3,1fr);padding:0;overflow:hidden}
 .ovmini>div{padding:14px 20px;border-left:1px solid var(--line-soft);display:flex;flex-direction:column;gap:1px}
 .ovmini>div:first-child{border-left:none}
@@ -1358,7 +1363,32 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
     <!-- ============================== PARAMÈTRES (réel) -->
     <section class="tab-page" id="page-settings">
       <div class="topbar"><div><h2>Paramètres</h2><p>Votre compte.</p></div></div>
-      <div class="card" style="max-width:560px" id="typeCard" data-grp="client">
+      <div class="setgrid">
+        <div class="setcol">
+      <div class="card" id="lookCard">
+        <div class="card__head"><div><h3>Apparence du chatbot</h3>
+          <p class="card__sub">Le prénom, la photo et les questions cliquables que voient vos visiteurs.</p></div></div>
+        <div class="set2"><div class="field"><label for="look-name">Prénom de l'assistant</label>
+          <input type="text" id="look-name" maxlength="40" placeholder="Ex. : Victoria" />
+          <p class="help">Laissez vide pour garder le nom indiqué dans le code du site.</p></div>
+        <div class="field"><label>Photo</label>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div id="look-preview" style="width:56px;height:56px;border-radius:50%;overflow:hidden;background:#EEF1F5;flex-shrink:0;display:grid;place-items:center;color:#8A9089;font-size:.7rem">Aucune</div>
+            <label class="btn btn--ghost btn--sm" style="cursor:pointer">Choisir une photo<input type="file" id="look-file" accept="image/*" hidden /></label>
+            <button type="button" class="btn btn--ghost btn--sm" id="look-remove">Retirer</button>
+          </div>
+          <p class="help">Carrée de préférence. Sans photo, un petit personnage illustré s'affiche.</p></div></div>
+        <div class="set2"><div class="field"><label for="look-sugg">Questions fréquentes cliquables</label>
+          <textarea id="look-sugg" rows="4" placeholder="Une question par ligne (6 maximum), ex. :&#10;Je souhaite obtenir une démo&#10;Quels sont vos tarifs ?"></textarea>
+          <p class="help">Affichées en bas du chat : un clic envoie la question à l'assistant.</p></div>
+        <div class="field"><label for="look-demo">Lien de réservation (démo ou rendez-vous)</label>
+          <input type="url" id="look-demo" placeholder="https://calendar.app.google/… ou https://calendly.com/…" />
+          <p class="help">Quand un visiteur veut une démo ou un rendez-vous, l'assistante affiche un bouton « Choisir un créneau » vers ce lien. Laissez vide pour ne pas l'utiliser.</p></div></div>
+        <button type="button" class="btn btn--primary" id="lookSave">Enregistrer</button>
+      </div>
+        </div>
+        <div class="setcol">
+      <div class="card" id="typeCard" data-grp="client">
         <div class="card__head"><div><h3>Type d'activité</h3>
           <p class="card__sub">Adapte votre tableau de bord et votre assistant à votre métier.</p></div></div>
         <div class="field"><label for="biz-type">Votre activité</label>
@@ -1371,28 +1401,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
           </select></div>
         <button type="button" class="btn btn--primary" id="bizTypeSave">Enregistrer</button>
       </div>
-      <div class="card" style="max-width:560px" id="lookCard">
-        <div class="card__head"><div><h3>Apparence du chatbot</h3>
-          <p class="card__sub">Le prénom, la photo et les questions cliquables que voient vos visiteurs.</p></div></div>
-        <div class="field"><label for="look-name">Prénom de l'assistant</label>
-          <input type="text" id="look-name" maxlength="40" placeholder="Ex. : Victoria" />
-          <p class="help">Laissez vide pour garder le nom indiqué dans le code du site.</p></div>
-        <div class="field"><label>Photo</label>
-          <div style="display:flex;align-items:center;gap:14px">
-            <div id="look-preview" style="width:56px;height:56px;border-radius:50%;overflow:hidden;background:#EEF1F5;flex-shrink:0;display:grid;place-items:center;color:#8A9089;font-size:.7rem">Aucune</div>
-            <label class="btn btn--ghost btn--sm" style="cursor:pointer">Choisir une photo<input type="file" id="look-file" accept="image/*" hidden /></label>
-            <button type="button" class="btn btn--ghost btn--sm" id="look-remove">Retirer</button>
-          </div>
-          <p class="help">Carrée de préférence. Sans photo, un petit personnage illustré s'affiche.</p></div>
-        <div class="field"><label for="look-sugg">Questions fréquentes cliquables</label>
-          <textarea id="look-sugg" rows="4" placeholder="Une question par ligne (6 maximum), ex. :&#10;Je souhaite obtenir une démo&#10;Quels sont vos tarifs ?"></textarea>
-          <p class="help">Affichées en bas du chat : un clic envoie la question à l'assistant.</p></div>
-        <div class="field"><label for="look-demo">Lien de réservation (démo ou rendez-vous)</label>
-          <input type="url" id="look-demo" placeholder="https://calendar.app.google/… ou https://calendly.com/…" />
-          <p class="help">Quand un visiteur veut une démo ou un rendez-vous, l'assistante affiche un bouton « Choisir un créneau » vers ce lien. Laissez vide pour ne pas l'utiliser.</p></div>
-        <button type="button" class="btn btn--primary" id="lookSave">Enregistrer</button>
-      </div>
-      <div class="card" style="max-width:420px">
+      <div class="card">
         <div class="card__head"><div><h3>Changer mon mot de passe</h3></div></div>
         <form id="passwordForm" novalidate>
           <div class="field"><label for="pw-current">Mot de passe actuel</label><input type="password" id="pw-current" required autocomplete="current-password" /></div>
@@ -1402,6 +1411,8 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
           <p class="msg msg--ok" id="pwOk">Mot de passe mis à jour.</p>
           <p class="msg msg--err" id="pwError"></p>
         </form>
+      </div>
+        </div>
       </div>
     </section>
 
