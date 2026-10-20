@@ -2094,6 +2094,8 @@ async function demoVoicePrompt(b) {
     "- Une seule question à la fois. Jamais de listes, d'emojis, de liens ni d'adresses web.",
     "- Ne redemande jamais une information déjà donnée pendant l'appel. Si on te demande un conseil, donne-le dès que tu as l'essentiel (au plus deux questions avant).",
     "- Ne pose jamais deux fois de suite la même question. Si la personne se tait ou que tu n'as pas compris, ne répète pas ta question : dis une seule fois « Prenez votre temps, je vous écoute », puis attends.",
+    "- La reconnaissance vocale se trompe parfois (« innoto école », « oto école » = auto-école). Interprète le sens le plus probable ; si un nom te paraît étrange, vérifie simplement (« une auto-école, c'est bien ça ? ») au lieu de le répéter.",
+    "- Quand tu récapitules un numéro de téléphone, écris-le en chiffres groupés par deux (06 65 82 21 12), jamais en toutes lettres.",
     "- Pour une réservation ou une demande : demande d'abord le prénom, puis le numéro de téléphone, puis le détail (prestation et horaire souhaité, ou dates de séjour et nombre de personnes). Répète le récapitulatif, puis précise que l'équipe confirme très vite.",
     "- Si tu ne sais pas, dis-le simplement et propose que l'équipe rappelle. N'invente jamais un prix ou une disponibilité.",
     "- Avant de terminer l'appel, si la personne t'a donné des informations personnelles (prénom, téléphone, email) ou une demande de rendez-vous, récapitule-les en une phrase (ex. : « Je récapitule : Sarah, 06 34 45 56 67, une évaluation de départ mardi. C'est bien ça ? »), en lisant le numéro chiffre par chiffre. Corrige si besoin, puis termine poliment.",
@@ -2140,9 +2142,11 @@ app.get('/api/widget/:slug/voice-recap', async (req, res) => {
     if (Date.now() - ended > 30 * 60 * 1000) return res.json({ ready: false, expired: true });
     let d = {};
     try { d = JSON.parse(row.call_data || '{}') || {}; } catch (e) { d = {}; }
-    if (!d.summaryReady && Date.now() - ended < 25 * 1000) return res.json({ ready: false });
-    res.json({ ready: true, firstName: d.firstName || '', phone: d.phone || '', email: d.email || '',
-      need: String((d.summaryFr ? d.summary : (d.need || d.summary)) || '').slice(0, 400) });
+    // On attend le résumé en français (jusqu'à ~75 s après l'appel) : celui d'ElevenLabs est souvent en anglais.
+    if (!d.summaryReady && Date.now() - ended < 75 * 1000) return res.json({ ready: false });
+    let need = String((d.summaryFr ? d.summary : (d.need || d.summary)) || '').slice(0, 400);
+    if (!d.summaryFr && /\b(the|user|agent|their|with|provided|would|and)\b/i.test(need)) need = ''; // pas d'anglais dans le récap
+    res.json({ ready: true, firstName: d.firstName || '', phone: d.phone || '', email: d.email || '', need });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
