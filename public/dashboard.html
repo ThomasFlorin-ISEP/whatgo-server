@@ -265,7 +265,11 @@ body.is-ae select.lead-status{min-width:178px}
 .ovmain{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:stretch}
 .ovmain>.card{margin-bottom:0;min-width:0}
 .ovline svg{display:block;width:100%;height:auto}
-.setgrid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:18px;align-items:start}
+.setgrid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:18px;align-items:stretch}
+.setcol>.card:last-child{flex:1}
+#lookCard,.setcol>.card:last-child{display:flex;flex-direction:column}
+#lookSave{margin-top:auto;align-self:flex-start}
+.setcol>.card:last-child>form{display:flex;flex-direction:column;flex:1}.setcol>.card:last-child>form>button{margin-top:auto;align-self:flex-start}
 .setcol{display:flex;flex-direction:column;gap:18px}.setcol>.card{margin:0}
 .set2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
 #look-sugg{min-height:132px}
