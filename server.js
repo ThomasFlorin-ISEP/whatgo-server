@@ -1602,6 +1602,12 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
       };
     }
 
+    let relancesTodo = { n: 0, names: [] };
+    try {
+      const rc = (await relanceCandidates({ id: bid, vertical: biz && biz.vertical }, 3)).filter((l) => l.email);
+      relancesTodo = { n: rc.length, names: rc.slice(0, 3).map((l) => prettyPersonName(l.name || '') || l.email) };
+    } catch (e) { /* facultatif */ }
+
     res.json({
       days, channel, ae,
       hasVoice: Boolean(voiceAgentIdOf(biz) || n(v.total) > 0),
@@ -1619,6 +1625,7 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
         rdvToday: calToday === null ? n(today.n) : calToday,
         rdvTodaySource: calToday === null ? 'leads' : 'calendar',
         improve: n(impr.n),
+        relances: relancesTodo,
       },
       series: series.map((r) => ({ day: r.day, conv: n(r.conv), leads: n(r.lchat) + n(r.lvoice), leadsChat: n(r.lchat), leadsVoice: n(r.lvoice) })),
       topics: topicCounts,
@@ -3658,6 +3665,130 @@ async function relanceCandidates(business, days) {
     return true;
   });
 }
+
+// ============================================================
+// JOURNAL : ce que l'assistante a fait (aujourd'hui, hier, cette semaine),
+// action par action, reconstitué à partir des conversations, réservations,
+// relances et questions sans réponse.
+// ============================================================
+app.get('/api/dashboard/journal', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const range = ['today', 'yesterday', 'week'].includes(req.query.range) ? req.query.range : 'today';
+    const bid = req.user.businessId;
+    const { rows: bz } = await query('SELECT * FROM businesses WHERE id = $1', [bid]);
+    const business = bz[0];
+    const isAE = business.vertical === 'autoecole';
+    const hours = booking.parseBooking(business).hours;
+    const D = (col) => `(${col} AT TIME ZONE 'Europe/Paris')::date`;
+    const TODAY = `(NOW() AT TIME ZONE 'Europe/Paris')::date`;
+    const IN = (col) => range === 'today' ? `${D(col)} = ${TODAY}` : range === 'yesterday' ? `${D(col)} = ${TODAY} - 1` : `${D(col)} > ${TODAY} - 7`;
+    const who = (l, c) => prettyPersonName((l && l.name) || '') || (l && (l.email || l.phone)) ||
+      String((c && c.visitor_label) || '').replace(/^\S+\s/, '').replace(/^Visiteur\s+—\s+/, '') || 'Visiteur';
+
+    const { rows: convs } = await query(
+      `SELECT c.id, c.started_at, COALESCE(c.channel, 'chat') AS channel, c.voice_source, c.duration_secs, c.visitor_label
+       FROM conversations c WHERE c.business_id = $1 AND ${IN('c.started_at')}
+         AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user')
+       ORDER BY c.started_at DESC LIMIT 300`, [bid]);
+    const ids = convs.map((c) => c.id);
+    let leads = [], texts = [];
+    if (ids.length) {
+      const ph = ids.map((_, i) => '$' + (i + 1)).join(',');
+      leads = (await query(`SELECT * FROM leads WHERE conversation_id IN (${ph}) ORDER BY created_at ASC`, ids)).rows;
+      texts = (await query(`SELECT conversation_id, string_agg(content, ' ') AS t FROM messages WHERE conversation_id IN (${ph}) AND role = 'user' GROUP BY conversation_id`, ids)).rows;
+    }
+    const leadOf = {}; leads.forEach((l) => { leadOf[l.conversation_id] = l; });
+    const textOf = {}; texts.forEach((t) => { textOf[t.conversation_id] = t.t || ''; });
+    const topicsList = isAE ? AE_TOPICS : OVERVIEW_TOPICS;
+    const events = [];
+    const groups = {};
+    let qualified = 0, calls = 0;
+    convs.forEach((c) => {
+      const l = leadOf[c.id];
+      const off = aeIsOffHours(c.started_at, hours);
+      const voice = c.channel === 'voice';
+      if (voice) calls++;
+      const src = voice ? (c.voice_source === 'phone' ? 'phone' : 'web') : 'chat';
+      if (l) {
+        const student = isAE && aeIsStudent(`${l.summary || ''} ${l.message || ''}`);
+        if (student) {
+          events.push({ at: c.started_at, kind: 'team', todo: l.status === 'nouveau', src, title: `Demande d'élève : ${who(l, c)}`,
+            detail: l.summary || l.message || '', off, link: { type: 'convo', id: c.id } });
+          return;
+        }
+        qualified++;
+        const title = voice
+          ? (src === 'phone' ? `Appel décroché : ${who(l, c)}` : `Conversation vocale : ${who(l, c)}`)
+          : `${isAE ? 'Futur élève qualifié' : 'Nouveau contact'} : ${who(l, c)}`;
+        events.push({ at: c.started_at, kind: voice ? 'call' : 'lead', src, title, detail: l.summary || l.message || '',
+          dur: voice ? c.duration_secs || null : null, off, leadId: l.id, link: { type: 'convo', id: c.id } });
+        return;
+      }
+      if (voice) {
+        events.push({ at: c.started_at, kind: 'call', src, title: src === 'phone' ? `Appel décroché : ${who(null, c)}` : 'Conversation vocale sur le site',
+          detail: '', dur: c.duration_secs || null, off, link: { type: 'convo', id: c.id } });
+        return;
+      }
+      // Questions sans contact laissé : regroupées par jour (et hors horaires à part).
+      const day = new Date(c.started_at).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
+      const key = day + (isAE && off ? ':off' : '');
+      const g = groups[key] || (groups[key] = { at: c.started_at, n: 0, off: isAE && off, topics: {}, convo: c.id });
+      g.n++;
+      if (new Date(c.started_at) > new Date(g.at)) { g.at = c.started_at; g.convo = c.id; }
+      topicsList.forEach(([label, re]) => { if (re.test(textOf[c.id] || '')) g.topics[label] = (g.topics[label] || 0) + 1; });
+    });
+    Object.values(groups).forEach((g) => {
+      const top = Object.entries(g.topics).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} (${v})`).join(' · ');
+      events.push({ at: g.at, kind: 'answers', src: 'chat', off: g.off,
+        title: `${g.n} question${g.n > 1 ? 's' : ''} répondue${g.n > 1 ? 's' : ''} sur le site${g.off ? ', agence fermée' : ''}`,
+        detail: top, link: { type: 'conversations' } });
+    });
+
+    const { rows: bks } = await query(
+      `SELECT id, customer_name, service_name, start_at, source, created_at, conversation_id, email FROM bookings
+       WHERE business_id = $1 AND ${IN('created_at')} AND source <> 'manuel' AND status <> 'annule' ORDER BY created_at DESC LIMIT 50`, [bid]);
+    bks.forEach((b) => {
+      const evalLike = /valuation/i.test(b.service_name);
+      events.push({ at: b.created_at, kind: 'booking', src: b.source === 'chat' ? 'chat' : 'phone',
+        title: `${evalLike ? 'Évaluation réservée' : 'Rendez-vous réservé'} : ${prettyPersonName(b.customer_name || '') || 'Client'}, ${booking.formatSlotLabel(new Date(b.start_at))}`,
+        detail: b.service_name + (b.email ? ' · confirmation envoyée par email' : ''), link: { type: 'agenda' } });
+    });
+
+    const { rows: rl } = await query(
+      `SELECT id, name, email, relance_at, relance_status, conversation_id FROM leads
+       WHERE business_id = $1 AND relance_status IN ('envoye', 'simule') AND ${IN('relance_at')} ORDER BY relance_at DESC LIMIT 50`, [bid]);
+    rl.forEach((l) => events.push({ at: l.relance_at, kind: 'relance', src: 'email', title: `Relance envoyée à ${prettyPersonName(l.name || '') || l.email}`,
+      detail: l.relance_status === 'simule' ? 'Email de relance (démo : envoi simulé)' : 'Email de relance validé par l\'équipe', link: { type: 'relances' } }));
+
+    const { rows: unans } = await query(
+      `SELECT m.created_at, m.conversation_id,
+         (SELECT u.content FROM messages u WHERE u.conversation_id = m.conversation_id AND u.role = 'user' AND u.created_at <= m.created_at ORDER BY u.created_at DESC LIMIT 1) AS q
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.business_id = $1 AND m.role = 'assistant' AND m.unanswered = true AND m.reviewed_at IS NULL AND ${IN('m.created_at')}
+       ORDER BY m.created_at DESC LIMIT 10`, [bid]);
+    unans.forEach((u) => events.push({ at: u.created_at, kind: 'question', todo: true, src: 'chat',
+      title: `Question sans réponse : « ${String(u.q || '').slice(0, 90)} »`, detail: 'Apprenez-lui la réponse en un clic', link: { type: 'improve' } }));
+
+    let pending = 0, pendingNames = [];
+    if (range === 'today') {
+      const rc = (await relanceCandidates(business, 3)).filter((l) => l.email);
+      pending = rc.length; pendingNames = rc.slice(0, 4).map((l) => prettyPersonName(l.name || '') || l.email);
+      if (pending) events.push({ at: new Date(), kind: 'relance-wait', todo: true, src: 'email', pinned: true,
+        title: `${pending} relance${pending > 1 ? 's' : ''} préparée${pending > 1 ? 's' : ''}`,
+        detail: `${pendingNames.join(', ')} · sans nouvelles depuis 3 jours · en attente de votre accord`, link: { type: 'relances' } });
+    }
+
+    events.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(b.at) - new Date(a.at));
+    res.json({
+      range, botName: business.bot_name || 'Victoria', botAvatar: business.bot_avatar || '',
+      summary: { demandes: convs.length, qualified, bookings: bks.length, calls, pending },
+      events: events.slice(0, 60),
+    });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/journal:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
 
 app.get('/api/dashboard/relances', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {

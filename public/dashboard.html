@@ -210,6 +210,32 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .ovstrip{display:grid;grid-template-columns:1.6fr 1fr 1fr;padding:0;margin-bottom:14px;overflow:hidden}
 /* ---- Métier auto-école ---- */
 .ovstrip.ae4{grid-template-columns:1.35fr 1fr 1fr 1fr}
+.ovstrip.n4{grid-template-columns:1.3fr 1fr 1fr 1fr}
+.ovstrip.n5{grid-template-columns:1.25fr 1fr 1fr 1fr 1fr}
+.ovstrip.n5 .todo{padding:14px 14px}
+.todo--rl .todo__ic{background:#FFF1DC}.todo--rl:not(.is-zero){background:#FFFCF5}
+/* Journal de l'assistante (statistiques détaillées) */
+.ovj{padding:18px 22px}
+.ovj-h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.ovj-who{display:flex;align-items:center;gap:11px}
+.ovj-av{width:34px;height:34px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:700;font-size:.9rem;position:relative;flex-shrink:0;background-size:cover;background-position:center}
+.ovj-av::after{content:'';position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;background:#1FAA59;border:2px solid #fff}
+.ovj-pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.ovj-pills span{font-size:.76rem;font-weight:650;padding:4px 10px;border-radius:999px;background:var(--line-soft);color:var(--ink-soft)}
+.ovj-ev{display:grid;grid-template-columns:62px 18px 1fr auto;gap:10px;position:relative;padding-bottom:14px;align-items:start}
+.ovj-ev .t{font-size:.74rem;color:var(--ink-faint);text-align:right;padding-top:2px;font-variant-numeric:tabular-nums}
+.ovj-ev .t.w{color:#8A5300;font-weight:700}
+.ovj-ev .dot{width:12px;height:12px;border-radius:50%;background:var(--green);margin:3px auto 0;box-shadow:0 0 0 4px var(--green-soft);position:relative;z-index:1}
+.ovj-ev:not(:last-child) .dot::after{content:'';position:absolute;left:5px;top:14px;width:2px;height:calc(100% + 30px);background:var(--line)}
+.ovj-ev .dot.v{background:var(--vox);box-shadow:0 0 0 4px var(--vox-soft)}
+.ovj-ev .dot.o{background:#E3A33B;box-shadow:0 0 0 4px #FFF1DC}
+.ovj-ev .dot.b{background:#3B7DD8;box-shadow:0 0 0 4px #E3EEFB}
+.ovj-ev .dot.m{background:#B9C7BF;box-shadow:0 0 0 4px var(--line-soft)}
+.ovj-ev b{font-size:.86rem;font-weight:650}
+.ovj-ev .d{font-size:.78rem;color:var(--ink-faint);margin-top:1px}
+.ovj-ev .lnk{font-size:.76rem;font-weight:650;color:var(--green-deep);background:none;border:0;cursor:pointer;font-family:inherit;white-space:nowrap;padding:2px 0}
+.ovj-more{border:0;background:none;color:var(--green-deep);font-weight:650;font-size:.8rem;cursor:pointer;font-family:inherit;padding:0;margin-left:72px}
+@media (max-width:700px){.ovj-ev{grid-template-columns:44px 16px 1fr}.ovj-ev .lnk{grid-column:3;justify-self:start}.ovj-more{margin-left:54px}}
 .todo--stu .todo__ic{background:#FFF1DC}
 .card.aeban{display:flex;align-items:center;gap:16px;padding:16px 22px;margin-bottom:14px;background:linear-gradient(115deg,#0C7A40,#1FAA59);color:#fff;border:none}
 .aeban .ic{font-size:1.7rem;width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.16);display:grid;place-items:center;flex-shrink:0}
@@ -270,7 +296,7 @@ body.is-ae select.lead-status{min-width:178px}
 .vgrid.vgrid3{grid-template-columns:repeat(3,1fr)}
 @media (max-width:700px){.vgrid.vgrid3{grid-template-columns:1fr}.rtbl .funnel__bar{display:none}table.tbl.rtbl th{white-space:normal;letter-spacing:.02em}table.tbl.rtbl th,table.tbl.rtbl td{padding:8px 6px}}
 .ovsat .n{font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:700}
-@media (max-width:900px){.ovstrip,.ovstrip.ae4{grid-template-columns:1fr}.card.aeban{align-items:flex-start;padding:16px}.aeban .ic{width:40px;height:40px;font-size:1.3rem}.ovstrip .todo{border-left:none;border-top:1px solid var(--line-soft)}.ovstrip .todo:first-child{border-top:none}.ovk{grid-template-columns:1fr 1fr}.ovmain{grid-template-columns:1fr}}
+@media (max-width:900px){.ovstrip,.ovstrip.ae4,.ovstrip.n4,.ovstrip.n5{grid-template-columns:1fr}.card.aeban{align-items:flex-start;padding:16px}.aeban .ic{width:40px;height:40px;font-size:1.3rem}.ovstrip .todo{border-left:none;border-top:1px solid var(--line-soft)}.ovstrip .todo:first-child{border-top:none}.ovk{grid-template-columns:1fr 1fr}.ovmain{grid-template-columns:1fr}}
 .todo{display:flex;gap:14px;align-items:center;padding:16px 18px;border-radius:18px;text-align:left;width:100%;font:inherit;color:inherit;
   background:linear-gradient(170deg,rgba(255,255,255,.95),rgba(255,255,255,.7));border:1px solid rgba(255,255,255,.95);
   box-shadow:0 8px 24px rgba(11,26,20,.06);cursor:pointer;transition:transform .15s,box-shadow .15s}
@@ -829,6 +855,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
       </div>
       <div class="ovmore"><button type="button" class="btn btn--ghost btn--sm" id="ovMoreBtn">📊 Voir les statistiques détaillées</button></div>
       <div id="ovDetails" hidden>
+        <div class="card ovj" id="ovJournal"></div>
         <div class="card vcard" id="ovVoice" hidden></div>
         <div class="split split--even" id="ovDetSplit" style="align-items:stretch">
           <div class="card"><div class="card__head"><div><h3>Sujets les plus demandés</h3><p class="card__sub" id="ovTopicsSub"></p></div></div><div id="ovTopics"></div></div>
@@ -2251,7 +2278,12 @@ function renderOverview(o) {
       items.splice(2, 0, ['stu', '📨', st.toForward, st.toForward > 1 ? 'demandes d\'élèves' : 'demande d\'élève',
         st.toForward ? 'à transmettre : ' + st.list.map(function (x) { return chanIcon(x.channel, x.source) + x.name; }).join(' · ') : 'Aucune demande d\'élève en attente', 'students']);
     }
-    todo.classList.toggle('ae4', items.length === 4);
+    var rlT = t.relances || { n: 0, names: [] };
+    items.splice(1, 0, ['rl', '✉️', rlT.n, rlT.n > 1 ? 'relances prêtes' : 'relance prête',
+      rlT.n ? rlT.names.slice(0, 2).join(', ') + (rlT.n > 2 ? '…' : '') + ' · à valider' : 'Tous vos contacts sont suivis', 'relances']);
+    todo.classList.toggle('ae4', false);
+    todo.classList.toggle('n4', items.length === 4);
+    todo.classList.toggle('n5', items.length === 5);
     todo.innerHTML = items.map(function (it) {
       return '<button type="button" class="todo todo--' + it[0] + (it[2] ? '' : ' is-zero') + '" data-go="' + it[5] + '">' +
         '<span class="todo__ic">' + it[1] + '</span><div style="min-width:0"><strong>' + it[2] + ' ' + esc(it[3]) + '</strong><small>' + esc(it[4]) + '</small></div></button>';
@@ -2326,6 +2358,7 @@ function renderOverview(o) {
         '</div>';
     }
   }
+  if ($('#ovDetails') && !$('#ovDetails').hidden) loadJournal();
   // 3 bis) Relances douces dans le chat (visiteur inactif en pleine conversation)
   var fuBox = $('#ovFu');
   if (fuBox) {
@@ -2437,7 +2470,7 @@ if ($('#ovChan')) $$('#ovChan button').forEach(function (b) {
   var open = false;
   try { open = localStorage.getItem('ov-details') === '1'; } catch (e) {}
   function sync() { box.hidden = !open; btn.textContent = open ? 'Masquer les statistiques détaillées' : '📊 Voir les statistiques détaillées'; }
-  btn.addEventListener('click', function () { open = !open; try { localStorage.setItem('ov-details', open ? '1' : '0'); } catch (e) {} sync(); });
+  btn.addEventListener('click', function () { open = !open; try { localStorage.setItem('ov-details', open ? '1' : '0'); } catch (e) {} sync(); if (open) loadJournal(); });
   sync();
 })();
 if ($('#ovRange')) $('#ovRange').addEventListener('change', function (e) {
@@ -3116,6 +3149,71 @@ function renderLeads(allLeads) {
       }
     });
     sel.dataset.prev = sel.value;
+  });
+}
+
+/* ============================================================
+   JOURNAL — ce que l'assistante a fait, action par action
+   ============================================================ */
+var JR_RANGE = 'today', JR_ALL = false;
+async function loadJournal() {
+  var box = $('#ovJournal'); if (!box) return;
+  try {
+    var r = await fetch(API + '/api/dashboard/journal?range=' + JR_RANGE, { credentials: 'include' });
+    if (!r.ok) throw new Error();
+    renderJournal(await r.json());
+  } catch (e) { box.innerHTML = '<p class="card__sub">Le journal est indisponible pour le moment.</p>'; }
+}
+function renderJournal(j) {
+  var box = $('#ovJournal');
+  var ae = typeof AE !== 'undefined' && AE;
+  var sm = j.summary;
+  var pills = [plural(sm.demandes, 'demande', 'demandes'),
+    sm.qualified ? plural(sm.qualified, ae ? 'futur élève qualifié' : 'nouveau contact', ae ? 'futurs élèves qualifiés' : 'nouveaux contacts') : null,
+    sm.bookings ? plural(sm.bookings, ae ? 'évaluation réservée' : 'rendez-vous réservé', ae ? 'évaluations réservées' : 'rendez-vous réservés') : null,
+    sm.calls ? plural(sm.calls, 'appel', 'appels') : null,
+    sm.pending ? plural(sm.pending, 'relance préparée', 'relances préparées') : null].filter(Boolean);
+  var tabs = [['today', "Aujourd'hui"], ['yesterday', 'Hier'], ['week', 'Cette semaine']];
+  var icon = { chat: '💬', web: '🎙️', phone: '📞', email: '✉️' };
+  var dotOf = function (e) {
+    if (e.todo || e.kind === 'relance-wait') return 'o';
+    if (e.kind === 'call') return 'v';
+    if (e.kind === 'relance') return 'b';
+    if (e.kind === 'answers' && e.off) return 'm';
+    return '';
+  };
+  var linkLabel = { convo: 'Conversation', agenda: 'Agenda', relances: 'Relances', improve: 'Répondre', conversations: 'Voir' };
+  var timeOf = function (e) {
+    if (e.pinned) return '<span class="t w">À valider</span>';
+    var d = new Date(e.at);
+    var hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+    if (j.range === 'week') hm = d.toLocaleDateString('fr-FR', { weekday: 'short', timeZone: 'Europe/Paris' }).replace('.', '') + ' ' + hm;
+    return '<span class="t">' + esc(hm) + '</span>';
+  };
+  var evs = j.events, max = JR_ALL ? evs.length : 8;
+  var av = j.botAvatar ? ' style="background-image:url(' + esc(j.botAvatar) + ')"' : '';
+  box.innerHTML =
+    '<div class="ovj-h"><div class="ovj-who"><span class="ovj-av"' + av + '>' + (j.botAvatar ? '' : esc((j.botName || 'V').charAt(0))) + '</span>' +
+      '<div><h3>Ce que ' + esc(j.botName || 'votre assistante') + ' a fait</h3><p class="card__sub">Le détail de sa journée, action par action</p></div></div>' +
+      '<div class="seg" id="ovjTabs">' + tabs.map(function (t) { return '<button type="button" data-r="' + t[0] + '" class="' + (t[0] === j.range ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+    '<div class="ovj-pills">' + pills.map(function (p) { return '<span>' + esc(p) + '</span>'; }).join('') + '</div>' +
+    (evs.length ? evs.slice(0, max).map(function (e, i) {
+      var det = [icon[e.src] ? icon[e.src] + ' ' + (e.src === 'chat' ? 'site' : e.src === 'web' ? 'voix · site' : e.src === 'phone' ? 'téléphone' : 'email') : '',
+        e.detail ? truncate(e.detail, 130) : '', e.dur ? fmtDur(e.dur) : '', e.off && e.kind !== 'answers' ? 'agence fermée' : ''].filter(Boolean).join(' · ');
+      return '<div class="ovj-ev">' + timeOf(e) + '<span class="dot ' + dotOf(e) + '"></span>' +
+        '<div><b>' + esc(e.title) + '</b>' + (det ? '<div class="d">' + esc(det) + '</div>' : '') + '</div>' +
+        (e.link ? '<button type="button" class="lnk" data-i="' + i + '">' + (e.kind === 'relance-wait' ? 'Valider' : linkLabel[e.link.type] || 'Voir') + ' →</button>' : '<span></span>') + '</div>';
+    }).join('') : '<p class="card__sub" style="padding:6px 0 4px">Pas encore d\'activité sur cette période.</p>') +
+    (evs.length > 8 ? '<button type="button" class="ovj-more">' + (JR_ALL ? 'Afficher moins' : 'Afficher les ' + evs.length + ' actions') + '</button>' : '');
+  $$('#ovjTabs button', box).forEach(function (b) { b.addEventListener('click', function () { JR_RANGE = b.getAttribute('data-r'); JR_ALL = false; loadJournal(); }); });
+  var more = box.querySelector('.ovj-more'); if (more) more.addEventListener('click', function () { JR_ALL = !JR_ALL; renderJournal(j); });
+  $$('.lnk', box).forEach(function (b) {
+    b.addEventListener('click', function () {
+      var e = evs[Number(b.dataset.i)]; if (!e || !e.link) return;
+      var t = e.link.type;
+      if (t === 'convo') openTranscript(e.link.id);
+      else switchTab(t === 'agenda' ? 'appointments' : t);
+    });
   });
 }
 
