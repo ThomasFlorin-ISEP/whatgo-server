@@ -704,14 +704,18 @@ function sleep(ms) {
 // retente jusqu'à 2 fois avec un court délai avant d'abandonner. Les autres
 // erreurs (clé API invalide, requête mal formée, etc.) ne sont PAS retentées,
 // puisqu'elles ne se résoudraient pas d'elles-mêmes.
+// Gemini 3.x « réfléchit » longuement par défaut (niveau High : 5 à 8 s avant de
+// répondre). Pour un chat, le niveau « minimal » suffit et répond en ~1 s.
+// Si l'API refuse ce réglage, on le retire automatiquement pour les appels suivants.
+let GEMINI_THINKING = process.env.GEMINI_THINKING || 'minimal';
 async function callGemini(systemPrompt, contents, maxRetries = 1) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let data;
-    // Au-delà de 12 s, on abandonne cette tentative (le chat bascule alors sur le secours).
+    // Au-delà de 9 s, on abandonne cette tentative (le chat bascule alors sur le secours).
     const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const killer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+    const killer = ctrl ? setTimeout(() => ctrl.abort(), 9000) : null;
     try {
       const response = await fetch(url, {
         ...(ctrl ? { signal: ctrl.signal } : {}),
@@ -723,6 +727,7 @@ async function callGemini(systemPrompt, contents, maxRetries = 1) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents,
+          ...(GEMINI_THINKING && GEMINI_THINKING !== 'off' ? { generationConfig: { thinkingConfig: { thinkingLevel: GEMINI_THINKING } } } : {}),
         }),
       });
       data = await response.json();
@@ -738,6 +743,13 @@ async function callGemini(systemPrompt, contents, maxRetries = 1) {
       return { error: { code: 504, message: 'Gemini indisponible : ' + (networkErr.name === 'AbortError' ? 'délai dépassé' : networkErr.message) } };
     }
 
+    // Réglage de réflexion refusé par ce modèle : on le retire et on réessaie tout de suite.
+    if (data.error && data.error.code === 400 && /think/i.test(String(data.error.message || '')) && GEMINI_THINKING !== 'off') {
+      console.warn(`Gemini refuse thinkingLevel=${GEMINI_THINKING} (${data.error.message}) : réglage retiré.`);
+      GEMINI_THINKING = 'off';
+      attempt--;
+      continue;
+    }
     const isOverloaded = data.error && (data.error.code === 503 || data.error.code === 429 || data.error.status === 'UNAVAILABLE');
     if (isOverloaded && attempt < maxRetries) {
       console.warn(`Gemini surchargé (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai dans 600ms...`);
