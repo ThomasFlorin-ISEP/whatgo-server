@@ -19,6 +19,10 @@ const isLocalDb = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || '');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: isLocalDb ? false : { rejectUnauthorized: false },
+  // Connexions gardées ouvertes 5 min (au lieu de 10 s) : évite de refaire une
+  // connexion sécurisée à la base à chaque message après un moment sans visite.
+  idleTimeoutMillis: 5 * 60 * 1000,
+  keepAlive: true,
 });
 
 // Petit raccourci utilisé partout dans server.js : query(sql, params)
