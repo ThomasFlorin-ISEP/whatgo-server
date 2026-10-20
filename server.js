@@ -1207,6 +1207,27 @@ app.put('/api/dashboard/learned', requireAuth, requireRole('admin'), async (req,
 // Ouverture du chat (une fois par visite) : première étape de l'entonnoir
 // de la Vue d'ensemble.
 // ------------------------------------------------------------
+// Relance douce dans le chat (visiteur inactif en pleine conversation) : comptée
+// pour la Vue d'ensemble (relances envoyées, conversations reprises ensuite).
+app.post('/api/widget/:slug/followup', async (req, res) => {
+  try {
+    if (isRateLimited(`followup:${clientIp(req)}`, 20, 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes.' });
+    const type = req.body && req.body.type === 'followup_click' ? 'followup_click' : 'followup';
+    const cid = Number(req.body && req.body.conversationId) || null;
+    const { rows } = await query('SELECT id FROM businesses WHERE slug = $1', [req.params.slug]);
+    if (!rows[0]) return res.status(404).json({ error: 'Entreprise inconnue.' });
+    let convoId = null;
+    if (cid) {
+      const { rows: c } = await query('SELECT id FROM conversations WHERE id = $1 AND business_id = $2', [cid, rows[0].id]);
+      convoId = c[0] ? c[0].id : null;
+    }
+    await query('INSERT INTO chat_events (business_id, conversation_id, type) VALUES ($1, $2, $3)', [rows[0].id, convoId, type]).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 app.post('/api/widget/:slug/open', async (req, res) => {
   try {
     if (isRateLimited(`open:${clientIp(req)}`, 20, 60 * 1000)) return res.status(429).json({ error: 'Trop de requêtes.' });
@@ -1475,6 +1496,9 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
       ${LJ} WHERE l.business_id = $1 AND ${RDV} AND ${CH('c')}`, P, [{}]);
     const [opens] = channel === 'voice' ? [{}] : await safe(`SELECT COUNT(*) FILTER (WHERE ${CUR('created_at')}) AS cur, COUNT(*) FILTER (WHERE ${PREV('created_at')}) AS prev
       FROM chat_events WHERE business_id = $1 AND type = 'open'`, P, [{}]);
+    const [fu] = channel === 'voice' ? [{}] : await safe(`SELECT COUNT(*) AS sent,
+        COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = e.conversation_id AND m.role = 'user' AND m.created_at > e.created_at)) AS resumed
+      FROM chat_events e WHERE e.business_id = $1 AND e.type = 'followup' AND ${CUR('e.created_at')}`, P, [{}]);
     const [fb] = await safe(`SELECT COUNT(*) FILTER (WHERE m.feedback = 1 AND ${CUR('m.created_at')}) AS up,
         COUNT(*) FILTER (WHERE m.feedback = -1 AND ${CUR('m.created_at')}) AS down,
         COUNT(*) FILTER (WHERE m.feedback = 1 AND ${PREV('m.created_at')}) AS pup,
@@ -1599,6 +1623,7 @@ app.get('/api/dashboard/overview', requireAuth, requireRole(['admin', 'lecture']
       series: series.map((r) => ({ day: r.day, conv: n(r.conv), leads: n(r.lchat) + n(r.lvoice), leadsChat: n(r.lchat), leadsVoice: n(r.lvoice) })),
       topics: topicCounts,
       topicsTotal: texts.length,
+      followups: { sent: n(fu && fu.sent), resumed: n(fu && fu.resumed) },
       funnel,
       voice: {
         calls: n(v.calls), phone: n(v.phone), web: n(v.web),
