@@ -3572,7 +3572,7 @@ function relanceFallback(business, lead, slots) {
     body: `Bonjour${first ? ' ' + first : ''},\n\n` +
       `Vous nous aviez contactés il y a quelques jours au sujet de votre projet, et nous voulions savoir si vous aviez pu avancer.\n\n` +
       (s ? `Nous avons encore de la place : ${s.labels.join(' ou ')}, pour une ${s.service.toLowerCase()}. ` : '') +
-      `Répondez simplement à cet email et nous nous occupons du reste.\n\nÀ bientôt,\n${bot}, ${business.name}`,
+      `Répondez simplement à cet email et nous nous occupons du reste.\n\nÀ bientôt,\nL'équipe ${business.name}`,
   };
 }
 async function relanceDrafts(business, leads) {
@@ -3593,7 +3593,7 @@ async function relanceDrafts(business, leads) {
   }));
   const prompt =
     `Tu écris des emails de relance pour « ${business.name} ». Ces personnes ont contacté l'établissement puis n'ont plus donné de nouvelles. ` +
-    `Pour chacune, écris un email court (50 à 90 mots), chaleureux et professionnel, en français, au vouvoiement, signé « ${bot}, ${business.name} ». ` +
+    `Pour chacune, écris un email court (50 à 90 mots), chaleureux et professionnel, en français, au vouvoiement, au nom de l'établissement (« nous »), signé uniquement « L'équipe ${business.name} » (aucun prénom). ` +
     `Rappelle précisément SA demande (avec les détails qu'elle a donnés), puis propose UNE prochaine étape simple : répondre à l'email` +
     (slots.length ? `, ou réserver une ${slots[0].service.toLowerCase()} (créneaux libres : ${slots[0].labels.join(' ou ')})` : '') + `. ` +
     `N'invente aucun prix, aucune promotion, aucune information absente de l'échange. Pas d'emoji, pas de pression, pas de « Cher client ». ` +
@@ -4727,6 +4727,8 @@ const DEMO_SLUG = 'salon-demo';
 // Paramètres → Apparence du chatbot).
 async function ensureDemoLooks() {
   await query("UPDATE businesses SET vertical = 'autoecole' WHERE slug = 'autoecole-demo' AND COALESCE(vertical, '') = ''").catch(() => {});
+  // Brouillons de relance signés « Victoria » (ancienne version) : régénérés, signés au nom de l'établissement.
+  await query("UPDATE leads SET relance_draft = NULL WHERE COALESCE(relance_status, '') = '' AND relance_draft LIKE '%Victoria, %'").catch(() => {});
   // Auto-école : consignes de qualification remplacées par une consigne de
   // conseil (évite de redemander l'âge, recommande vite un forfait).
   try {
