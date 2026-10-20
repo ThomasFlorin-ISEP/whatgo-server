@@ -959,6 +959,30 @@ async function callGemini(systemPrompt, contents, maxRetries = 1) {
   }
 }
 
+// Chat : Gemini (1 seul essai). S'il n'a pas répondu au bout de 4 s, ou s'il
+// renvoie une erreur, on lance aussitôt le secours Groq et on garde la première
+// bonne réponse : le visiteur n'attend jamais les pannes au hasard de Gemini.
+async function geminiFast(sysFull, sysShort, contents) {
+  const g = callGemini(sysFull, contents, 0);
+  const first = await Promise.race([g, sleep(4000).then(() => null)]);
+  if (first && !first.error) return first;
+  const groqP = callGroqFallback(sysShort, contents)
+    .then((t) => (t ? { candidates: [{ content: { parts: [{ text: t }] } }], viaGroq: true } : null))
+    .catch(() => null);
+  if (first && first.error) return (await groqP) || first;
+  return new Promise((resolve) => {
+    let done = false, pending = 2, last = null;
+    const fin = (v) => {
+      if (done) return;
+      if (v && !v.error) { done = true; resolve(v); return; }
+      if (v) last = v;
+      if (--pending === 0) resolve(last || { error: { message: 'Aucune réponse de l\'IA.' } });
+    };
+    g.then(fin, () => fin(null));
+    groqP.then(fin);
+  });
+}
+
 // Appelle Groq (API compatible OpenAI) en secours, uniquement quand
 // Gemini a échoué. Reprend le même "contents" (format Gemini) et le
 // convertit au format attendu par Groq. Si GROQ_API_KEY n'est pas
@@ -2719,7 +2743,7 @@ app.post('/api/chat', async (req, res) => {
     const docsBlock = await docsBlockP;
     const tAi = Date.now();
     let data;
-    try { data = await callGemini(systemPromptForCall + docsBlock.full, contents); } catch (e) { data = { error: { message: e.message } }; }
+    try { data = await geminiFast(systemPromptForCall + docsBlock.full, systemPromptForCall + docsBlock.short, contents); } catch (e) { data = { error: { message: e.message } }; }
 
     let reply;
     let usedFallback = false;
@@ -2747,6 +2771,7 @@ app.post('/api/chat', async (req, res) => {
     } else {
       reply = data.candidates?.[0]?.content?.parts?.[0]?.text
         || "Désolé, je n'ai pas pu répondre.";
+      if (data.viaGroq) { usedFallback = true; timing.fallback = true; console.warn(`Gemini trop lent : réponse du secours Groq pour "${business.name}".`); }
     }
 
     timing.ai = Date.now() - tAi;
