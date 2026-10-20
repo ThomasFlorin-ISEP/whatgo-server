@@ -271,6 +271,9 @@ body.is-ae select.lead-status{min-width:178px}
 #lookSave{margin-top:auto;align-self:flex-start}
 .setcol>.card:last-child>form{display:flex;flex-direction:column;flex:1}.setcol>.card:last-child>form>button{margin-top:auto;align-self:flex-start}
 .setcol{display:flex;flex-direction:column;gap:18px}.setcol>.card{margin:0}
+#integCard{margin-top:18px}
+.integrow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}.integrow .msg{grid-column:1/-1;margin:0}
+@media (max-width:700px){.integrow{grid-template-columns:1fr}}
 .set2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
 #look-sugg{min-height:132px}
 @media (max-width:1000px){.setgrid{grid-template-columns:1fr}}@media (max-width:700px){.set2{grid-template-columns:1fr;gap:0}}
@@ -785,7 +788,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4" stroke-linecap="round"/></svg>
         <span>Rendez-vous</span></button>
 
-      <div class="navgroup" data-grp="client">Assistant</div>
+      <div class="navgroup" data-grp="client">Configuration</div>
       <button class="nav-item" data-tab="knowledge" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5V5a2 2 0 012-2h13v18H6a2 2 0 01-2-1.5z" stroke-linejoin="round"/><path d="M8 7h7M8 11h5" stroke-linecap="round"/></svg>
         <span>Base de connaissances</span></button>
@@ -810,10 +813,6 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.8 2.1z" stroke-linejoin="round"/></svg>
         <span>IA vocale</span></button>
 
-      <div class="navgroup" data-grp="client">Connexions</div>
-      <button class="nav-item" data-tab="integrations" data-grp="client" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" stroke-linecap="round"/></svg>
-        <span>Intégrations</span></button>
 
       <div class="navgroup" data-grp="all">Compte</div>
       <button class="nav-item" data-tab="team" data-grp="client" type="button">
@@ -1274,20 +1273,6 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
     </section>
 
     <!-- ============================== INTÉGRATIONS (réel) -->
-    <section class="tab-page" id="page-integrations">
-      <div class="topbar"><div><h2>Intégrations</h2><p>Où envoyer automatiquement les contacts captés par l'assistant.</p></div></div>
-      <div class="card" style="max-width:560px">
-        <div class="card__head"><div><h3>Envoyer les leads vers Make (ou Zapier)</h3>
-          <p class="card__sub">Dès qu'un visiteur laisse un email dans la conversation, ses informations sont envoyées automatiquement à cette adresse. Laissez vide pour ne rien envoyer.</p></div></div>
-        <form id="webhookForm" novalidate>
-          <div class="field" style="margin:0"><label for="wh-url">URL du webhook</label>
-            <input type="url" id="wh-url" placeholder="https://hook.eu1.make.com/..." /></div>
-          <button type="submit" class="btn btn--primary btn--sm" style="margin-top:14px">Enregistrer</button>
-          <p class="msg msg--ok" id="webhookOk">Adresse enregistrée.</p>
-          <p class="msg msg--err" id="webhookError"></p>
-        </form>
-      </div>
-    </section>
 
     <!-- ============================== ÉQUIPE (pas encore développé) -->
     <section class="tab-page" id="page-team">
@@ -1405,7 +1390,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
           </select></div>
         <button type="button" class="btn btn--primary" id="bizTypeSave">Enregistrer</button>
       </div>
-      <div class="card">
+            <div class="card">
         <div class="card__head"><div><h3>Changer mon mot de passe</h3></div></div>
         <form id="passwordForm" novalidate>
           <div class="field"><label for="pw-current">Mot de passe actuel</label><input type="password" id="pw-current" required autocomplete="current-password" /></div>
@@ -1418,6 +1403,17 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
       </div>
         </div>
       </div>
+      <div class="card" id="integCard" data-grp="client">
+          <div class="card__head"><div><h3>Intégrations</h3>
+            <p class="card__sub">Envoyez automatiquement chaque nouveau lead vers Make ou Zapier (puis votre CRM, Google Sheets…). Dès qu'un visiteur laisse ses coordonnées, ses informations partent à cette adresse. Laissez vide pour ne rien envoyer.</p></div></div>
+          <form id="webhookForm" class="integrow" novalidate>
+            <div class="field" style="margin:0"><label for="wh-url">URL du webhook</label>
+              <input type="url" id="wh-url" placeholder="https://hook.eu1.make.com/..." /></div>
+            <button type="submit" class="btn btn--primary">Enregistrer</button>
+            <p class="msg msg--ok" id="webhookOk">Adresse enregistrée.</p>
+            <p class="msg msg--err" id="webhookError"></p>
+          </form>
+        </div>
     </section>
 
   </main>
