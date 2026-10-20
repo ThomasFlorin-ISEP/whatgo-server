@@ -3534,6 +3534,232 @@ app.get('/api/dashboard/conversations/:id', requireAuth, requireRole(['admin', '
 // Page "Leads" : les contacts qualifiés captés via le chat (email laissé).
 const LEAD_STATUSES = ['nouveau', 'contacte', 'rdv_pris', 'gagne', 'perdu'];
 
+// ============================================================
+// RELANCES : les prospects sans nouvelles depuis quelques jours. L'IA prépare
+// un message personnalisé pour chacun ; rien ne part sans la validation du
+// gérant. Canal : email pour l'instant (le SMS viendra avec Twilio).
+// ============================================================
+const RELANCE_DAYS = [2, 3, 5, 7, 14];
+function relanceFrom(business) {
+  const m = String(RESEND_FROM).match(/<([^>]+)>/);
+  const addr = m ? m[1] : String(RESEND_FROM).trim();
+  return `${String(business.name || 'WHATGO').replace(/[<>"]/g, '')} <${addr}>`;
+}
+// Deux prochains créneaux libres (pour proposer une date concrète dans le message).
+async function relanceSlots(business) {
+  try {
+    const config = booking.parseBooking(business);
+    if (!config.enabled || config.mode !== 'agenda' || !config.services.length) return [];
+    const svc = config.services.find((s) => /valuation|d[ée]couverte|essai/i.test(s.name)) || config.services[0];
+    const today = booking.dateToParis(new Date()).dateStr;
+    const out = [];
+    for (let i = 1; i <= 10 && out.length < 2; i++) {
+      const d = booking.addDays(today, i);
+      const slots = booking.slotsForDay(config, d, svc.duration, await loadDayBookings(business.id, d));
+      if (!slots.length) continue;
+      const pick = slots.find((s) => booking.hhmmToMinutes(s.time) >= 14 * 60) || slots[0];
+      out.push(booking.formatSlotLabel(pick.start));
+    }
+    return out.length ? [{ service: svc.name, labels: out }] : [];
+  } catch (e) { return []; }
+}
+function relanceFallback(business, lead, slots) {
+  const first = String(prettyPersonName(lead.name || '')).split(' ')[0];
+  const bot = business.bot_name || 'Victoria';
+  const s = slots[0];
+  return {
+    subject: `Votre demande auprès de ${business.name}`,
+    body: `Bonjour${first ? ' ' + first : ''},\n\n` +
+      `Vous nous aviez contactés il y a quelques jours au sujet de votre projet, et nous voulions savoir si vous aviez pu avancer.\n\n` +
+      (s ? `Nous avons encore de la place : ${s.labels.join(' ou ')}, pour une ${s.service.toLowerCase()}. ` : '') +
+      `Répondez simplement à cet email et nous nous occupons du reste.\n\nÀ bientôt,\n${bot}, ${business.name}`,
+  };
+}
+async function relanceDrafts(business, leads) {
+  if (!leads.length) return {};
+  const slots = await relanceSlots(business);
+  const bot = business.bot_name || 'Victoria';
+  const ids = leads.map((l) => l.id);
+  const ph = ids.map((_, i) => '$' + (i + 1)).join(',');
+  const { rows: msgs } = await query(
+    `SELECT l.id AS lead_id, m.role, m.content FROM leads l JOIN messages m ON m.conversation_id = l.conversation_id
+     WHERE l.id IN (${ph}) ORDER BY m.created_at ASC`, ids);
+  const items = leads.map((l) => ({
+    id: l.id,
+    prenom: String(prettyPersonName(l.name || '')).split(' ')[0] || null,
+    besoin: l.summary || l.message || '',
+    echange: msgs.filter((m) => m.lead_id === l.id).slice(-8)
+      .map((m) => (m.role === 'user' ? 'Visiteur' : bot) + ' : ' + String(m.content).slice(0, 400)).join('\n'),
+  }));
+  const prompt =
+    `Tu écris des emails de relance pour « ${business.name} ». Ces personnes ont contacté l'établissement puis n'ont plus donné de nouvelles. ` +
+    `Pour chacune, écris un email court (50 à 90 mots), chaleureux et professionnel, en français, au vouvoiement, signé « ${bot}, ${business.name} ». ` +
+    `Rappelle précisément SA demande (avec les détails qu'elle a donnés), puis propose UNE prochaine étape simple : répondre à l'email` +
+    (slots.length ? `, ou réserver une ${slots[0].service.toLowerCase()} (créneaux libres : ${slots[0].labels.join(' ou ')})` : '') + `. ` +
+    `N'invente aucun prix, aucune promotion, aucune information absente de l'échange. Pas d'emoji, pas de pression, pas de « Cher client ». ` +
+    `Objet : court et personnel (6 mots max). Commence le corps par « Bonjour <prénom>, » si le prénom est connu, sinon « Bonjour, ». ` +
+    `Réponds UNIQUEMENT avec un tableau JSON : [{"id": <id>, "subject": "...", "body": "..."}] (retours à la ligne en \\n).`;
+  const out = {};
+  try {
+    const data = await callGemini(prompt, [{ role: 'user', parts: [{ text: JSON.stringify(items) }] }], 1);
+    const text = (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts
+      && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) || '';
+    const json = JSON.parse(text.slice(text.indexOf('['), text.lastIndexOf(']') + 1));
+    (Array.isArray(json) ? json : []).forEach((d) => {
+      if (d && ids.includes(Number(d.id)) && d.subject && d.body) {
+        out[Number(d.id)] = { subject: String(d.subject).slice(0, 140), body: String(d.body).replace(/\\n/g, '\n').slice(0, 2000) };
+      }
+    });
+  } catch (e) { /* repli ci-dessous */ }
+  leads.forEach((l) => { if (!out[l.id]) out[l.id] = relanceFallback(business, l, slots); });
+  return out;
+}
+async function relanceCandidates(business, days) {
+  const { rows } = await query(
+    `SELECT l.*, c.channel, c.voice_source, c.external_id,
+       (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = l.conversation_id) AS last_msg
+     FROM leads l LEFT JOIN conversations c ON c.id = l.conversation_id
+     WHERE l.business_id = $1 AND l.status IN ('nouveau', 'contacte') AND l.appointment_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.lead_id = l.id AND b.status <> 'annule')
+       AND l.created_at > NOW() - INTERVAL '60 days' AND COALESCE(l.relance_status, '') = ''
+     ORDER BY l.created_at DESC LIMIT 100`, [business.id]);
+  const limit = Date.now() - days * 86400000;
+  const ae = business.vertical === 'autoecole';
+  return rows.filter((l) => {
+    const last = Math.max(new Date(l.created_at).getTime(), l.last_msg ? new Date(l.last_msg).getTime() : 0);
+    l.lastContact = new Date(last);
+    if (last > limit) return false;
+    if (ae && aeIsStudent(`${l.summary || ''} ${l.message || ''}`)) return false;
+    return true;
+  });
+}
+
+app.get('/api/dashboard/relances', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
+  try {
+    const days = RELANCE_DAYS.includes(Number(req.query.days)) ? Number(req.query.days) : 3;
+    const { rows: bz } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    const business = bz[0];
+    const cands = await relanceCandidates(business, days);
+    const withEmail = cands.filter((l) => l.email).slice(0, 30);
+    const phoneOnly = cands.filter((l) => !l.email && l.phone).length;
+    // Brouillons : préparés une fois par l'IA (8 à la fois), puis gardés.
+    const missing = withEmail.filter((l) => !l.relance_draft).slice(0, 8);
+    if (missing.length) {
+      const drafts = await relanceDrafts(business, missing);
+      for (const l of missing) {
+        l.relance_draft = JSON.stringify(drafts[l.id]);
+        await query('UPDATE leads SET relance_draft = $1 WHERE id = $2', [l.relance_draft, l.id]);
+      }
+    }
+    const { rows: hist } = await query(
+      `SELECT l.id, l.name, l.email, l.status, l.relance_status, l.relance_at, l.relance_subject, l.conversation_id,
+         EXISTS (SELECT 1 FROM bookings b WHERE b.lead_id = l.id AND b.created_at > l.relance_at) AS booked
+       FROM leads l WHERE l.business_id = $1 AND l.relance_status IN ('envoye', 'simule') AND l.relance_at > NOW() - INTERVAL '30 days'
+       ORDER BY l.relance_at DESC LIMIT 50`, [business.id]);
+    const parse = (t) => { try { return JSON.parse(t); } catch (e) { return null; } };
+    res.json({
+      days,
+      emailReady: Boolean(RESEND_API_KEY),
+      items: withEmail.map((l) => ({
+        leadId: l.id, name: l.name || '', email: l.email, phone: l.phone || '', summary: l.summary || l.message || '', message: l.message || '',
+        status: l.status, lastContact: l.lastContact, channel: l.channel || 'chat', voiceSource: l.voice_source || null,
+        conversationId: l.conversation_id, demo: String(l.external_id || '').startsWith('demo-seed:'),
+        draft: parse(l.relance_draft),
+      })),
+      phoneOnly,
+      history: hist.map((h) => ({
+        leadId: h.id, name: h.name || '', email: h.email, at: h.relance_at, subject: h.relance_subject || '', simulated: h.relance_status === 'simule',
+        converted: h.booked || h.status === 'rdv_pris' || h.status === 'gagne', status: h.status, conversationId: h.conversation_id,
+      })),
+    });
+  } catch (err) {
+    console.error('Erreur GET /api/dashboard/relances:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+async function relanceLead(req) {
+  const { rows } = await query(
+    `SELECT l.*, c.external_id FROM leads l LEFT JOIN conversations c ON c.id = l.conversation_id WHERE l.id = $1 AND l.business_id = $2`,
+    [Number(req.params.id) || 0, req.user.businessId]);
+  return rows[0] || null;
+}
+
+app.post('/api/dashboard/relances/:id/draft', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const lead = await relanceLead(req);
+    if (!lead) return res.status(404).json({ error: 'Contact introuvable.' });
+    const { rows: bz } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    const drafts = await relanceDrafts(bz[0], [lead]);
+    await query('UPDATE leads SET relance_draft = $1 WHERE id = $2', [JSON.stringify(drafts[lead.id]), lead.id]);
+    res.json({ draft: drafts[lead.id] });
+  } catch (err) {
+    console.error('Erreur POST relance draft:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.post('/api/dashboard/relances/:id/skip', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const lead = await relanceLead(req);
+    if (!lead) return res.status(404).json({ error: 'Contact introuvable.' });
+    await query(`UPDATE leads SET relance_status = 'ignore', relance_at = NOW() WHERE id = $1`, [lead.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erreur POST relance skip:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
+app.post('/api/dashboard/relances/:id/send', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    if (isRateLimited(`relance:${req.user.businessId}`, 60, 60 * 60 * 1000)) {
+      return res.status(429).json({ error: 'Trop de relances envoyées en une heure. Réessayez plus tard.' });
+    }
+    const lead = await relanceLead(req);
+    if (!lead) return res.status(404).json({ error: 'Contact introuvable.' });
+    if (!lead.email) return res.status(400).json({ error: 'Ce contact n\'a pas d\'email : la relance par SMS arrive bientôt.' });
+    if (lead.relance_status === 'envoye' || lead.relance_status === 'simule') return res.status(409).json({ error: 'Ce contact a déjà été relancé.' });
+    const subject = String((req.body && req.body.subject) || '').trim().slice(0, 140);
+    const body = String((req.body && req.body.body) || '').trim().slice(0, 3000);
+    if (!subject || body.length < 10) return res.status(400).json({ error: 'L\'objet et le message sont obligatoires.' });
+    const { rows: bz } = await query('SELECT * FROM businesses WHERE id = $1', [req.user.businessId]);
+    const business = bz[0];
+    // Contacts de démonstration (adresses inventées) : on simule l'envoi, rien ne part.
+    const simulated = String(lead.external_id || '').startsWith('demo-seed:');
+    if (!simulated) {
+      if (!RESEND_API_KEY) return res.status(503).json({ error: 'L\'envoi d\'emails n\'est pas encore configuré sur ce serveur.' });
+      const { rows: admins } = await query(`SELECT email FROM users WHERE business_id = $1 AND role = 'admin' ORDER BY id LIMIT 1`, [business.id]);
+      const html = '<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a">' +
+        escapeHtmlText(body).replace(/\n/g, '<br>') +
+        `<p style="margin-top:28px;font-size:12px;color:#888">Vous recevez ce message car vous avez contacté ${escapeHtmlText(business.name)}. ` +
+        'Pour ne plus être recontacté, répondez simplement « STOP ».</p></div>';
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+        body: JSON.stringify({ from: relanceFrom(business), to: [lead.email], subject, html, text: body,
+          ...(admins[0] && admins[0].email ? { reply_to: admins[0].email } : {}) }),
+      });
+      if (!r.ok) {
+        console.error(`Erreur email relance (HTTP ${r.status}):`, await r.text());
+        return res.status(502).json({ error: 'L\'email n\'a pas pu être envoyé. Réessayez dans un instant.' });
+      }
+    }
+    await query(
+      `UPDATE leads SET relance_status = $1, relance_at = NOW(), relance_subject = $2, relance_body = $3,
+         status = CASE WHEN status = 'nouveau' THEN 'contacte' ELSE status END, updated_at = NOW() WHERE id = $4`,
+      [simulated ? 'simule' : 'envoye', subject, body, lead.id]);
+    if (lead.conversation_id) {
+      await query('INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
+        [lead.conversation_id, 'assistant', `📧 Relance envoyée par email — ${subject}\n\n${body}`]).catch(() => {});
+    }
+    res.json({ ok: true, simulated });
+  } catch (err) {
+    console.error('Erreur POST relance send:', err);
+    res.status(500).json({ error: 'Erreur interne du serveur.' });
+  }
+});
+
 app.get('/api/dashboard/leads', requireAuth, requireRole(['admin', 'lecture']), async (req, res) => {
   try {
     const { rows: leads } = await query(`
@@ -4816,6 +5042,15 @@ const DEMO_ACTIVITY = {
       t: ['Je voudrais réserver une évaluation.', 'Avec plaisir ! Choisissez votre créneau ci-dessous.', '📅 A réservé : Évaluation de départ (1 h en voiture)', 'C’est réservé ! Pensez à apporter votre pièce d’identité. À bientôt !'] },
     { ch: 'chat', d: 5, h: 18.3, name: '', email: '', status: null,
       t: ['C’est combien l’examen du code ?', 'L’examen du code coûte 30 €, c’est un tarif national. Il se réserve auprès d’un centre agréé, et nous vous accompagnons dans la démarche.'] },
+    { ch: 'chat', d: 5, h: 20.7, name: 'Kévin', email: 'kevin.lambert@exemple.fr', status: 'nouveau', score: 70,
+      summary: '18 ans, veut passer le permis B en boîte manuelle avant l’été, demande les tarifs et les délais d’examen.',
+      t: ['Bonsoir, je voudrais passer le permis avant l’été, c’est possible ?', 'Bonsoir ! Oui, en comptant 2 à 3 leçons par semaine, c’est tout à fait réaliste. Le forfait boîte manuelle 20 h est à 1 290 €, payable en plusieurs fois.',
+        'Ok je réfléchis, mon email c’est kevin.lambert@exemple.fr', 'Avec plaisir Kévin ! La première étape est une évaluation de départ d’une heure (45 €). Je reste disponible si vous avez des questions.'] },
+    { ch: 'voice', src: 'web', d: 9, h: 18.4, dur: 97, name: 'Manon', phone: '', email: 'manon.richard@exemple.fr', status: 'contacte', score: 65,
+      summary: 'Maman de Léo (15 ans) : se renseigne sur la conduite accompagnée et le financement.',
+      t: ['Bonjour, ici Victoria, de l’Auto-École Horizon. Que puis-je faire pour vous ?', 'Bonjour, mon fils a 15 ans, il peut commencer la conduite accompagnée ?',
+        'Oui, dès 15 ans ! Le forfait conduite accompagnée est à 1 390 €, et le permis à 1 € par jour est possible. Puis-je avoir votre prénom et votre email pour vous envoyer les détails ?', 'Manon, manon.richard@exemple.fr.',
+        'Merci Manon, je vous envoie tout ça. À bientôt !'] },
     { ch: 'chat', d: 1, h: 21.2, name: 'Inès', email: 'ines.b@gmail.com', phone: '06 45 12 78 90', status: 'nouveau', score: 75,
       summary: '19 ans, code à passer, intéressée par la boîte automatique et le permis à 1 € par jour.',
       t: ['Bonsoir, j’ai 19 ans et j’ai pas encore le code, vous faites la boîte automatique ?', 'Bonsoir ! Oui : le forfait boîte automatique 13 h est à 990 €, code en ligne inclus. Le permis à 1 € par jour est possible jusqu’à 25 ans.',

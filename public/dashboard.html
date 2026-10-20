@@ -517,6 +517,29 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 .bk-who{font-size:.86rem}
 .bk-who small,.bk-svc small{display:block;color:var(--ink-soft);font-size:.76rem;font-weight:500}
 .bk-act{display:flex;gap:8px;align-items:center;justify-content:flex-end}
+/* ---------- Relances ---------- */
+.rl-card{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);gap:0;margin-bottom:14px;overflow:hidden;padding:0}
+.rl-who{padding:18px 20px;border-right:1px solid var(--line-soft);display:flex;flex-direction:column;gap:8px}
+.rl-who h3{font-size:1.05rem}
+.rl-who .meta{font-size:.78rem;color:var(--ink-faint)}
+.rl-who .need{font-size:.86rem;color:var(--ink-soft);line-height:1.45}
+.rl-who .lnk{font-size:.8rem;font-weight:650;color:var(--green-deep);background:none;border:0;padding:0;cursor:pointer;text-align:left;font-family:inherit}
+.rl-mail{padding:16px 20px;display:flex;flex-direction:column;gap:8px;background:rgba(237,243,240,.35)}
+.rl-mail .to{font-size:.78rem;color:var(--ink-faint)}.rl-mail .to b{color:var(--ink);font-weight:600}
+.rl-mail input,.rl-mail textarea{font:inherit;font-size:.88rem;border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:#fff;width:100%;box-sizing:border-box;color:var(--ink)}
+.rl-mail input{font-weight:650}
+.rl-mail textarea{min-height:150px;resize:vertical;line-height:1.5}
+.rl-mail input:focus,.rl-mail textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+.rl-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rl-acts .sp{flex:1}
+.rl-ai{font-size:.72rem;font-weight:700;color:var(--green-deep);background:var(--green-soft);border-radius:999px;padding:2px 8px;align-self:flex-start}
+.rl-done{display:flex;align-items:center;gap:12px;padding:14px 20px;margin-bottom:14px}
+.rl-done .ic{width:34px;height:34px;border-radius:10px;background:var(--green-soft);display:grid;place-items:center;flex-shrink:0}
+.rl-done small{display:block;color:var(--ink-faint)}
+.rl-note{font-size:.82rem;color:var(--ink-soft);background:#FFF8EA;border:1px solid #F3E2BD;border-radius:12px;padding:10px 14px;margin-bottom:14px}
+.rl-empty{text-align:center;padding:38px 20px}
+.rl-empty .ic{font-size:1.8rem}
+@media (max-width:900px){.rl-card{grid-template-columns:1fr}.rl-who{border-right:none;border-bottom:1px solid var(--line-soft)}}
 /* Agenda : vue semaine */
 .bkc{margin-top:12px}.bkc-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line-soft);font-size:.86rem}.bkc-row span{color:var(--ink-faint)}.bkc-row b{font-weight:600;text-align:right}.bkc-row a{color:var(--green-deep)}
 .bk-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
@@ -703,6 +726,9 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
       <button class="nav-item" data-tab="leads" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke-linecap="round"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87" stroke-linecap="round"/></svg>
         <span id="navLeadsLabel">Leads</span></button>
+      <button class="nav-item" data-tab="relances" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16v12H4z" stroke-linejoin="round"/><path d="M4 7l8 6 8-6" stroke-linejoin="round"/></svg>
+        <span>Relances</span><span class="pill-soon" id="relanceCount" hidden style="background:var(--green-soft);color:var(--green-deep)"></span></button>
       <button class="nav-item" data-tab="conversations" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0112.5 3 8.5 8.5 0 0121 11.5z" stroke-linejoin="round"/></svg>
         <span>Conversations</span></button>
@@ -822,6 +848,25 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
       <div class="chips" id="aeChips" hidden></div>
       <div class="card card--flush">
         <div class="tablewrap"><table class="tbl" id="leadsTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ============================== RELANCES -->
+    <section class="tab-page" id="page-relances">
+      <div class="topbar">
+        <div><h2>Relances</h2><p id="rlIntro">Les contacts sans nouvelles depuis quelques jours. Victoria a préparé un message pour chacun : relisez, modifiez si besoin, puis envoyez. Rien ne part sans votre accord.</p></div>
+        <div class="topbar__act" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+          <label for="rlDays" style="font-size:.82rem;color:var(--ink-soft);font-weight:600">Sans nouvelles depuis</label>
+          <select id="rlDays" class="rangepick"><option value="2">2 jours</option><option value="3">3 jours</option><option value="5">5 jours</option><option value="7">7 jours</option><option value="14">14 jours</option></select>
+          <button type="button" class="btn btn--primary" id="rlSendAll" hidden>Tout envoyer</button>
+        </div>
+      </div>
+      <div class="card ovk" id="rlKpis"></div>
+      <div id="rlNotice"></div>
+      <div id="rlList"></div>
+      <div class="card card--flush" id="rlHistCard" hidden>
+        <div class="card__head card__head--pad"><div><h3>Déjà relancés</h3><p class="card__sub">Les 30 derniers jours.</p></div></div>
+        <div class="tablewrap"><table class="tbl" id="rlHist"></table></div>
       </div>
     </section>
 
@@ -1488,6 +1533,7 @@ function enterApp() {
     loadShopStats();
     loadWebhook();
     loadQualification();
+    loadRelances(true);
   }
 }
 
@@ -1622,6 +1668,7 @@ function switchTab(tab) {
   if (tab === 'voice') loadVoicePage();
   if (tab === 'appointments') loadCalendar();
   if (tab === 'improve') loadImprove();
+  if (tab === 'relances') loadRelances();
   if (tab === 'knowledge') loadDocs();
   $$('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
   $$('.tab-page').forEach(function (el) { el.classList.toggle('active', el.id === 'page-' + tab); });
@@ -3056,6 +3103,162 @@ function renderLeads(allLeads) {
     sel.dataset.prev = sel.value;
   });
 }
+
+/* ============================================================
+   RELANCES — prospects sans nouvelles, message préparé par l'IA
+   ============================================================ */
+var RL = null, RL_DAYS = 3;
+try { RL_DAYS = Number(localStorage.getItem('rl-days')) || 3; } catch (e) {}
+function rlAgo(ts) {
+  var d = Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
+  return d <= 0 ? "aujourd'hui" : d === 1 ? 'hier' : 'il y a ' + d + ' jours';
+}
+async function loadRelances(countOnly) {
+  try {
+    var res = await fetch(API + '/api/dashboard/relances?days=' + RL_DAYS, { credentials: 'include' });
+    if (!res.ok) throw new Error();
+    RL = await res.json();
+    var pill = $('#relanceCount');
+    if (pill) { pill.hidden = !RL.items.length; pill.textContent = RL.items.length; }
+    if (!countOnly || $('#page-relances').classList.contains('active')) renderRelances();
+  } catch (e) { if (!countOnly) toast('Impossible de charger les relances.', true); }
+}
+if ($('#rlDays')) {
+  $('#rlDays').value = String(RL_DAYS);
+  $('#rlDays').addEventListener('change', function (e) {
+    RL_DAYS = Number(e.target.value) || 3;
+    try { localStorage.setItem('rl-days', String(RL_DAYS)); } catch (er) {}
+    $('#rlList').innerHTML = '<div class="card rl-empty"><p class="card__sub">Victoria prépare les messages…</p></div>';
+    loadRelances();
+  });
+}
+function renderRelances() {
+  if (!RL) return;
+  var isAdmin = ME.role === 'admin';
+  var who = (typeof AE !== 'undefined' && AE) ? ['futur élève', 'futurs élèves'] : ['contact', 'contacts'];
+  rlKpis();
+  var demo = RL.items.some(function (it) { return it.demo; }) || RL.history.some(function (h) { return h.simulated; });
+  $('#rlNotice').innerHTML = (demo ? '<div class="rl-note">Démo : les contacts d\'exemple ont des adresses inventées, l\'envoi est donc <b>simulé</b> pour eux. Pour un vrai contact, l\'email part réellement.</div>' : '') +
+    (!RL.emailReady && RL.items.some(function (it) { return !it.demo; }) ? '<div class="rl-note">L\'envoi d\'emails n\'est pas encore configuré sur ce serveur : les messages ne pourront pas partir.</div>' : '');
+  RL_BODY();
+}
+function rlKpis() {
+  var sent = RL.history.length, conv = RL.history.filter(function (h) { return h.converted; }).length;
+  $('#rlKpis').innerHTML =
+    '<div><div class="l">À relancer</div><div class="n">' + RL.items.length + '</div><div class="s">sans nouvelles depuis ' + RL.days + ' jours ou plus</div></div>' +
+    '<div><div class="l">Relances envoyées</div><div class="n">' + sent + '</div><div class="s">sur les 30 derniers jours</div></div>' +
+    '<div><div class="l">Ont réservé ensuite</div><div class="n">' + conv + '</div><div class="s">' + (sent ? Math.round(conv / sent * 100) + ' % des relancés' : 'après une relance') + '</div></div>' +
+    '<div><div class="l">Joignables par téléphone seulement</div><div class="n">' + RL.phoneOnly + '</div><div class="s">relance par SMS bientôt disponible</div></div>';
+}
+var RL_BODY = function () {
+  var isAdmin = ME.role === 'admin';
+  var who = (typeof AE !== 'undefined' && AE) ? ['futur élève', 'futurs élèves'] : ['contact', 'contacts'];
+  $('#rlSendAll').hidden = !isAdmin || RL.items.length < 2;
+  $('#rlSendAll').textContent = 'Tout envoyer (' + RL.items.length + ')';
+  var list = $('#rlList');
+  if (!RL.items.length) {
+    list.innerHTML = '<div class="card rl-empty"><div class="ic">✉️</div><h3 style="margin-top:6px">Personne à relancer</h3>' +
+      '<p class="card__sub">Aucun ' + who[0] + ' sans nouvelles depuis ' + RL.days + ' jours. Victoria vous préviendra ici dès qu\'il y en aura.</p></div>';
+  } else {
+    list.innerHTML = RL.items.map(function (it) {
+      var d = it.draft || { subject: '', body: '' };
+      var lead = { summary: it.summary, message: it.message };
+      var ch = it.channel === 'voice' ? (it.voiceSource === 'phone' ? '📞 au téléphone' : '🎙️ à la voix sur le site') : '💬 dans le chat';
+      return '<div class="card rl-card" data-id="' + it.leadId + '">' +
+        '<div class="rl-who"><h3>' + esc(niceName(it.name) || it.email) + '</h3>' +
+          '<div class="meta">Dernier contact ' + rlAgo(it.lastContact) + ' · ' + ch + '</div>' +
+          (typeof aeTagsHtml === 'function' ? aeTagsHtml(lead) : '') +
+          '<div class="need">' + esc(it.summary) + '</div>' +
+          (it.conversationId ? '<button type="button" class="lnk rl-convo" data-c="' + it.conversationId + '">Voir la conversation →</button>' : '') +
+        '</div>' +
+        '<div class="rl-mail"><span class="rl-ai">✨ Préparé par Victoria</span>' +
+          '<div class="to">À : <b>' + esc(it.email) + '</b></div>' +
+          '<input type="text" class="rl-subj" maxlength="140" value="' + esc(d.subject) + '"' + (isAdmin ? '' : ' disabled') + '>' +
+          '<textarea class="rl-body"' + (isAdmin ? '' : ' disabled') + '>' + esc(d.body) + '</textarea>' +
+          (isAdmin ? '<div class="rl-acts"><button type="button" class="btn btn--primary rl-send">Envoyer l\'email</button>' +
+            '<button type="button" class="btn btn--ghost rl-regen">↻ Autre proposition</button><span class="sp"></span>' +
+            '<button type="button" class="btn btn--ghost rl-skip">Ne pas relancer</button></div>' : '') +
+        '</div></div>';
+    }).join('');
+  }
+  $$('.rl-body', list).forEach(function (t) {
+    var fit = function () { t.style.height = 'auto'; t.style.height = Math.min(420, t.scrollHeight + 4) + 'px'; };
+    fit(); t.addEventListener('input', fit);
+  });
+  $$('.rl-convo', list).forEach(function (b) { b.addEventListener('click', function () { openTranscript(b.dataset.c); }); });
+  $$('.rl-card', list).forEach(function (card) {
+    var id = card.dataset.id;
+    var send = card.querySelector('.rl-send'), skip = card.querySelector('.rl-skip'), regen = card.querySelector('.rl-regen');
+    if (send) send.addEventListener('click', function () { rlSend(card, id); });
+    if (skip) skip.addEventListener('click', async function () {
+      try {
+        var r = await fetch(API + '/api/dashboard/relances/' + id + '/skip', { method: 'POST', credentials: 'include' });
+        if (!r.ok) throw new Error();
+        rlDone(card, id, '🙈', 'Ne sera pas relancé', 'Vous pourrez toujours le recontacter depuis sa fiche.');
+      } catch (e) { toast('Action impossible pour le moment.', true); }
+    });
+    if (regen) regen.addEventListener('click', async function () {
+      regen.disabled = true; regen.textContent = 'Victoria réécrit…';
+      try {
+        var r = await fetch(API + '/api/dashboard/relances/' + id + '/draft', { method: 'POST', credentials: 'include' });
+        var data = await r.json();
+        if (!r.ok) throw new Error();
+        card.querySelector('.rl-subj').value = data.draft.subject; card.querySelector('.rl-body').value = data.draft.body;
+      } catch (e) { toast('Impossible de proposer un autre message.', true); }
+      regen.disabled = false; regen.textContent = '↻ Autre proposition';
+    });
+  });
+  // Historique
+  var hc = $('#rlHistCard');
+  hc.hidden = !RL.history.length;
+  $('#rlHist').innerHTML = '<thead><tr><th>Contact</th><th>Objet</th><th class="ctr">Envoyé</th><th>Résultat</th></tr></thead><tbody>' +
+    RL.history.map(function (h) {
+      return '<tr class="' + (h.conversationId ? 'clickable' : '') + '" data-convo="' + esc(h.conversationId || '') + '">' +
+        '<td><div class="cell-main">' + esc(niceName(h.name) || h.email) + '</div><div class="cell-sub">' + esc(h.email || '') + '</div></td>' +
+        '<td class="cell-sub">' + esc(h.subject) + (h.simulated ? ' <span class="tag tag--grey">démo</span>' : '') + '</td>' +
+        '<td class="ctr cell-sub">' + rlAgo(h.at) + '</td>' +
+        '<td>' + (h.converted ? '<span class="tag tag--green">A réservé</span>' : '<span class="tag tag--grey">En attente de réponse</span>') + '</td></tr>';
+    }).join('') + '</tbody>';
+  $$('tr.clickable', $('#rlHist')).forEach(function (row) { row.addEventListener('click', function () { openTranscript(row.dataset.convo); }); });
+}
+function rlDone(card, id, ic, title, sub) {
+  card.outerHTML = '<div class="card rl-done"><span class="ic">' + ic + '</span><div><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></div></div>';
+  RL.items = RL.items.filter(function (it) { return String(it.leadId) !== String(id); });
+  var pill = $('#relanceCount'); if (pill) { pill.hidden = !RL.items.length; pill.textContent = RL.items.length; }
+  $('#rlSendAll').hidden = RL.items.length < 2; $('#rlSendAll').textContent = 'Tout envoyer (' + RL.items.length + ')';
+}
+async function rlSend(card, id) {
+  var btn = card.querySelector('.rl-send');
+  var subject = card.querySelector('.rl-subj').value.trim(), body = card.querySelector('.rl-body').value.trim();
+  if (!subject || body.length < 10) { toast('Ajoutez un objet et un message.', true); return false; }
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    var r = await fetch(API + '/api/dashboard/relances/' + id + '/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ subject: subject, body: body }),
+    });
+    var data = await r.json();
+    if (!r.ok) throw new Error(data.error || '');
+    var it = RL.items.find(function (x) { return String(x.leadId) === String(id); }) || {};
+    RL.history.unshift({ leadId: id, name: it.name, email: it.email, at: new Date().toISOString(), subject: subject, simulated: !!data.simulated, converted: false });
+    rlDone(card, id, '✅', 'Relance envoyée à ' + (niceName(it.name) || it.email || 'ce contact'),
+      data.simulated ? 'Démo : envoi simulé (adresse d\'exemple). Le message apparaît dans la conversation.' : 'Email envoyé à ' + (it.email || '') + '. Sa réponse arrivera dans votre boîte mail.');
+    try { loadLeads(); } catch (e) {}
+    rlKpis();
+    return true;
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Envoyer l\'email';
+    toast(e.message || 'L\'email n\'a pas pu être envoyé.', true);
+    return false;
+  }
+}
+if ($('#rlSendAll')) $('#rlSendAll').addEventListener('click', async function () {
+  var cards = $$('.rl-card', $('#rlList'));
+  if (!cards.length || !confirm('Envoyer les ' + cards.length + ' relances préparées ?')) return;
+  var ok = 0;
+  for (var i = 0; i < cards.length; i++) { if (await rlSend(cards[i], cards[i].dataset.id)) ok++; }
+  toast(ok + ' relance' + (ok > 1 ? 's envoyées' : ' envoyée'));
+  loadRelances();
+});
 
 /* ============================================================
    RENDEZ-VOUS — agenda WHATGO + réglages de réservation en ligne

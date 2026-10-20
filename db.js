@@ -212,6 +212,13 @@ async function initDb() {
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS business_type TEXT NOT NULL DEFAULT 'autre'`);
   // Métier spécialisé (ex. 'autoecole') : dashboard et vocabulaire dédiés.
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS vertical TEXT DEFAULT ''`);
+  // Relances des prospects sans nouvelles : brouillon préparé par l'IA, envoyé
+  // seulement quand le gérant valide. relance_status : '' | 'envoye' | 'simule' | 'ignore'.
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS relance_status TEXT DEFAULT ''`);
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS relance_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS relance_subject TEXT`);
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS relance_body TEXT`);
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS relance_draft TEXT`);
 
   // Rendez-vous réservés (par le visiteur via le chat, ou ajoutés à la main
   // par le commerçant pour ceux pris par téléphone). C'est l'agenda WHATGO.
