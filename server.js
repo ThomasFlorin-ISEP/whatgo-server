@@ -704,13 +704,17 @@ function sleep(ms) {
 // retente jusqu'à 2 fois avec un court délai avant d'abandonner. Les autres
 // erreurs (clé API invalide, requête mal formée, etc.) ne sont PAS retentées,
 // puisqu'elles ne se résoudraient pas d'elles-mêmes.
-async function callGemini(systemPrompt, contents, maxRetries = 3) {
+async function callGemini(systemPrompt, contents, maxRetries = 1) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let data;
+    // Au-delà de 12 s, on abandonne cette tentative (le chat bascule alors sur le secours).
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const killer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
     try {
       const response = await fetch(url, {
+        ...(ctrl ? { signal: ctrl.signal } : {}),
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -722,20 +726,22 @@ async function callGemini(systemPrompt, contents, maxRetries = 3) {
         }),
       });
       data = await response.json();
+      if (killer) clearTimeout(killer);
     } catch (networkErr) {
-      // Erreur réseau (timeout, coupure...) : on retente pareil qu'une surcharge.
+      if (killer) clearTimeout(killer);
+      // Erreur réseau ou délai dépassé : une nouvelle tentative rapide, puis on rend la main.
       if (attempt < maxRetries) {
-        console.warn(`Gemini injoignable (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai...`);
-        await sleep(1000 * (attempt + 1));
+        console.warn(`Gemini injoignable ou trop lent (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai...`);
+        await sleep(400);
         continue;
       }
-      throw networkErr;
+      return { error: { code: 504, message: 'Gemini indisponible : ' + (networkErr.name === 'AbortError' ? 'délai dépassé' : networkErr.message) } };
     }
 
-    const isOverloaded = data.error && (data.error.code === 503 || data.error.status === 'UNAVAILABLE');
+    const isOverloaded = data.error && (data.error.code === 503 || data.error.code === 429 || data.error.status === 'UNAVAILABLE');
     if (isOverloaded && attempt < maxRetries) {
-      console.warn(`Gemini surchargé (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai dans ${1000 * (attempt + 1)}ms...`);
-      await sleep(1000 * (attempt + 1)); // 1s, puis 2s, puis 3s
+      console.warn(`Gemini surchargé (tentative ${attempt + 1}/${maxRetries + 1}), nouvel essai dans 600ms...`);
+      await sleep(600);
       continue;
     }
 
@@ -2146,6 +2152,13 @@ app.post('/api/handoff', async (req, res) => {
 });
 
 app.post('/api/chat', async (req, res) => {
+  // Chronométrage (visible dans les journaux du serveur) pour suivre la latence du chat.
+  const tStart = Date.now();
+  const timing = { ai: 0, fallback: false };
+  res.on('finish', () => {
+    const total = Date.now() - tStart;
+    console.log(`⏱️ chat ${req.body && req.body.business}: ${total} ms au total (IA ${timing.ai} ms${timing.fallback ? ', via secours Groq' : ''}, reste ${total - timing.ai} ms)`);
+  });
   try {
     // Anti-abus : évite qu'un visiteur (ou un script) fasse exploser la
     // facture Gemini/Groq en spammant le chat. 20 messages/minute/IP laisse
@@ -2165,6 +2178,8 @@ app.post('/api/chat', async (req, res) => {
     if (!business) {
       return res.status(404).json({ error: 'Entreprise inconnue.' });
     }
+    // Documents de la base de connaissances : chargés pendant le reste de la préparation.
+    const docsBlockP = loadDocsBlock(business.id).catch(() => ({ full: '', short: '' }));
 
     // Chargée une seule fois pour cet appel : sert à la fois au seuil
     // "Proposer un RDV" (plus bas) et à l'escalade (plus loin, après la
@@ -2352,8 +2367,10 @@ app.post('/api/chat', async (req, res) => {
       business, shouldOfferAppointment, appointmentDateLabel, appointmentInProgress, hasContactInfo
     );
     // Documents de la base de connaissances (version courte pour le secours Groq).
-    const docsBlock = await loadDocsBlock(business.id);
-    const data = await callGemini(systemPromptForCall + docsBlock.full, contents);
+    const docsBlock = await docsBlockP;
+    const tAi = Date.now();
+    let data;
+    try { data = await callGemini(systemPromptForCall + docsBlock.full, contents); } catch (e) { data = { error: { message: e.message } }; }
 
     let reply;
     let usedFallback = false;
@@ -2373,6 +2390,7 @@ app.post('/api/chat', async (req, res) => {
         console.warn(`Bascule sur Groq réussie pour "${business.name}".`);
         reply = fallbackReply;
         usedFallback = true;
+        timing.fallback = true;
       } else {
         return res.status(500).json({ error: data.error.message });
       }
@@ -2381,6 +2399,7 @@ app.post('/api/chat', async (req, res) => {
         || "Désolé, je n'ai pas pu répondre.";
     }
 
+    timing.ai = Date.now() - tAi;
     // Si l'IA a confirmé un rendez-vous dans sa réponse (marqueur
     // [RDV_CONFIRME: ...]), on extrait la date et on retire le marqueur —
     // le visiteur ne doit jamais le voir. C'est la SEULE source pour une
