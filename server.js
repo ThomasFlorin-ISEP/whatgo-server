@@ -785,6 +785,25 @@ async function geminiFast(sysFull, sysShort, contents) {
   });
 }
 
+// Chat : Groq d'abord (rapide et régulier), Gemini en secours. Les messages
+// avec une photo ou un PDF passent directement par Gemini (Groq ne lit pas les images).
+async function chatAi(sysFull, sysShort, contents, hasAttachment) {
+  if (GROQ_API_KEY && !hasAttachment) {
+    let text = null;
+    try {
+      text = await Promise.race([callGroqFallback(sysShort, contents), sleep(7000).then(() => null)]);
+    } catch (e) { text = null; }
+    if (text) return { candidates: [{ content: { parts: [{ text }] } }], provider: 'groq' };
+    console.warn('Groq sans réponse ou trop lent : bascule sur Gemini.');
+    const g = await callGemini(sysFull, contents, 1);
+    if (!g.error) g.provider = 'gemini-secours';
+    return g;
+  }
+  const g = await geminiFast(sysFull, sysShort, contents);
+  if (!g.error) g.provider = g.viaGroq ? 'groq' : 'gemini';
+  return g;
+}
+
 // Appelle Groq (API compatible OpenAI) en secours, uniquement quand
 // Gemini a échoué. Reprend le même "contents" (format Gemini) et le
 // convertit au format attendu par Groq. Si GROQ_API_KEY n'est pas
@@ -807,7 +826,11 @@ async function callGroqFallback(systemPrompt, contents) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${GROQ_API_KEY}`,
     },
-    body: JSON.stringify({ model: GROQ_MODEL, messages }),
+    body: JSON.stringify({
+      model: GROQ_MODEL, messages, max_completion_tokens: 1200,
+      // Modèles gpt-oss : réflexion courte, pour répondre vite.
+      ...(/gpt-oss/.test(GROQ_MODEL) ? { reasoning_effort: 'low' } : {}),
+    }),
   });
   const data = await response.json();
 
@@ -2195,7 +2218,7 @@ app.post('/api/chat', async (req, res) => {
   const timing = { ai: 0, fallback: false };
   res.on('finish', () => {
     const total = Date.now() - tStart;
-    console.log(`⏱️ chat ${req.body && req.body.business}: ${total} ms au total (IA ${timing.ai} ms${timing.fallback ? ', via secours Groq' : ''}, reste ${total - timing.ai} ms)`);
+    console.log(`⏱️ chat ${req.body && req.body.business}: ${total} ms au total (IA ${timing.ai} ms via ${timing.fallback ? 'secours' : (timing.provider || 'gemini')}, reste ${total - timing.ai} ms)`);
   });
   try {
     // Anti-abus : évite qu'un visiteur (ou un script) fasse exploser la
@@ -2408,7 +2431,7 @@ app.post('/api/chat', async (req, res) => {
     const docsBlock = await docsBlockP;
     const tAi = Date.now();
     let data;
-    try { data = await geminiFast(systemPromptForCall + docsBlock.full, systemPromptForCall + docsBlock.short, contents); } catch (e) { data = { error: { message: e.message } }; }
+    try { data = await chatAi(systemPromptForCall + docsBlock.full, systemPromptForCall + docsBlock.short, contents, Boolean(attachment)); } catch (e) { data = { error: { message: e.message } }; }
 
     let reply;
     let usedFallback = false;
@@ -2435,7 +2458,8 @@ app.post('/api/chat', async (req, res) => {
     } else {
       reply = data.candidates?.[0]?.content?.parts?.[0]?.text
         || "Désolé, je n'ai pas pu répondre.";
-      if (data.viaGroq) { usedFallback = true; timing.fallback = true; console.warn(`Gemini trop lent : réponse du secours Groq pour "${business.name}".`); }
+      timing.provider = data.provider || 'gemini';
+      if (data.provider === 'gemini-secours') usedFallback = true;
     }
 
     timing.ai = Date.now() - tAi;
