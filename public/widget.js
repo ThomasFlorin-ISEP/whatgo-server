@@ -20,6 +20,8 @@
  *   data-nudge="true"             relance automatique si le visiteur n'a jamais écrit ("false" pour désactiver)
  *   data-nudge-delay="180000"     délai avant la relance, en millisecondes (3 min par défaut)
  *   data-nudge-message="Vous avez besoin d'un renseignement ?"   message affiché lors de la relance
+ *   data-followup="true"          relance douce si le visiteur s'arrête en pleine conversation ("false" pour désactiver)
+ *   data-followup-delay="120000"  délai d'inactivité avant cette relance, en millisecondes (2 min par défaut)
  *
  * Prise de rendez-vous : si l'entreprise a activé la réservation en ligne
  * dans son tableau de bord (page Rendez-vous), le widget propose tout seul
@@ -53,6 +55,8 @@
   var NUDGE_ENABLED = attr('nudge', 'true') !== 'false';
   var NUDGE_DELAY = parseInt(attr('nudge-delay', '180000'), 10) || 180000;
   var NUDGE_MESSAGE = attr('nudge-message', "Vous avez besoin d'un renseignement ?");
+  var FOLLOWUP_ENABLED = attr('followup', 'true') !== 'false';
+  var FOLLOWUP_DELAY = Math.max(15000, parseInt(attr('followup-delay', '120000'), 10) || 120000);
   var BUSINESS = scriptTag ? scriptTag.getAttribute('data-business') : null;
   var conversationId = null;
   // Adresse du serveur déduite de data-server (".../api/chat" → "...").
@@ -324,6 +328,14 @@
       background: #E5383B; color: #fff; font-size: .72rem; font-weight: 800; display: flex; align-items: center; justify-content: center;
       border: 2px solid #fff; animation: wgt-pop .3s ease-out; }
     .wgt-badge[hidden] { display: none; }
+    .wgt-peek { position: fixed; bottom: 30px; right: 92px; max-width: 250px; background: #fff; color: #1D2530; border-radius: 16px 16px 4px 16px;
+      padding: 11px 30px 11px 14px; font-size: .86rem; line-height: 1.4; box-shadow: 0 10px 30px rgba(0,0,0,.18); z-index: 999998;
+      cursor: pointer; animation: wgt-peek .35s ease-out; }
+    .wgt-peek b { display: block; font-size: .74rem; color: var(--wgt-color); margin-bottom: 2px; }
+    .wgt-peek button { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border: 0; background: none; color: #9AA3AD; cursor: pointer; font-size: 15px; line-height: 1; }
+    .wgt-left .wgt-peek { right: auto; left: 92px; border-radius: 16px 16px 16px 4px; }
+    @keyframes wgt-peek { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @media (max-width: 480px) { .wgt-peek { right: 86px; max-width: calc(100vw - 110px); } }
     @keyframes wgt-pop { from { transform: scale(0); } to { transform: scale(1); } }
 
     /* ---------- Écran d'accueil ---------- */
@@ -907,6 +919,7 @@
     return (err && err.userMessage) || "L'appel n'a pas pu démarrer. Réessayez dans un instant, ou continuez à m'écrire ici.";
   }
   async function startVoiceCall() {
+    cancelFollowup();
     if (voiceConv || voiceStarting || !BUSINESS) return;
     if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       addMessage('bot', "L'appel vocal n'est pas disponible sur ce navigateur. Vous pouvez continuer à m'écrire ici.");
@@ -1405,6 +1418,7 @@
         conversationId = data.conversationId;
         card.remove();
         activeCard = null;
+        bookedConv = true; contactKnown = true; cancelFollowup();
         var userLine = 'Réservation : ' + service.name + ', ' + data.label;
         addMessage('user', userLine);
         history.push({ role: 'user', content: userLine });
@@ -1722,6 +1736,7 @@
   }
 
   function openPanel(byUser) {
+    if (typeof removePeek === 'function') removePeek();
     panel.classList.add('wgt-open');
     root.classList.add('wgt-is-open');
     if (isPhone()) document.documentElement.classList.add('wgt-lock');
@@ -1978,6 +1993,97 @@
     }, NUDGE_DELAY);
   }
 
+  // --- Relance douce en pleine conversation : le visiteur a écrit, l'assistante
+  // a répondu, puis plus rien pendant ~2 min alors qu'il est toujours sur la page.
+  // Un seul message par conversation, adapté à la situation (réserver, laisser
+  // ses coordonnées, ou simplement « je reste là »). Fenêtre fermée : on ne
+  // rouvre rien, un aperçu discret apparaît à côté de la bulle. ---
+  var followupTimer = null, contactKnown = false, bookedConv = false, peekEl = null;
+  function followupKey() { return 'wgt-fu-' + BUSINESS + '-' + (conversationId || 'new'); }
+  function followupDone() { try { return sessionStorage.getItem(followupKey()) === '1'; } catch (e) { return false; } }
+  function cancelFollowup() { if (followupTimer) { clearTimeout(followupTimer); followupTimer = null; } removePeek(); }
+  function removePeek() { if (peekEl) { peekEl.remove(); peekEl = null; } }
+  function scheduleFollowup(delay) {
+    if (!FOLLOWUP_ENABLED || bookedConv || !conversationId || followupDone()) return;
+    if (followupTimer) clearTimeout(followupTimer);
+    followupTimer = setTimeout(runFollowup, delay || FOLLOWUP_DELAY);
+  }
+  function logFollowup(type) {
+    if (!BUSINESS) return;
+    fetch(API_BASE + '/api/widget/' + encodeURIComponent(BUSINESS) + '/followup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversationId: conversationId, type: type }),
+    }).catch(function () {});
+  }
+  function pickFollowup() {
+    var lastBot = '', lastUser = '';
+    for (var i = history.length - 1; i >= 0; i--) {
+      if (!lastBot && history[i].role === 'assistant') lastBot = history[i].content || '';
+      if (!lastUser && history[i].role === 'user') lastUser = history[i].content || '';
+      if (lastBot && lastUser) break;
+    }
+    // Conversation terminée (« merci, au revoir ») : on ne relance pas.
+    if (/^\s*(ok(ay)?\s*)?(merci|super|parfait|top|génial|au revoir|bonne (journée|soirée)|c'est bon|ça marche)\b[^?]{0,40}$/i.test(lastUser)) return null;
+    if (bookingServices && /(r[ée]serv|[ée]valuation|cr[ée]neau|rendez-vous|\brdv\b|disponibilit)/i.test(lastBot)) {
+      return { text: 'Voulez-vous que je vous montre les prochains créneaux disponibles ? Ça prend 30 secondes.',
+        chips: [['📅 Voir les créneaux', function () { startBooking(); }], ['Plus tard', null]], kind: 'booking' };
+    }
+    if (!contactKnown) {
+      return { text: "Si vous préférez, laissez-moi votre numéro ou votre email : l'équipe vous recontacte rapidement.",
+        chips: [['✍️ Laisser mes coordonnées', function () { showContactForm(); }], ['Non merci', null]], kind: 'contact' };
+    }
+    return { text: 'Une autre question ? Je reste là si besoin.', chips: [], kind: 'generic' };
+  }
+  function showFollowupChips(f) {
+    if (!f.chips.length) return;
+    var box = el('div', 'wgt-follow');
+    f.chips.forEach(function (c) {
+      var b = el('button', 'wgt-chip', c[0]); b.type = 'button';
+      b.addEventListener('click', function () { box.remove(); if (c[1]) { logFollowup('followup_click'); c[1](); } });
+      box.appendChild(b);
+    });
+    log.appendChild(box);
+    log.scrollTop = log.scrollHeight;
+  }
+  function runFollowup() {
+    followupTimer = null;
+    if (followupDone() || bookedConv) return;
+    // Visiteur sur un autre onglet ou en train d'écrire : on attend.
+    if (document.hidden) { document.addEventListener('visibilitychange', function onVis() { if (!document.hidden) { document.removeEventListener('visibilitychange', onVis); scheduleFollowup(20000); } }); return; }
+    if (input.value.trim() || voiceConv) { scheduleFollowup(30000); return; }
+    var f = pickFollowup();
+    if (!f) return;
+    try { sessionStorage.setItem(followupKey(), '1'); } catch (e) {}
+    logFollowup('followup');
+    if (panel.classList.contains('wgt-open')) {
+      var t = showTyping();
+      setTimeout(function () {
+        t.remove();
+        addMessage('bot', f.text);
+        history.push({ role: 'assistant', content: f.text });
+        showFollowupChips(f);
+        ding();
+        saveStateSoon();
+      }, 1100);
+    } else {
+      addMessage('bot', f.text);
+      history.push({ role: 'assistant', content: f.text });
+      showFollowupChips(f);
+      removePeek();
+      peekEl = el('div', 'wgt-peek');
+      peekEl.innerHTML = '<b></b><span></span><button type="button" aria-label="Fermer">×</button>';
+      peekEl.querySelector('b').textContent = BOT_NAME;
+      peekEl.querySelector('span').textContent = f.text;
+      peekEl.addEventListener('click', function (e) {
+        if (e.target.tagName === 'BUTTON') { removePeek(); return; }
+        removePeek(); openPanel(true);
+      });
+      root.appendChild(peekEl);
+      ding();
+      saveStateSoon();
+    }
+  }
+  input.addEventListener('input', function () { if (followupTimer) scheduleFollowup(); });
+
   // --- Photos et fichiers : choisis, compressés, montrés en aperçu, envoyés avec le message ---
   var clipBtn = root.querySelector('.wgt-clip');
   var fileInput = root.querySelector('.wgt-file');
@@ -2097,6 +2203,8 @@
   async function sendText(text, att) {
     sendBtn.disabled = true;
     hasInteracted = true;
+    cancelFollowup();
+    if (/[^\s@]+@[^\s@]+\.[^\s@]+/.test(text || '') || String(text || '').replace(/\D/g, '').length >= 9) contactKnown = true;
     showQuickReplies();
     clearFollowups();
     var oldContact = log.querySelector('.wgt-contact');
@@ -2143,6 +2251,7 @@
           if (data.demoLink) showDemoLink(data.demoLink);
           else if (data.contactForm) showContactForm();
           showFollowups(data.followups);
+          scheduleFollowup();
           saveStateSoon();
         } });
       }
