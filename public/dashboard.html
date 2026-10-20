@@ -4241,7 +4241,7 @@ async function openSuperAdminTranscript(id) {
     var body = '<div class="thread">' + (data.messages.length
       ? data.messages.map(function (m) {
           return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + fmtMsg(m.content) +
-            (m.used_fallback ? ' <span class="cell-sub">(via secours Groq)</span>' : '') + '</div>';
+            (m.used_fallback ? ' <span class="cell-sub">(via IA de secours)</span>' : '') + '</div>';
         }).join('')
       : '<p class="card__sub">Aucun message enregistré.</p>') + '</div>';
     openDrawer(
