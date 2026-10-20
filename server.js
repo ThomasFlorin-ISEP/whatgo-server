@@ -1835,9 +1835,11 @@ app.get('/api/widget/:slug/voice-recap', async (req, res) => {
     if (Date.now() - ended > 30 * 60 * 1000) return res.json({ ready: false, expired: true });
     let d = {};
     try { d = JSON.parse(row.call_data || '{}') || {}; } catch (e) { d = {}; }
-    if (!d.summaryReady && Date.now() - ended < 25 * 1000) return res.json({ ready: false });
-    res.json({ ready: true, firstName: d.firstName || '', phone: d.phone || '', email: d.email || '',
-      need: String((d.summaryFr ? d.summary : (d.need || d.summary)) || '').slice(0, 400) });
+    // On attend le résumé en français (jusqu'à ~75 s après l'appel) : celui d'ElevenLabs est souvent en anglais.
+    if (!d.summaryReady && Date.now() - ended < 75 * 1000) return res.json({ ready: false });
+    let need = String((d.summaryFr ? d.summary : (d.need || d.summary)) || '').slice(0, 400);
+    if (!d.summaryFr && /\b(the|user|agent|their|with|provided|would|and)\b/i.test(need)) need = ''; // pas d'anglais dans le récap
+    res.json({ ready: true, firstName: d.firstName || '', phone: d.phone || '', email: d.email || '', need });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur.' });
   }
