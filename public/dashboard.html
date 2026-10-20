@@ -710,11 +710,7 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
           <div class="ovleads" id="ovLeadsTable"></div>
         </div>
       </div>
-      <div class="ovmore"><button type="button" class="btn btn--ghost btn--sm" id="ovMoreBtn">📊 Voir les statistiques détaillées</button></div>
       <div id="ovDetails" hidden>
-        <div class="card vcard" id="ovVoice" hidden></div>
-        <div class="card ovmini" id="ovMini"></div>
-        <div class="card"><div class="card__head"><div><h3>Sujets les plus demandés</h3><p class="card__sub" id="ovTopicsSub"></p></div></div><div id="ovTopics" class="ovtopics2"></div></div>
       </div>
     </section>
 
@@ -1876,8 +1872,8 @@ function renderOverview(o) {
   // 4) Sujets
   // jauge = part des conversations de la période qui parlent de ce sujet
   var tmax = Math.max(1, o.topicsTotal || 0, ...(o.topics.length ? o.topics.map(function (x) { return x.count; }) : [1]));
-  $('#ovTopicsSub').textContent = (o.topicsTotal ? 'Sur ' + plural(o.topicsTotal, 'conversation', 'conversations') + (both ? ' (chat et voix)' : '') + ' · ' : '') + days + ' derniers jours';
-  $('#ovTopics').innerHTML = o.topics.length ? o.topics.map(function (x) {
+  if ($('#ovTopicsSub')) $('#ovTopicsSub').textContent = (o.topicsTotal ? 'Sur ' + plural(o.topicsTotal, 'conversation', 'conversations') + (both ? ' (chat et voix)' : '') + ' · ' : '') + days + ' derniers jours';
+  if ($('#ovTopics')) $('#ovTopics').innerHTML = o.topics.length ? o.topics.map(function (x) {
     return '<div class="topic"><span>' + esc(x.label) + '</span><b>' + x.count + ' <small style="color:var(--ink-faint);font-weight:600">· ' + Math.round(x.count / tmax * 100) + ' %</small></b><div class="funnel__bar"><i style="width:' + Math.round(x.count / tmax * 100) + '%"></i></div></div>';
   }).join('') : '<p class="card__sub">Pas encore assez de conversations sur cette période.</p>';
   // 5) Courbe (par semaine sur 90 jours)
