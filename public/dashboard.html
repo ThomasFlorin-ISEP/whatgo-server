@@ -2607,6 +2607,7 @@ async function openTranscript(id) {
           : '<a href="' + url + '" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:6px;font-weight:600">📄 ' + esc(x.name || 'Fichier') + '</a>';
       }).join('');
       var text = files ? String(m.content || '').replace(/\n?\[📎[^\]]*\]\s*$/, '') : m.content;
+      if (m.role !== 'user') text = String(text || '').replace(/\[[^\]\n📎]{1,40}\]\s*/g, '').replace(/ {2,}/g, ' ').trim();
       return '<div class="bubble ' + (m.role === 'user' ? 'user' : 'assistant') + '">' + files + fmtMsg(text) + '</div>';
     }).join('') + '</div>';
     openDrawer(
