@@ -554,7 +554,8 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 .sec-exh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .sec-clear,.sec-more{border:0;background:none;color:var(--green-deep);font-weight:650;font-size:.8rem;cursor:pointer;font-family:inherit;padding:0}
 .sec-more{margin-top:10px}
-.sec-exl.is-all{max-height:430px;overflow-y:auto;padding-right:6px}
+.sec-exl{max-height:300px;overflow-y:auto;padding-right:8px;scrollbar-width:thin;mask-image:linear-gradient(#000 calc(100% - 28px),transparent);-webkit-mask-image:linear-gradient(#000 calc(100% - 28px),transparent);padding-bottom:18px}
+.sec-hero{align-items:start}
 .sec-ex h4{margin:0 0 10px;font-size:.92rem}
 .sec-exi{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line-soft)}
 .sec-exi:last-child{border-bottom:0}
@@ -1872,7 +1873,7 @@ function renderSecHero(j) {
   var kinds = Object.keys(j.byKind || {}).sort(function (a, b) { return j.byKind[b] - j.byKind[a]; });
   var shield = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6z" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var list = (j.examples || []).filter(function (e) { return !SEC_FILTER || e.kind === SEC_FILTER; });
-  var ex = list.slice(0, SEC_ALL ? list.length : 6).map(function (e, i) {
+  var ex = list.map(function (e, i) {
     var d = new Date(e.at);
     var when = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }) + ' · ' +
       d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
@@ -1889,8 +1890,7 @@ function renderSecHero(j) {
     '</div>' +
     '<div class="sec-ex"><div class="sec-exh"><h4>' + (SEC_FILTER ? esc((SEC_KIND_PL[SEC_FILTER] || ['', SEC_FILTER])[1].replace(/^./, function (c) { return c.toUpperCase(); })) : 'Dernières interventions') + '</h4>' +
       (SEC_FILTER ? '<button type="button" class="sec-clear">Tout afficher ×</button>' : '') + '</div>' +
-      '<div class="sec-exl' + (SEC_ALL ? ' is-all' : '') + '">' + ex + '</div>' +
-      (list.length > 6 ? '<button type="button" class="sec-more">' + (SEC_ALL ? 'Afficher moins' : 'Voir les ' + list.length + ' interventions') + ' <span>' + (SEC_ALL ? '▴' : '▾') + '</span></button>' : '') +
+      '<div class="sec-exl">' + ex + '</div>' +
       (ex ? '' : '<p class="sec-empty">Rien à signaler pour l\'instant : vos visiteurs sont sages. Dès qu\'' + esc(bot === 'Votre assistante' ? 'elle' : bot) + ' recadre une conversation, vous le verrez ici.</p>') + '</div>';
   $$('#secHero .lnk').forEach(function (b) { b.addEventListener('click', function () { openTranscript(Number(b.dataset.c)); }); });
   $$('#secHero .sec-kinds button').forEach(function (b) { b.addEventListener('click', function () { SEC_FILTER = SEC_FILTER === b.dataset.k ? '' : b.dataset.k; SEC_ALL = false; renderSecHero(SEC_DATA); }); });
