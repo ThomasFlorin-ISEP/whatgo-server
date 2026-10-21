@@ -514,7 +514,9 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 .sec-exh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .sec-clear,.sec-more{border:0;background:none;color:var(--green-deep);font-weight:650;font-size:.8rem;cursor:pointer;font-family:inherit;padding:0}
 .sec-more{margin-top:10px}
-.sec-exl{max-height:300px;overflow-y:auto;padding-right:8px;scrollbar-width:thin;mask-image:linear-gradient(#000 calc(100% - 28px),transparent);-webkit-mask-image:linear-gradient(#000 calc(100% - 28px),transparent);padding-bottom:18px}
+.sec-exl{max-height:300px;overflow-y:scroll;padding-right:10px;scrollbar-width:thin;scrollbar-color:#B9C7BF transparent}
+.sec-exl::-webkit-scrollbar{width:7px}.sec-exl::-webkit-scrollbar-track{background:var(--line-soft);border-radius:9px}
+.sec-exl::-webkit-scrollbar-thumb{background:#B9C7BF;border-radius:9px}.sec-exl::-webkit-scrollbar-thumb:hover{background:#94A79C}
 .sec-hero{align-items:start}
 .sec-ex h4{margin:0 0 10px;font-size:.92rem}
 .sec-exi{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line-soft)}
