@@ -548,7 +548,13 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 .sec-num{font-size:2.4rem;font-weight:800;letter-spacing:-.02em;line-height:1}
 .sec-numl{font-size:.9rem;font-weight:650}
 .sec-kinds{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.sec-kinds span{font-size:.74rem;font-weight:650;padding:3px 9px;border-radius:999px;background:var(--line-soft);color:var(--ink-soft)}
+.sec-kinds button{font-size:.74rem;font-weight:650;padding:3px 9px;border-radius:999px;background:var(--line-soft);color:var(--ink-soft);border:1px solid transparent;cursor:pointer;font-family:inherit}
+.sec-kinds button:hover{border-color:var(--line)}
+.sec-kinds button.on{background:var(--green-soft);color:var(--green-deep);border-color:var(--green)}
+.sec-exh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.sec-clear,.sec-more{border:0;background:none;color:var(--green-deep);font-weight:650;font-size:.8rem;cursor:pointer;font-family:inherit;padding:0}
+.sec-more{margin-top:10px}
+.sec-exl.is-all{max-height:430px;overflow-y:auto;padding-right:6px}
 .sec-ex h4{margin:0 0 10px;font-size:.92rem}
 .sec-exi{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line-soft)}
 .sec-exi:last-child{border-bottom:0}
@@ -1846,7 +1852,7 @@ function switchTab(tab) {
 /* ============================================================
    SÉCURITÉ — protections de l'assistante, interventions, données
    ============================================================ */
-var SEC = null, secSaveT = null;
+var SEC = null, secSaveT = null, SEC_DATA = null, SEC_ALL = false, SEC_FILTER = '';
 var SEC_KIND = { manipulation: 'Manipulation', 'hors-sujet': 'Hors sujet', sensible: 'Sujet sensible', insulte: 'Insulte', regle: 'Règle', plainte: 'Plainte' };
 var SEC_KIND_PL = { manipulation: ['tentative de manipulation', 'tentatives de manipulation'], 'hors-sujet': ['demande hors sujet', 'demandes hors sujet'],
   sensible: ['sujet sensible évité', 'sujets sensibles évités'], insulte: ['insulte gérée', 'insultes gérées'], regle: ['règle respectée', 'règles respectées'], plainte: ['plainte transmise', 'plaintes transmises'] };
@@ -1855,7 +1861,7 @@ async function loadSecurity() {
     var r = await fetch(API + '/api/dashboard/security', { credentials: 'include' });
     if (!r.ok) throw new Error();
     var j = await r.json();
-    SEC = j.settings;
+    SEC = j.settings; SEC_DATA = j; SEC_ALL = false; SEC_FILTER = '';
     renderSecHero(j);
     renderSecSettings();
     $('#secVoiceNote').hidden = !j.voice;
@@ -1865,7 +1871,8 @@ function renderSecHero(j) {
   var bot = (typeof BOT_NAME_CUR !== 'undefined' && BOT_NAME_CUR) || 'Votre assistante';
   var kinds = Object.keys(j.byKind || {}).sort(function (a, b) { return j.byKind[b] - j.byKind[a]; });
   var shield = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6z" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var ex = (j.examples || []).map(function (e, i) {
+  var list = (j.examples || []).filter(function (e) { return !SEC_FILTER || e.kind === SEC_FILTER; });
+  var ex = list.slice(0, SEC_ALL ? list.length : 6).map(function (e, i) {
     var d = new Date(e.at);
     var when = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }) + ' · ' +
       d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
@@ -1878,11 +1885,17 @@ function renderSecHero(j) {
       '<span class="sec-num">' + (j.total || 0) + '</span>' +
       '<span class="sec-numl">' + (j.total > 1 ? 'interventions' : 'intervention') + ' ces 30 derniers jours</span>' +
       '<p class="sec-d">Sur ' + plural(j.conversations || 0, 'conversation', 'conversations') + '. Tentatives bloquées, sujets recadrés et plaintes transmises.</p>' +
-      (kinds.length ? '<div class="sec-kinds">' + kinds.map(function (k) { var w = SEC_KIND_PL[k] || [k, k]; return '<span>' + j.byKind[k] + ' ' + esc(j.byKind[k] > 1 ? w[1] : w[0]) + '</span>'; }).join('') + '</div>' : '') +
+      (kinds.length ? '<div class="sec-kinds">' + kinds.map(function (k) { var w = SEC_KIND_PL[k] || [k, k]; return '<button type="button" data-k="' + esc(k) + '" class="' + (SEC_FILTER === k ? 'on' : '') + '" title="Afficher seulement celles-ci">' + j.byKind[k] + ' ' + esc(j.byKind[k] > 1 ? w[1] : w[0]) + '</button>'; }).join('') + '</div>' : '') +
     '</div>' +
-    '<div class="sec-ex"><h4>Dernières interventions</h4>' +
-      (ex || '<p class="sec-empty">Rien à signaler pour l\'instant : vos visiteurs sont sages. Dès qu\'' + esc(bot === 'Votre assistante' ? 'elle' : bot) + ' recadre une conversation, vous le verrez ici.</p>') + '</div>';
+    '<div class="sec-ex"><div class="sec-exh"><h4>' + (SEC_FILTER ? esc((SEC_KIND_PL[SEC_FILTER] || ['', SEC_FILTER])[1].replace(/^./, function (c) { return c.toUpperCase(); })) : 'Dernières interventions') + '</h4>' +
+      (SEC_FILTER ? '<button type="button" class="sec-clear">Tout afficher ×</button>' : '') + '</div>' +
+      '<div class="sec-exl' + (SEC_ALL ? ' is-all' : '') + '">' + ex + '</div>' +
+      (list.length > 6 ? '<button type="button" class="sec-more">' + (SEC_ALL ? 'Afficher moins' : 'Voir les ' + list.length + ' interventions') + ' <span>' + (SEC_ALL ? '▴' : '▾') + '</span></button>' : '') +
+      (ex ? '' : '<p class="sec-empty">Rien à signaler pour l\'instant : vos visiteurs sont sages. Dès qu\'' + esc(bot === 'Votre assistante' ? 'elle' : bot) + ' recadre une conversation, vous le verrez ici.</p>') + '</div>';
   $$('#secHero .lnk').forEach(function (b) { b.addEventListener('click', function () { openTranscript(Number(b.dataset.c)); }); });
+  $$('#secHero .sec-kinds button').forEach(function (b) { b.addEventListener('click', function () { SEC_FILTER = SEC_FILTER === b.dataset.k ? '' : b.dataset.k; SEC_ALL = false; renderSecHero(SEC_DATA); }); });
+  var cl = $('#secHero .sec-clear'); if (cl) cl.addEventListener('click', function () { SEC_FILTER = ''; renderSecHero(SEC_DATA); });
+  var mo = $('#secHero .sec-more'); if (mo) mo.addEventListener('click', function () { SEC_ALL = !SEC_ALL; renderSecHero(SEC_DATA); });
 }
 function renderSecSettings() {
   var ro = ME && ME.role === 'lecture';

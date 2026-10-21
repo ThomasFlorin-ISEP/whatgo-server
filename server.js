@@ -4872,7 +4872,7 @@ app.get('/api/dashboard/security', requireAuth, requireRole(['admin', 'lecture']
     items.forEach((x) => { byKind[x.kind] = (byKind[x.kind] || 0) + 1; });
     const { rows: cc } = await query(
       `SELECT COUNT(*)::int AS n FROM conversations WHERE business_id = $1 AND started_at > NOW() - INTERVAL '30 days'`, [bid]);
-    res.json({ settings: g, total: items.length, byKind, examples: items.slice(0, 6), conversations: cc[0].n, voice: Boolean(bz[0].voice_agent_id) });
+    res.json({ settings: g, total: items.length, byKind, examples: items.slice(0, 200), conversations: cc[0].n, voice: Boolean(bz[0].voice_agent_id) });
   } catch (err) {
     console.error('Erreur GET /api/dashboard/security:', err);
     res.status(500).json({ error: 'Erreur interne du serveur.' });
