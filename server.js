@@ -301,6 +301,12 @@ function extractNameFromMessages(messages) {
 // conversation. Appelé en arrière-plan APRÈS la réponse au visiteur : il ne
 // ralentit donc jamais le chat, et s'il échoue, le dashboard affiche
 // simplement le message brut comme avant.
+// Balises d'expression du « mode expressif » ElevenLabs ([Avec patience], [laughs]…) :
+// la voix les joue, elles ne doivent jamais apparaître à l'écrit.
+function stripVoiceTags(t) {
+  return String(t || '').replace(/\[[^\]\n📎]{1,40}\]\s*/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 async function generateLeadSummary(transcriptMessages) {
   const transcript = transcriptMessages
     .map((m) => (m.role === 'user' ? 'Visiteur' : 'Assistant') + ' : ' + String(m.content || '').slice(0, 1500))
@@ -2027,7 +2033,7 @@ app.post('/api/voice/elevenlabs', async (req, res) => {
       const role = turn.role === 'user' ? 'user' : 'assistant';
       // Paroles du visiteur nettoyées (« euh », répétitions) ; la version
       // brute reste dans call_data.rawTranscript.
-      const text = role === 'user' ? cleanSpeech(raw) : raw;
+      const text = role === 'user' ? cleanSpeech(raw) : stripVoiceTags(raw);
       rawTranscript.push({ role, text: raw.slice(0, 2000) });
       if (!text) continue;
       turns.push({ role, content: text });

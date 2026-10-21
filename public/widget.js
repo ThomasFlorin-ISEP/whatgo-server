@@ -972,6 +972,7 @@
           if (!text) return;
           var who = msg.source === 'user' || msg.role === 'user' ? 'user' : 'bot';
           if (who === 'user') { text = cleanSpeech(text); if (!text) return; }
+          else { text = text.replace(/\[[^\]\n]{1,40}\]\s*/g, '').replace(/\s{2,}/g, ' ').trim(); if (!text) return; }
           if (who === 'bot' && voiceDiag) voiceDiag.agentSpoke = true;
           callCap.textContent = (who === 'user' ? 'Vous : ' : '') + text;
           addMessage(who, text);
