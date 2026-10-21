@@ -114,6 +114,8 @@ async function initDb() {
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS pricing TEXT DEFAULT ''`);
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS hours TEXT DEFAULT ''`);
   await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS webhook_url TEXT DEFAULT ''`);
+  // Page « Sécurité » : garde-fous de l'assistante et règles de conservation des données.
+  await query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS guardrails TEXT DEFAULT '{}'`);
   // Règles de qualification (infos à collecter, seuils de score, escalade,
   // sujets bloqués) : un blob JSON, pour éviter une migration multi-tables
   // tant que cette structure est encore amenée à évoluer.

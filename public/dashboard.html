@@ -500,6 +500,58 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
 .switchrow:last-child{border-bottom:none}
 .switchrow__lbl{font-size:.86rem;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .switchrow__lbl input[type=number]{width:88px;padding:5px 8px;display:inline-block}
+/* Page Sécurité */
+.sec-hero{display:grid;grid-template-columns:minmax(230px,300px) 1fr;gap:26px;padding:22px 24px}
+.sec-big{display:flex;flex-direction:column;justify-content:center;gap:6px;border-right:1px solid var(--line-soft);padding-right:24px}
+.sec-shield{width:46px;height:46px;border-radius:14px;background:var(--green-soft);color:var(--green-deep);display:grid;place-items:center;margin-bottom:6px}
+.sec-shield svg{width:26px;height:26px;stroke-width:1.8}
+.sec-num{font-size:2.4rem;font-weight:800;letter-spacing:-.02em;line-height:1}
+.sec-numl{font-size:.9rem;font-weight:650}
+.sec-kinds{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sec-kinds span{font-size:.74rem;font-weight:650;padding:3px 9px;border-radius:999px;background:var(--line-soft);color:var(--ink-soft)}
+.sec-ex h4{margin:0 0 10px;font-size:.92rem}
+.sec-exi{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line-soft)}
+.sec-exi:last-child{border-bottom:0}
+.sec-exi q{font-size:.85rem;color:var(--ink);quotes:"« " " »";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.sec-exi small{display:block;font-size:.73rem;color:var(--ink-faint);margin-top:1px}
+.sec-tag{font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:7px;white-space:nowrap}
+.sec-tag.k-manipulation{background:#FDE8E8;color:#B42318}.sec-tag.k-insulte{background:#FFF1DC;color:#8A5300}
+.sec-tag.k-sensible{background:#EFE8FB;color:#6B3FB8}.sec-tag.k-hors-sujet{background:#E3EEFB;color:#2459A6}
+.sec-tag.k-regle,.sec-tag.k-plainte{background:var(--green-soft);color:var(--green-deep)}
+.sec-exi .lnk{font-size:.76rem;font-weight:650;color:var(--green-deep);background:none;border:0;cursor:pointer;font-family:inherit;white-space:nowrap}
+.sec-empty{font-size:.86rem;color:var(--ink-faint);padding:14px 0}
+.sec-saved{font-size:.78rem;font-weight:650;color:var(--green-deep);opacity:0;transition:opacity .2s}
+.sec-saved.on{opacity:1}
+.sec-row{display:grid;grid-template-columns:38px 1fr auto;gap:14px;align-items:start;padding:16px 0;border-top:1px solid var(--line-soft)}
+.sec-ic{width:38px;height:38px;border-radius:11px;background:var(--line-soft);color:var(--ink-soft);display:grid;place-items:center}
+.sec-ic svg{width:20px;height:20px;stroke-width:1.8}
+.sec-row.is-on .sec-ic{background:var(--green-soft);color:var(--green-deep)}
+.sec-t{font-weight:700;font-size:.94rem;display:flex;align-items:center;gap:8px}
+.sec-st{font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--line-soft);color:var(--ink-faint)}
+.sec-row.is-on .sec-st{background:var(--green-soft);color:var(--green-deep)}
+.sec-d{font-size:.82rem;color:var(--ink-faint);margin:3px 0 0;line-height:1.45}
+.sec-sub{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.sec-row:not(.is-on) .sec-sub{opacity:.45;pointer-events:none}
+.sec-sub--col{flex-direction:column;gap:10px}
+.sec-chip{display:inline-flex;align-items:center;gap:7px;font-size:.8rem;font-weight:600;padding:6px 11px;border:1px solid var(--line);border-radius:999px;cursor:pointer;background:#fff}
+.sec-chip:has(input:checked){border-color:var(--green);background:var(--green-soft);color:var(--green-deep)}
+.sec-chip input,.sec-check input{accent-color:var(--green);margin:0}
+.sec-check{display:flex;gap:9px;align-items:flex-start;font-size:.84rem;line-height:1.4;cursor:pointer}
+.sec-check input{margin-top:3px}
+.sec-lbl{font-size:.8rem;font-weight:700;margin-top:4px}
+.sec-sub textarea{width:100%;font-size:.86rem}
+.sec-actions{display:flex;justify-content:flex-end}
+.sec-foot{font-size:.8rem;color:var(--ink-faint);margin:6px 0 0;padding-top:12px;border-top:1px solid var(--line-soft)}
+#secData{margin-top:18px}
+.sec-drow{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:15px 0;border-top:1px solid var(--line-soft)}
+.sec-drow b{font-size:.9rem}
+.sec-drow select{width:auto;min-width:150px}
+.sec-drow--col{flex-direction:column;align-items:stretch}
+.sec-rgpd{display:flex;gap:10px;flex-wrap:wrap}
+.sec-rgpd input{flex:1;min-width:220px}
+.sec-danger{background:#fff;border:1px solid #F3C4C4;color:#B42318}
+.sec-danger:hover{background:#FDE8E8}
+@media (max-width:800px){.sec-hero{grid-template-columns:1fr}.sec-big{border-right:0;border-bottom:1px solid var(--line-soft);padding:0 0 18px}}
 .switch{position:relative;display:inline-block;width:38px;height:22px;flex-shrink:0;margin-top:1px}
 .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
 .switch__track{position:absolute;inset:0;background:#D8E3DE;border-radius:99px;transition:background .16s;pointer-events:none}
@@ -650,6 +702,9 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
       <button class="nav-item" data-tab="qualification" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M6 12h12M10 19h4" stroke-linecap="round"/></svg>
         <span>Qualification</span></button>
+      <button class="nav-item" data-tab="security" data-grp="client" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6z" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Sécurité</span></button>
       <button class="nav-item" data-tab="widget" data-grp="client" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="14" rx="3"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/></svg>
         <span>Widget du site</span><span class="pill-soon">Bientôt</span></button>
@@ -1022,6 +1077,76 @@ table.tbl th.ctr,table.tbl td.ctr{text-align:center}
     </section>
 
     <!-- ============================== PARAMÈTRES (réel) -->
+    <section class="tab-page" id="page-security">
+      <div class="topbar"><div><h2>Sécurité</h2><p>Ce que votre assistante a le droit de dire, et ce qu'elle a géré pour vous.</p></div></div>
+
+      <div class="card sec-hero" id="secHero"><p class="card__sub">Chargement…</p></div>
+
+      <div class="card">
+        <div class="card__head"><div><h3>Protections</h3>
+          <p class="card__sub">Elles s'appliquent dès le message suivant. Votre assistante ne mentionne jamais ces règles à vos visiteurs.</p></div>
+          <span class="sec-saved" id="secSaved"></span></div>
+        <div class="sec-row" data-k="focus">
+          <span class="sec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke-linecap="round"/></svg></span>
+          <div class="sec-body"><div class="sec-t">Rester dans le sujet <span class="sec-st"></span></div><p class="sec-d">Elle ne parle que de votre activité. Devoirs, recettes, code informatique… elle refuse poliment et ramène la conversation vers vous.</p></div>
+          <label class="switch"><input type="checkbox" id="sec-focus" /><span class="switch__track"></span></label>
+        </div>
+        <div class="sec-row" data-k="antiManip">
+          <span class="sec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3" stroke-linecap="round"/></svg></span>
+          <div class="sec-body"><div class="sec-t">Anti-manipulation <span class="sec-st"></span></div><p class="sec-d">Personne ne peut lui faire oublier ses consignes, révéler ses instructions ou lui faire jouer un autre rôle. Les tentatives sont repérées et comptées.</p></div>
+          <label class="switch"><input type="checkbox" id="sec-antiManip" /><span class="switch__track"></span></label>
+        </div>
+        <div class="sec-row" data-k="sensitive">
+          <span class="sec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16" stroke-linecap="round"/></svg></span>
+          <div class="sec-body"><div class="sec-t">Contenus sensibles <span class="sec-st"></span></div><p class="sec-d">Les sujets sur lesquels elle ne donne jamais d'avis. Elle reste calme et polie, même face à un visiteur insultant.</p><div class="sec-sub" id="secSensSub">
+            <label class="sec-chip"><input type="checkbox" data-topic="insults" /> Insultes et contenus choquants</label>
+            <label class="sec-chip"><input type="checkbox" data-topic="politics" /> Politique et religion</label>
+            <label class="sec-chip"><input type="checkbox" data-topic="medical" /> Avis médicaux</label>
+            <label class="sec-chip"><input type="checkbox" data-topic="legal" /> Conseils juridiques</label>
+            <label class="sec-chip"><input type="checkbox" data-topic="competitors" /> Parler des concurrents</label>
+          </div></div>
+          <label class="switch"><input type="checkbox" id="sec-sensitive" /><span class="switch__track"></span></label>
+        </div>
+        <div class="sec-row" data-k="rules">
+          <span class="sec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 6h12M8 12h12M8 18h12" stroke-linecap="round"/><path d="M3.5 6l1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <div class="sec-body"><div class="sec-t">Mes règles <span class="sec-st"></span></div><p class="sec-d">Vos propres interdits, en plus des protections ci-dessus.</p><div class="sec-sub sec-sub--col" id="secRulesSub">
+            <label class="sec-check"><input type="checkbox" id="sec-noPromises" /> <span><b>Ne jamais promettre</b> de remise, de délai ou de résultat garanti (ex. « c'est garanti »)</span></label>
+            <label class="sec-check"><input type="checkbox" id="sec-complaintHandoff" /> <span><b>Plainte ou client mécontent :</b> s'excuser et transmettre à l'équipe, sans discuter</span></label>
+            <label class="sec-lbl" for="sec-customRules">Vos règles, une par ligne</label>
+            <textarea id="sec-customRules" rows="4" placeholder="Ne jamais donner de prix sans devis&#10;Toujours proposer un rendez-vous pour les demandes complexes"></textarea>
+            <div class="sec-actions"><button type="button" class="btn btn--primary btn--sm" id="secRulesSave">Enregistrer mes règles</button></div>
+          </div></div>
+          <label class="switch"><input type="checkbox" id="sec-rules" /><span class="switch__track"></span></label>
+        </div>
+        <p class="sec-foot" id="secVoiceNote" hidden>📞 Appels vocaux : les tentatives de manipulation et les insultes sont aussi repérées et comptées. Les règles de l'agent vocal se règlent dans son espace ElevenLabs.</p>
+      </div>
+
+      <div class="card" id="secData">
+        <div class="card__head"><div><h3>Données et confidentialité</h3>
+          <p class="card__sub">Ce que vous gardez, combien de temps, et comment répondre à un visiteur qui demande ses données (RGPD).</p></div></div>
+        <div class="sec-drow">
+          <div><b>Durée de conservation des conversations</b><p class="sec-d">Au-delà, les conversations et les fiches contact associées sont supprimées automatiquement.</p></div>
+          <select id="sec-retention">
+            <option value="0">Illimitée</option><option value="3">3 mois</option><option value="6">6 mois</option>
+            <option value="12">12 mois</option><option value="24">24 mois</option><option value="36">36 mois</option>
+          </select>
+        </div>
+        <div class="sec-drow">
+          <div><b>Masquer les numéros de carte bancaire</b><p class="sec-d">Si un visiteur en tape un dans le chat, il n'est ni enregistré ni transmis à l'IA : seuls les 4 derniers chiffres restent.</p></div>
+          <label class="switch"><input type="checkbox" id="sec-maskCards" /><span class="switch__track"></span></label>
+        </div>
+        <div class="sec-drow sec-drow--col">
+          <div><b>Demande d'un visiteur sur ses données</b><p class="sec-d">Entrez son email ou son téléphone pour télécharger tout ce que vous avez sur lui, ou tout supprimer définitivement.</p></div>
+          <div class="sec-rgpd">
+            <input type="text" id="sec-contact" placeholder="email@exemple.fr ou 06 12 34 56 78" />
+            <button type="button" class="btn btn--ghost btn--sm" id="secExport">Télécharger ses données</button>
+            <button type="button" class="btn btn--sm sec-danger" id="secForget">Tout supprimer</button>
+          </div>
+          <p class="msg" id="secMsg" style="display:none"></p>
+        </div>
+      </div>
+    </section>
+
     <section class="tab-page" id="page-settings">
       <div class="topbar"><div><h2>Paramètres</h2><p>Votre compte.</p></div></div>
       <div class="setgrid">
@@ -1242,6 +1367,7 @@ if (diagnosticsNavItem) diagnosticsNavItem.addEventListener('click', loadDiagnos
 function switchTab(tab) {
   if (tab === 'settings') { loadBotLook(); }
   if (tab === 'voice') loadVoicePage();
+  if (tab === 'security') loadSecurity();
   if (tab === 'appointments') loadCalendar();
   if (tab === 'improve') loadImprove();
   if (tab === 'knowledge') loadDocs();
@@ -1250,6 +1376,122 @@ function switchTab(tab) {
   $('#sidebar').classList.remove('open');
   window.scrollTo(0, 0);
 }
+/* ============================================================
+   SÉCURITÉ — protections de l'assistante, interventions, données
+   ============================================================ */
+var SEC = null, secSaveT = null;
+var SEC_KIND = { manipulation: 'Manipulation', 'hors-sujet': 'Hors sujet', sensible: 'Sujet sensible', insulte: 'Insulte', regle: 'Règle', plainte: 'Plainte' };
+var SEC_KIND_PL = { manipulation: ['tentative de manipulation', 'tentatives de manipulation'], 'hors-sujet': ['demande hors sujet', 'demandes hors sujet'],
+  sensible: ['sujet sensible évité', 'sujets sensibles évités'], insulte: ['insulte gérée', 'insultes gérées'], regle: ['règle respectée', 'règles respectées'], plainte: ['plainte transmise', 'plaintes transmises'] };
+async function loadSecurity() {
+  try {
+    var r = await fetch(API + '/api/dashboard/security', { credentials: 'include' });
+    if (!r.ok) throw new Error();
+    var j = await r.json();
+    SEC = j.settings;
+    renderSecHero(j);
+    renderSecSettings();
+    $('#secVoiceNote').hidden = !j.voice;
+  } catch (e) { $('#secHero').innerHTML = '<p class="card__sub">La page Sécurité est indisponible pour le moment.</p>'; }
+}
+function renderSecHero(j) {
+  var bot = (typeof BOT_NAME_CUR !== 'undefined' && BOT_NAME_CUR) || 'Votre assistante';
+  var kinds = Object.keys(j.byKind || {}).sort(function (a, b) { return j.byKind[b] - j.byKind[a]; });
+  var shield = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6z" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var ex = (j.examples || []).map(function (e, i) {
+    var d = new Date(e.at);
+    var when = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }) + ' · ' +
+      d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+    return '<div class="sec-exi"><span class="sec-tag k-' + esc(e.kind) + '">' + esc(SEC_KIND[e.kind] || 'Règle') + '</span>' +
+      '<div style="min-width:0"><q>' + esc(e.q || '') + '</q><small>' + esc(when) + '</small></div>' +
+      (e.conversationId ? '<button type="button" class="lnk" data-c="' + e.conversationId + '">Voir →</button>' : '<span></span>') + '</div>';
+  }).join('');
+  $('#secHero').innerHTML =
+    '<div class="sec-big"><span class="sec-shield">' + shield + '</span>' +
+      '<span class="sec-num">' + (j.total || 0) + '</span>' +
+      '<span class="sec-numl">' + (j.total > 1 ? 'interventions' : 'intervention') + ' ces 30 derniers jours</span>' +
+      '<p class="sec-d">Sur ' + plural(j.conversations || 0, 'conversation', 'conversations') + '. Tentatives bloquées, sujets recadrés et plaintes transmises.</p>' +
+      (kinds.length ? '<div class="sec-kinds">' + kinds.map(function (k) { var w = SEC_KIND_PL[k] || [k, k]; return '<span>' + j.byKind[k] + ' ' + esc(j.byKind[k] > 1 ? w[1] : w[0]) + '</span>'; }).join('') + '</div>' : '') +
+    '</div>' +
+    '<div class="sec-ex"><h4>Dernières interventions</h4>' +
+      (ex || '<p class="sec-empty">Rien à signaler pour l\'instant : vos visiteurs sont sages. Dès qu\'' + esc(bot === 'Votre assistante' ? 'elle' : bot) + ' recadre une conversation, vous le verrez ici.</p>') + '</div>';
+  $$('#secHero .lnk').forEach(function (b) { b.addEventListener('click', function () { openTranscript(Number(b.dataset.c)); }); });
+}
+function renderSecSettings() {
+  var ro = ME && ME.role === 'lecture';
+  ['focus', 'antiManip', 'sensitive', 'rules', 'noPromises', 'complaintHandoff', 'maskCards'].forEach(function (k) {
+    var el = $('#sec-' + k); if (!el) return; el.checked = !!SEC[k]; el.disabled = ro;
+  });
+  $$('#secSensSub input[data-topic]').forEach(function (el) { el.checked = !!SEC.sensitiveTopics[el.dataset.topic]; el.disabled = ro; });
+  $('#sec-customRules').value = SEC.customRules || ''; $('#sec-customRules').disabled = ro;
+  $('#sec-retention').value = String(SEC.retentionMonths || 0); $('#sec-retention').disabled = ro;
+  $('#secRulesSave').hidden = ro; $('#secExport').disabled = ro; $('#secForget').disabled = ro;
+  secSyncRows();
+}
+function secSyncRows() {
+  $$('.sec-row').forEach(function (row) {
+    var on = !!SEC[row.dataset.k];
+    row.classList.toggle('is-on', on);
+    row.querySelector('.sec-st').textContent = on ? 'Actif' : 'Désactivé';
+  });
+}
+function secCollect() {
+  ['focus', 'antiManip', 'sensitive', 'rules', 'noPromises', 'complaintHandoff', 'maskCards'].forEach(function (k) { SEC[k] = $('#sec-' + k).checked; });
+  $$('#secSensSub input[data-topic]').forEach(function (el) { SEC.sensitiveTopics[el.dataset.topic] = el.checked; });
+  SEC.customRules = $('#sec-customRules').value;
+  SEC.retentionMonths = Number($('#sec-retention').value) || 0;
+}
+function secSave(now) {
+  if (!SEC) return;
+  secCollect(); secSyncRows();
+  clearTimeout(secSaveT);
+  secSaveT = setTimeout(async function () {
+    var s = $('#secSaved');
+    try {
+      var r = await fetch(API + '/api/dashboard/security', { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(SEC) });
+      if (!r.ok) throw new Error();
+      s.textContent = 'Enregistré ✓';
+    } catch (e) { s.textContent = 'Erreur, réessayez'; }
+    s.classList.add('on'); setTimeout(function () { s.classList.remove('on'); }, 1800);
+  }, now ? 0 : 350);
+}
+function secMsg(t, err) { var m = $('#secMsg'); m.textContent = t || ''; m.className = 'msg ' + (err ? 'msg--err' : 'msg--ok'); m.style.display = t ? 'block' : 'none'; }
+(function initSecurity() {
+  var page = $('#page-security'); if (!page) return;
+  $$('#page-security .sec-row > .switch input, #secSensSub input, #secRulesSub input[type=checkbox], #sec-maskCards').forEach(function (el) { el.addEventListener('change', function () { secSave(); }); });
+  $('#sec-retention').addEventListener('change', function () {
+    var v = Number(this.value);
+    if (v && !confirm('Les conversations de plus de ' + v + ' mois (et les fiches contact associées) seront supprimées définitivement. Continuer ?')) { this.value = String(SEC.retentionMonths || 0); return; }
+    secSave(true);
+  });
+  $('#secRulesSave').addEventListener('click', function () { secSave(true); });
+  $('#secExport').addEventListener('click', async function () {
+    var c = $('#sec-contact').value.trim(); secMsg('');
+    try {
+      var r = await fetch(API + '/api/dashboard/security/export?contact=' + encodeURIComponent(c), { credentials: 'include' });
+      var j = await r.json();
+      if (!r.ok) return secMsg(j.error || 'Erreur.', true);
+      if (!j.fiches_contact.length && !j.conversations.length) return secMsg('Aucune donnée trouvée pour ce contact.', true);
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(j, null, 2)], { type: 'application/json' }));
+      a.download = 'donnees-' + c.replace(/[^\w@.-]+/g, '_') + '.json'; a.click();
+      secMsg('Fichier téléchargé : ' + plural(j.conversations.length, 'conversation', 'conversations') + ', ' + plural(j.fiches_contact.length, 'fiche contact', 'fiches contact') + '. Vous pouvez l\'envoyer à la personne.');
+    } catch (e) { secMsg('Erreur, réessayez.', true); }
+  });
+  $('#secForget').addEventListener('click', async function () {
+    var c = $('#sec-contact').value.trim(); secMsg('');
+    if (!c) return secMsg('Entrez un email ou un numéro de téléphone.', true);
+    if (!confirm('Supprimer définitivement toutes les conversations et fiches de « ' + c + ' » ? Cette action est irréversible.')) return;
+    try {
+      var r = await fetch(API + '/api/dashboard/security/forget', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact: c }) });
+      var j = await r.json();
+      if (!r.ok) return secMsg(j.error || 'Erreur.', true);
+      secMsg(j.conversations || j.contacts ? 'Supprimé : ' + plural(j.conversations, 'conversation', 'conversations') + ' et les fiches contact associées.' : 'Aucune donnée trouvée pour ce contact.', !(j.conversations || j.contacts));
+      if (j.conversations || j.contacts) $('#sec-contact').value = '';
+    } catch (e) { secMsg('Erreur, réessayez.', true); }
+  });
+})();
+
 /* ---------- Base de connaissances : documents ---------- */
 function docsMsg(text, isErr) {
   var m = $('#docsMsg');
